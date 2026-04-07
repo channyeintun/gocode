@@ -1,0 +1,44 @@
+# Go
+*.o
+*.a
+*.so
+*.dll
+*.dylib
+dist/
+build/
+
+# Go test binaries
+*.test
+*.out
+
+# Vendoring
+vendor/
+
+# Go workspace
+go.work
+
+# Cache
+.cache/
+cache/
+*.cache
+.go-cache/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.swp
+*.swo
+*~
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.iml
+*.sublime-project
+*.sublime-workspace
+
+# OS
+Thumbs.db
