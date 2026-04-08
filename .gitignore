@@ -42,3 +42,7 @@ cache/
 
 # OS
 Thumbs.db
+
+#Source code
+sourcecode/
+adk-go/
