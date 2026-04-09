@@ -13,11 +13,18 @@ type Registry struct {
 	tools map[string]Tool
 }
 
-// NewRegistry creates an empty tool registry.
+// NewRegistry creates a registry preloaded with built-in tools.
 func NewRegistry() *Registry {
-	return &Registry{
+	r := &Registry{
 		tools: make(map[string]Tool),
 	}
+
+	r.Register(NewBashTool())
+	r.Register(NewFileReadTool())
+	r.Register(NewFileWriteTool())
+	r.Register(NewFileEditTool())
+
+	return r
 }
 
 // Register adds a tool to the registry.
