@@ -9,6 +9,7 @@ export type EventType =
   | "tool_error"
   | "permission_request"
   | "mode_changed"
+  | "model_changed"
   | "cost_update"
   | "compact_start"
   | "compact_end"
@@ -67,6 +68,10 @@ export interface PermissionRequestPayload {
 
 export interface ModeChangedPayload {
   mode: string;
+}
+
+export interface ModelChangedPayload {
+  model: string;
 }
 
 export interface CostUpdatePayload {

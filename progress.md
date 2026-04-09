@@ -92,8 +92,8 @@
 ### `cmd/go-cli/`
 - [x] `main.go` — Cobra entrypoint, `--stdio`/`--model`/`--mode` flags, NDJSON event loop
 - [x] Wire query engine into the event loop (replace stub response)
-- [ ] Slash command dispatch (`/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/resume`)
-	- Implemented: `/plan`, `/fast`, `/cost`, `/usage`, `/resume`
+- [x] Slash command dispatch (`/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/resume`)
+	- Also implemented: `/usage`, `/plan-mode`, `/model default`
 
 ### `internal/config/`
 - [x] `config.go` — File + env config loading, ParseModel, Save
@@ -138,7 +138,7 @@
 - [x] `src/protocol/codec.ts` — NDJSON parser/serializer
 - [ ] `src/components/PlanPanel.tsx` — Render implementation-plan artifact
 - [ ] `src/components/ArtifactView.tsx` — Render artifact content
-- [ ] `npm install` + TypeScript build verification
+- [x] `npm install` + TypeScript build verification
 
 ---
 
@@ -159,7 +159,7 @@
 - [x] `openai_compat.go` — SSE parser, function calling
 - [x] `gemini.go` — Native streaming, function declarations
 - [x] `ollama.go` — Local chat streaming implementation
-- [ ] `/model` runtime switching
+- [x] `/model` runtime switching
 - [ ] Capability-aware engine adjustments
 
 ---
@@ -184,4 +184,4 @@
 | Ink TUI | ✅ | ❌ (not built) |
 | CLI Entrypoint | ✅ | ✅ (live stdio engine) |
 
-**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The stdio engine now persists and restores transcript + session metadata, including mode/model/cwd, and exposes `/plan`, `/fast`, `/cost`, `/usage`, and `/resume` over the stdio command path. The next concrete task is filling the remaining slash-command gaps (`/compact`, `/model`) or moving to planner/artifact wiring.
+**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The stdio engine now persists and restores transcript + session metadata, supports runtime `/model` switching, and exposes `/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/usage`, and `/resume` over the stdio command path. The next concrete task is planner/artifact wiring or deeper compaction work beyond the current manual trigger.

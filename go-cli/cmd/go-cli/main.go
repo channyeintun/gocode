@@ -320,6 +320,43 @@ func modelRef(provider, model string) string {
 	return provider + "/" + model
 }
 
+func resolveModelSelection(input string, fallbackProvider string) (string, string) {
+	provider, model := config.ParseModel(strings.TrimSpace(input))
+	if model == "" && provider != "" {
+		model = provider
+		provider = ""
+	}
+	if provider != "" {
+		return normalizeProvider(provider), model
+	}
+
+	lower := strings.ToLower(model)
+	switch {
+	case strings.Contains(lower, "gemini"):
+		provider = "gemini"
+	case strings.Contains(lower, "gpt"), strings.HasPrefix(lower, "o1"), strings.HasPrefix(lower, "o3"), strings.HasPrefix(lower, "o4"):
+		provider = "openai"
+	case strings.Contains(lower, "deepseek"):
+		provider = "deepseek"
+	case strings.Contains(lower, "qwen"):
+		provider = "qwen"
+	case strings.Contains(lower, "glm"):
+		provider = "glm"
+	case strings.Contains(lower, "mistral"):
+		provider = "mistral"
+	case strings.Contains(lower, "llama"), strings.Contains(lower, "maverick"):
+		provider = "groq"
+	case strings.Contains(lower, "gemma"), strings.Contains(lower, "ollama"):
+		provider = "ollama"
+	case strings.Contains(lower, "claude"), strings.Contains(lower, "sonnet"), strings.Contains(lower, "opus"), strings.Contains(lower, "haiku"):
+		provider = "anthropic"
+	default:
+		provider = normalizeProvider(fallbackProvider)
+	}
+
+	return provider, model
+}
+
 func parseExecutionMode(mode string) agent.ExecutionMode {
 	if strings.EqualFold(mode, string(agent.ModeFast)) {
 		return agent.ModeFast
@@ -690,8 +727,98 @@ func handleSlashCommand(
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "model":
+		if args == "" {
+			if err := emitTextResponse(bridge, fmt.Sprintf("Current model: %s", activeModelID)); err != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+
+		selectedModel := args
+		if strings.EqualFold(strings.TrimSpace(args), "default") {
+			selectedModel = cfg.Model
+		}
+
+		currentProvider, _ := config.ParseModel(activeModelID)
+		provider, model := resolveModelSelection(selectedModel, currentProvider)
+		nextClient, err := newLLMClient(provider, model, cfg)
+		if err != nil {
+			if emitErr := bridge.EmitError(fmt.Sprintf("switch model %q: %v", args, err), true); emitErr != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+
+		*client = nextClient
+		activeModelID = modelRef(provider, nextClient.ModelID())
+		if err := persistSessionState(store, sessionStateParams{
+			SessionID: sessionID,
+			CreatedAt: startedAt,
+			Mode:      mode,
+			Model:     activeModelID,
+			CWD:       cwd,
+			Branch:    agent.LoadTurnContext().GitBranch,
+			Tracker:   tracker,
+			Messages:  messages,
+		}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := bridge.Emit(ipc.EventModelChanged, ipc.ModelChangedPayload{Model: activeModelID}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := emitTextResponse(bridge, fmt.Sprintf("Set model to %s", activeModelID)); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
 	case "cost", "usage":
 		if err := emitTextResponse(bridge, formatCostSummary(tracker.Snapshot(), activeModelID)); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "compact":
+		if len(messages) == 0 {
+			if emitErr := bridge.EmitError("no messages to compact", true); emitErr != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+
+		tokensBefore := estimateConversationTokens(messages)
+		if err := bridge.Emit(ipc.EventCompactStart, ipc.CompactStartPayload{
+			Strategy:     string(agent.CompactManual),
+			TokensBefore: tokensBefore,
+		}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+
+		pipeline := compact.NewPipeline((*client).Capabilities().MaxContextWindow, nil)
+		result, err := pipeline.Compact(ctx, messages, string(agent.CompactManual))
+		if err != nil {
+			if emitErr := bridge.EmitError(fmt.Sprintf("compact conversation: %v", err), true); emitErr != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+
+		messages = result.Messages
+		tokensAfter := estimateConversationTokens(messages)
+		if err := persistSessionState(store, sessionStateParams{
+			SessionID: sessionID,
+			CreatedAt: startedAt,
+			Mode:      mode,
+			Model:     activeModelID,
+			CWD:       cwd,
+			Branch:    agent.LoadTurnContext().GitBranch,
+			Tracker:   tracker,
+			Messages:  messages,
+		}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := bridge.Emit(ipc.EventCompactEnd, ipc.CompactEndPayload{TokensAfter: tokensAfter}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := emitTextResponse(bridge, fmt.Sprintf("Compacted conversation with %s. Tokens %d -> %d.", result.Strategy, tokensBefore, tokensAfter)); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
@@ -764,6 +891,9 @@ func handleSlashCommand(
 		}); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
+		if err := bridge.Emit(ipc.EventModelChanged, ipc.ModelChangedPayload{Model: activeModelID}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
 		if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
@@ -798,6 +928,21 @@ func formatCostSummary(snapshot costpkg.TrackerSnapshot, activeModelID string) s
 		snapshot.TotalAPIDuration.Round(time.Millisecond),
 		snapshot.TotalToolDuration.Round(time.Millisecond),
 	)
+}
+
+func estimateConversationTokens(messages []api.Message) int {
+	total := 0
+	for _, message := range messages {
+		total += compact.EstimateTokens(message.Content)
+		for _, call := range message.ToolCalls {
+			total += compact.EstimateTokens(call.Name)
+			total += compact.EstimateTokens(call.Input)
+		}
+		if message.ToolResult != nil {
+			total += compact.EstimateTokens(message.ToolResult.Output)
+		}
+	}
+	return total
 }
 
 func stringParamFromMap(params map[string]any, key string) (string, bool) {

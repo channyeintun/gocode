@@ -27,6 +27,7 @@ const (
 
 	// Session state
 	EventModeChanged  EventType = "mode_changed"
+	EventModelChanged EventType = "model_changed"
 	EventCostUpdate   EventType = "cost_update"
 	EventCompactStart EventType = "compact_start"
 	EventCompactEnd   EventType = "compact_end"
@@ -108,6 +109,10 @@ type PermissionRequestPayload struct {
 
 type ModeChangedPayload struct {
 	Mode string `json:"mode"`
+}
+
+type ModelChangedPayload struct {
+	Model string `json:"model"`
 }
 
 type CostUpdatePayload struct {

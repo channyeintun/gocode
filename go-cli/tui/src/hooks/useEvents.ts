@@ -1,9 +1,10 @@
 import { useState, useCallback } from "react";
-import type { StreamEvent, TokenDeltaPayload, ModeChangedPayload, CostUpdatePayload, ToolStartPayload, ToolResultPayload, PermissionRequestPayload, ErrorPayload, SessionRestoredPayload } from "../protocol/types.js";
+import type { StreamEvent, TokenDeltaPayload, ModeChangedPayload, ModelChangedPayload, CostUpdatePayload, ToolStartPayload, ToolResultPayload, PermissionRequestPayload, ErrorPayload, SessionRestoredPayload } from "../protocol/types.js";
 
 export interface EngineUIState {
   streamedText: string;
   mode: string;
+  model: string;
   cost: { totalUsd: number; inputTokens: number; outputTokens: number };
   activeTool: { id: string; name: string } | null;
   pendingPermission: PermissionRequestPayload | null;
@@ -11,18 +12,19 @@ export interface EngineUIState {
   isStreaming: boolean;
 }
 
-const initialState: EngineUIState = {
+const initialState = (model: string): EngineUIState => ({
   streamedText: "",
   mode: "plan",
+  model,
   cost: { totalUsd: 0, inputTokens: 0, outputTokens: 0 },
   activeTool: null,
   pendingPermission: null,
   error: null,
   isStreaming: false,
-};
+});
 
-export function useEvents() {
-  const [uiState, setUIState] = useState<EngineUIState>(initialState);
+export function useEvents(initialModel: string) {
+  const [uiState, setUIState] = useState<EngineUIState>(() => initialState(initialModel));
 
   const handleEvent = useCallback((event: StreamEvent) => {
     switch (event.type) {
@@ -51,6 +53,11 @@ export function useEvents() {
       case "mode_changed": {
         const p = event.payload as ModeChangedPayload;
         setUIState((s) => ({ ...s, mode: p.mode }));
+        break;
+      }
+      case "model_changed": {
+        const p = event.payload as ModelChangedPayload;
+        setUIState((s) => ({ ...s, model: p.model }));
         break;
       }
       case "cost_update": {

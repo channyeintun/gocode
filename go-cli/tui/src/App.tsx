@@ -15,7 +15,7 @@ interface AppProps {
 
 const App: FC<AppProps> = ({ enginePath, model }) => {
   const engine = useEngine(enginePath);
-  const { uiState, handleEvent, clearStream, clearPermission } = useEvents();
+  const { uiState, handleEvent, clearStream, clearPermission } = useEvents(model);
 
   // Dispatch incoming events to the UI state handler
   useEffect(() => {
@@ -45,7 +45,7 @@ const App: FC<AppProps> = ({ enginePath, model }) => {
     <Box flexDirection="column" height="100%">
       <StatusBar
         mode={uiState.mode}
-        model={model}
+        model={uiState.model}
         totalCostUsd={uiState.cost.totalUsd}
         inputTokens={uiState.cost.inputTokens}
         outputTokens={uiState.cost.outputTokens}
