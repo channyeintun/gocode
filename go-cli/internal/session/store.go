@@ -1,10 +1,13 @@
 package session
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/channyeintun/go-cli/internal/api"
@@ -131,5 +134,43 @@ func (s *Store) ListSessions() ([]Metadata, error) {
 		}
 		sessions = append(sessions, meta)
 	}
+	sort.Slice(sessions, func(i, j int) bool {
+		return sessions[i].UpdatedAt.After(sessions[j].UpdatedAt)
+	})
 	return sessions, nil
+}
+
+// LoadTranscript reads all persisted transcript messages for a session.
+func (s *Store) LoadTranscript(sessionID string) ([]api.Message, error) {
+	path := filepath.Join(s.SessionDir(sessionID), "transcript.ndjson")
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open transcript: %w", err)
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
+
+	messages := make([]api.Message, 0, 64)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var msg api.Message
+		if err := json.Unmarshal(line, &msg); err != nil {
+			return nil, fmt.Errorf("decode transcript message: %w", err)
+		}
+		messages = append(messages, msg)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan transcript: %w", err)
+	}
+
+	return messages, nil
 }

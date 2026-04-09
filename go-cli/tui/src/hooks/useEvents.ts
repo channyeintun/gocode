@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { StreamEvent, TokenDeltaPayload, ModeChangedPayload, CostUpdatePayload, ToolStartPayload, ToolResultPayload, PermissionRequestPayload, ErrorPayload } from "../protocol/types.js";
+import type { StreamEvent, TokenDeltaPayload, ModeChangedPayload, CostUpdatePayload, ToolStartPayload, ToolResultPayload, PermissionRequestPayload, ErrorPayload, SessionRestoredPayload } from "../protocol/types.js";
 
 export interface EngineUIState {
   streamedText: string;
@@ -59,6 +59,11 @@ export function useEvents() {
           ...s,
           cost: { totalUsd: p.total_usd, inputTokens: p.input_tokens, outputTokens: p.output_tokens },
         }));
+        break;
+      }
+      case "session_restored": {
+        const p = event.payload as SessionRestoredPayload;
+        setUIState((s) => ({ ...s, mode: p.mode, isStreaming: false, error: null }));
         break;
       }
       case "error": {

@@ -75,6 +75,11 @@ export interface CostUpdatePayload {
   output_tokens: number;
 }
 
+export interface SessionRestoredPayload {
+  session_id: string;
+  mode: string;
+}
+
 export interface ReadyPayload {
   protocol_version: number;
 }

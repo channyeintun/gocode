@@ -106,10 +106,12 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	bridge := ipc.NewBridge(os.Stdin, os.Stdout)
 	registry := toolpkg.NewRegistry()
 	provider, model := config.ParseModel(cfg.Model)
+	provider = normalizeProvider(provider)
 	client, err := newLLMClient(provider, model, cfg)
 	if err != nil {
 		return err
 	}
+	activeModelID := modelRef(provider, client.ModelID())
 	messages := make([]api.Message, 0, 32)
 	mode := parseExecutionMode(cfg.DefaultMode)
 	permissionCtx := newPermissionContext(cfg.PermissionMode)
@@ -128,7 +130,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 		SessionID: sessionID,
 		CreatedAt: startedAt,
 		Mode:      mode,
-		Model:     client.ModelID(),
+		Model:     activeModelID,
 		CWD:       cwd,
 		Branch:    agent.LoadTurnContext().GitBranch,
 		Tracker:   tracker,
@@ -196,7 +198,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						SessionID: sessionID,
 						CreatedAt: startedAt,
 						Mode:      mode,
-						Model:     client.ModelID(),
+						Model:     activeModelID,
 						CWD:       cwd,
 						Branch:    agent.LoadTurnContext().GitBranch,
 						Tracker:   tracker,
@@ -227,7 +229,33 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				}
 			}
 		case ipc.MsgSlashCommand:
-			// TODO: dispatch slash commands
+			var payload ipc.SlashCommandPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return fmt.Errorf("decode slash command: %w", err)
+			}
+
+			var handled bool
+			handled, sessionID, startedAt, mode, activeModelID, cwd, messages, err = handleSlashCommand(
+				ctx,
+				bridge,
+				sessionStore,
+				cfg,
+				tracker,
+				payload,
+				sessionID,
+				startedAt,
+				mode,
+				activeModelID,
+				cwd,
+				messages,
+				&client,
+			)
+			if err != nil {
+				return err
+			}
+			if handled {
+				continue
+			}
 			continue
 		case ipc.MsgModeToggle:
 			if mode == agent.ModePlan {
@@ -239,7 +267,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				SessionID: sessionID,
 				CreatedAt: startedAt,
 				Mode:      mode,
-				Model:     client.ModelID(),
+				Model:     activeModelID,
 				CWD:       cwd,
 				Branch:    agent.LoadTurnContext().GitBranch,
 				Tracker:   tracker,
@@ -259,9 +287,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 }
 
 func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
-	if provider == "" {
-		provider = "anthropic"
-	}
+	provider = normalizeProvider(provider)
 
 	baseURL := cfg.BaseURL
 	switch api.Presets[provider].ClientType {
@@ -276,6 +302,22 @@ func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, err
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", provider)
 	}
+}
+
+func normalizeProvider(provider string) string {
+	if strings.TrimSpace(provider) == "" {
+		return "anthropic"
+	}
+	return provider
+}
+
+func modelRef(provider, model string) string {
+	provider = normalizeProvider(provider)
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return provider
+	}
+	return provider + "/" + model
 }
 
 func parseExecutionMode(mode string) agent.ExecutionMode {
@@ -591,6 +633,171 @@ func emitCostUpdate(bridge *ipc.Bridge, tracker *costpkg.Tracker) error {
 		InputTokens:  snapshot.TotalInputTokens,
 		OutputTokens: snapshot.TotalOutputTokens,
 	})
+}
+
+func handleSlashCommand(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	store *session.Store,
+	cfg config.Config,
+	tracker *costpkg.Tracker,
+	payload ipc.SlashCommandPayload,
+	sessionID string,
+	startedAt time.Time,
+	mode agent.ExecutionMode,
+	activeModelID string,
+	cwd string,
+	messages []api.Message,
+	client *api.LLMClient,
+) (bool, string, time.Time, agent.ExecutionMode, string, string, []api.Message, error) {
+	command := strings.ToLower(strings.TrimSpace(payload.Command))
+	args := strings.TrimSpace(payload.Args)
+
+	switch command {
+	case "plan", "plan-mode":
+		mode = agent.ModePlan
+		if err := persistSessionState(store, sessionStateParams{
+			SessionID: sessionID,
+			CreatedAt: startedAt,
+			Mode:      mode,
+			Model:     activeModelID,
+			CWD:       cwd,
+			Branch:    agent.LoadTurnContext().GitBranch,
+			Tracker:   tracker,
+			Messages:  messages,
+		}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "fast":
+		mode = agent.ModeFast
+		if err := persistSessionState(store, sessionStateParams{
+			SessionID: sessionID,
+			CreatedAt: startedAt,
+			Mode:      mode,
+			Model:     activeModelID,
+			CWD:       cwd,
+			Branch:    agent.LoadTurnContext().GitBranch,
+			Tracker:   tracker,
+			Messages:  messages,
+		}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "cost", "usage":
+		if err := emitTextResponse(bridge, formatCostSummary(tracker.Snapshot(), activeModelID)); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "resume":
+		var targetID string
+		if args != "" {
+			targetID = args
+		} else {
+			meta, err := store.LatestResumeCandidate(sessionID)
+			if err != nil {
+				if emitErr := bridge.EmitError(err.Error(), true); emitErr != nil {
+					return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+				}
+				return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+			}
+			targetID = meta.SessionID
+		}
+
+		restored, err := store.Restore(targetID)
+		if err != nil {
+			if emitErr := bridge.EmitError(fmt.Sprintf("restore session %q: %v", targetID, err), true); emitErr != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+
+		messages = append(messages[:0], restored.Messages...)
+		sessionID = restored.Metadata.SessionID
+		if !restored.Metadata.CreatedAt.IsZero() {
+			startedAt = restored.Metadata.CreatedAt
+		}
+		mode = parseExecutionMode(restored.Metadata.Mode)
+
+		if restored.Metadata.Model != "" {
+			provider, model := config.ParseModel(restored.Metadata.Model)
+			provider = normalizeProvider(provider)
+			restoredClient, err := newLLMClient(provider, model, cfg)
+			if err != nil {
+				if emitErr := bridge.EmitError(fmt.Sprintf("restore model %q: %v", restored.Metadata.Model, err), true); emitErr != nil {
+					return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+				}
+				return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+			}
+			*client = restoredClient
+			activeModelID = modelRef(provider, restoredClient.ModelID())
+		}
+
+		if restored.Metadata.CWD != "" {
+			if err := os.Chdir(restored.Metadata.CWD); err == nil {
+				cwd = restored.Metadata.CWD
+			}
+		}
+
+		if err := persistSessionState(store, sessionStateParams{
+			SessionID: sessionID,
+			CreatedAt: startedAt,
+			Mode:      mode,
+			Model:     activeModelID,
+			CWD:       cwd,
+			Branch:    agent.LoadTurnContext().GitBranch,
+			Tracker:   tracker,
+			Messages:  messages,
+		}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+
+		if err := bridge.Emit(ipc.EventSessionRestored, ipc.SessionRestoredPayload{
+			SessionID: sessionID,
+			Mode:      string(mode),
+		}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := emitTextResponse(bridge, fmt.Sprintf("Resumed session %s with %d messages.", sessionID, len(messages))); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	default:
+		if err := bridge.EmitError(fmt.Sprintf("unknown slash command: %s", payload.Command), true); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	}
+}
+
+func emitTextResponse(bridge *ipc.Bridge, text string) error {
+	if strings.TrimSpace(text) != "" {
+		if err := bridge.Emit(ipc.EventTokenDelta, ipc.TokenDeltaPayload{Text: text}); err != nil {
+			return err
+		}
+	}
+	return bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "end_turn"})
+}
+
+func formatCostSummary(snapshot costpkg.TrackerSnapshot, activeModelID string) string {
+	return fmt.Sprintf(
+		"Model: %s\nTotal cost: $%.4f\nInput tokens: %d\nOutput tokens: %d\nAPI duration: %s\nTool duration: %s",
+		activeModelID,
+		snapshot.TotalCostUSD,
+		snapshot.TotalInputTokens,
+		snapshot.TotalOutputTokens,
+		snapshot.TotalAPIDuration.Round(time.Millisecond),
+		snapshot.TotalToolDuration.Round(time.Millisecond),
+	)
 }
 
 func stringParamFromMap(params map[string]any, key string) (string, bool) {

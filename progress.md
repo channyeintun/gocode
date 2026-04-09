@@ -93,6 +93,7 @@
 - [x] `main.go` — Cobra entrypoint, `--stdio`/`--model`/`--mode` flags, NDJSON event loop
 - [x] Wire query engine into the event loop (replace stub response)
 - [ ] Slash command dispatch (`/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/resume`)
+	- Implemented: `/plan`, `/fast`, `/cost`, `/usage`, `/resume`
 
 ### `internal/config/`
 - [x] `config.go` — File + env config loading, ParseModel, Save
@@ -110,7 +111,7 @@
 
 ### `internal/session/`
 - [x] `store.go` — NDJSON transcript persistence, metadata save/load, ListSessions
-- [ ] `restore.go` — Resume conversation/todos/model/mode state
+- [x] `restore.go` — Resume conversation/model/mode state from transcript + metadata
 - [x] Wire session save into query loop
 
 ### `internal/artifacts/`
@@ -176,11 +177,11 @@
 | Cost Tracking | ✅ | ✅ (API usage, token totals, tool duration, TUI updates) |
 | Hooks | ✅ | ❌ (not wired) |
 | Artifacts | ✅ | ❌ (not wired) |
-| Session | ✅ | ⚠️ (live save wired; restore still pending) |
+| Session | ✅ | ✅ (live save + restore wired for transcript, mode, model, cwd) |
 | Config | ✅ | ✅ |
 | Skills | ✅ | ❌ (not wired) |
 | Local Model | ✅ | ❌ (not wired) |
 | Ink TUI | ✅ | ❌ (not built) |
 | CLI Entrypoint | ✅ | ✅ (live stdio engine) |
 
-**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The stdio engine now persists transcript and metadata state for each live session while turns run, in addition to permission and cost tracking. The next concrete task is implementing session restore.
+**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The stdio engine now persists and restores transcript + session metadata, including mode/model/cwd, and exposes `/plan`, `/fast`, `/cost`, `/usage`, and `/resume` over the stdio command path. The next concrete task is filling the remaining slash-command gaps (`/compact`, `/model`) or moving to planner/artifact wiring.
