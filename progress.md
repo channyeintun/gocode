@@ -41,7 +41,7 @@
 - [x] `grep.go` — Ripgrep wrapper tool
 - [x] `web_search.go` — Web search tool (DuckDuckGo-backed with domain filters)
 - [x] `web_fetch.go` — Web fetch tool (URL validation, HTTPS upgrade, redirect limits, HTML→markdown, in-memory cache)
-- [ ] `git.go` — Git operations tool
+- [x] `git.go` — Structured read-only git tool (`status`/`diff`/`log`/`show`/`branch`/`blame`)
 - [ ] `streaming_executor.go` — Overlap tool execution with model generation
 
 ### `internal/utils/`
@@ -183,4 +183,4 @@
 | Ink TUI | ✅ | ❌ (not built/tested) |
 | CLI Entrypoint | ✅ | ✅ (stub responses) |
 
-**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch tools are implemented. The default tool registry now includes those built-ins. The next concrete tooling task is `git.go`, with query-loop wiring still pending behind the tool layer.
+**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented. The default tool registry now includes those built-ins. The next concrete tooling task is `streaming_executor.go`, with query-loop wiring still pending behind the tool layer.

@@ -27,6 +27,7 @@ func NewRegistry() *Registry {
 	r.Register(NewGrepTool())
 	r.Register(NewWebSearchTool())
 	r.Register(NewWebFetchTool())
+	r.Register(NewGitTool())
 
 	return r
 }
