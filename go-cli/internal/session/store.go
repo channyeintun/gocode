@@ -12,15 +12,15 @@ import (
 
 // Metadata holds session state for persistence and resume.
 type Metadata struct {
-	SessionID   string    `json:"session_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Mode        string    `json:"mode"`
-	Model       string    `json:"model"`
-	CWD         string    `json:"cwd"`
-	Branch      string    `json:"branch"`
-	TotalCostUSD float64  `json:"total_cost_usd"`
-	Title       string    `json:"title,omitempty"`
+	SessionID    string    `json:"session_id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Mode         string    `json:"mode"`
+	Model        string    `json:"model"`
+	CWD          string    `json:"cwd"`
+	Branch       string    `json:"branch"`
+	TotalCostUSD float64   `json:"total_cost_usd"`
+	Title        string    `json:"title,omitempty"`
 }
 
 // Store handles session transcript persistence.
@@ -87,6 +87,28 @@ func (s *Store) AppendTranscript(sessionID string, msg api.Message) error {
 	}
 	_, err = fmt.Fprintf(f, "%s\n", data)
 	return err
+}
+
+// SaveTranscript rewrites the full transcript for a session as NDJSON.
+func (s *Store) SaveTranscript(sessionID string, messages []api.Message) error {
+	dir := s.SessionDir(sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	f, err := os.Create(filepath.Join(dir, "transcript.ndjson"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	encoder := json.NewEncoder(f)
+	for _, msg := range messages {
+		if err := encoder.Encode(msg); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ListSessions returns all available session IDs, most recent first.

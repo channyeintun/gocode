@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"iter"
@@ -22,6 +24,7 @@ import (
 	costpkg "github.com/channyeintun/go-cli/internal/cost"
 	"github.com/channyeintun/go-cli/internal/ipc"
 	"github.com/channyeintun/go-cli/internal/permissions"
+	"github.com/channyeintun/go-cli/internal/session"
 	toolpkg "github.com/channyeintun/go-cli/internal/tools"
 )
 
@@ -111,6 +114,28 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	mode := parseExecutionMode(cfg.DefaultMode)
 	permissionCtx := newPermissionContext(cfg.PermissionMode)
 	tracker := costpkg.NewTracker()
+	sessionStore := session.NewStore(session.DefaultBaseDir())
+	sessionID, err := newSessionID()
+	if err != nil {
+		return err
+	}
+	startedAt := time.Now()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if err := persistSessionState(sessionStore, sessionStateParams{
+		SessionID: sessionID,
+		CreatedAt: startedAt,
+		Mode:      mode,
+		Model:     client.ModelID(),
+		CWD:       cwd,
+		Branch:    agent.LoadTurnContext().GitBranch,
+		Tracker:   tracker,
+		Messages:  messages,
+	}); err != nil {
+		return err
+	}
 
 	// Emit ready event
 	if err := bridge.EmitReady(); err != nil {
@@ -167,6 +192,16 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				},
 				PersistMessages: func(updated []api.Message) {
 					messages = updated
+					_ = persistSessionState(sessionStore, sessionStateParams{
+						SessionID: sessionID,
+						CreatedAt: startedAt,
+						Mode:      mode,
+						Model:     client.ModelID(),
+						CWD:       cwd,
+						Branch:    agent.LoadTurnContext().GitBranch,
+						Tracker:   tracker,
+						Messages:  messages,
+					})
 				},
 				Clock: time.Now,
 			}
@@ -175,6 +210,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				Messages:     messages,
 				SystemPrompt: defaultSystemPrompt(),
 				Mode:         mode,
+				SessionID:    sessionID,
 				Tools:        registry.Definitions(),
 				MaxTokens:    client.Capabilities().MaxOutputTokens,
 			}, deps)
@@ -198,6 +234,18 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				mode = agent.ModeFast
 			} else {
 				mode = agent.ModePlan
+			}
+			if err := persistSessionState(sessionStore, sessionStateParams{
+				SessionID: sessionID,
+				CreatedAt: startedAt,
+				Mode:      mode,
+				Model:     client.ModelID(),
+				CWD:       cwd,
+				Branch:    agent.LoadTurnContext().GitBranch,
+				Tracker:   tracker,
+				Messages:  messages,
+			}); err != nil {
+				return err
 			}
 			if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
 				return err
@@ -552,6 +600,48 @@ func stringParamFromMap(params map[string]any, key string) (string, bool) {
 	}
 	stringValue, ok := value.(string)
 	return stringValue, ok
+}
+
+type sessionStateParams struct {
+	SessionID string
+	CreatedAt time.Time
+	Mode      agent.ExecutionMode
+	Model     string
+	CWD       string
+	Branch    string
+	Tracker   *costpkg.Tracker
+	Messages  []api.Message
+}
+
+func persistSessionState(store *session.Store, params sessionStateParams) error {
+	if err := store.SaveTranscript(params.SessionID, params.Messages); err != nil {
+		return err
+	}
+
+	totalCost := 0.0
+	if params.Tracker != nil {
+		totalCost = params.Tracker.Snapshot().TotalCostUSD
+	}
+
+	return store.SaveMetadata(session.Metadata{
+		SessionID:    params.SessionID,
+		CreatedAt:    params.CreatedAt,
+		UpdatedAt:    time.Now(),
+		Mode:         string(params.Mode),
+		Model:        params.Model,
+		CWD:          params.CWD,
+		Branch:       params.Branch,
+		TotalCostUSD: totalCost,
+	})
+}
+
+func newSessionID() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate session id: %w", err)
+	}
+	encoded := hex.EncodeToString(buf)
+	return fmt.Sprintf("%s-%s-%s-%s-%s", encoded[0:8], encoded[8:12], encoded[12:16], encoded[16:20], encoded[20:32]), nil
 }
 
 func decodeToolInput(call api.ToolCall) (toolpkg.ToolInput, error) {

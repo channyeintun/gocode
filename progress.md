@@ -111,7 +111,7 @@
 ### `internal/session/`
 - [x] `store.go` — NDJSON transcript persistence, metadata save/load, ListSessions
 - [ ] `restore.go` — Resume conversation/todos/model/mode state
-- [ ] Wire session save into query loop
+- [x] Wire session save into query loop
 
 ### `internal/artifacts/`
 - [x] `types.go` — 10 artifact kinds, Scope (session/user), Artifact/ArtifactVersion/ArtifactRef
@@ -176,11 +176,11 @@
 | Cost Tracking | ✅ | ✅ (API usage, token totals, tool duration, TUI updates) |
 | Hooks | ✅ | ❌ (not wired) |
 | Artifacts | ✅ | ❌ (not wired) |
-| Session | ✅ | ❌ (not wired) |
+| Session | ✅ | ⚠️ (live save wired; restore still pending) |
 | Config | ✅ | ✅ |
 | Skills | ✅ | ❌ (not wired) |
 | Local Model | ✅ | ❌ (not wired) |
 | Ink TUI | ✅ | ❌ (not built) |
 | CLI Entrypoint | ✅ | ✅ (live stdio engine) |
 
-**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The stdio engine now records API token usage and tool duration into the cost tracker, emits `cost_update` events to the TUI, and uses Claude-family pricing where the source implementation already defines it. The next concrete task is wiring session save into the live query loop.
+**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The stdio engine now persists transcript and metadata state for each live session while turns run, in addition to permission and cost tracking. The next concrete task is implementing session restore.
