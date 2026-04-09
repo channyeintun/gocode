@@ -4,6 +4,7 @@ import "context"
 
 // SaveRequest is the input to Service.Save.
 type SaveRequest struct {
+	ID       string
 	Kind     Kind
 	Scope    Scope
 	Title    string

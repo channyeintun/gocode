@@ -5,9 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -22,19 +26,75 @@ func NewLocalStore(baseDir string) *LocalStore {
 }
 
 func (s *LocalStore) Save(_ context.Context, req SaveRequest) (ArtifactVersion, error) {
-	id := generateID()
-	artDir := filepath.Join(s.baseDir, string(req.Kind), id)
+	now := time.Now()
+	id := strings.TrimSpace(req.ID)
+	createdAt := now
+	version := 1
+	artDir := ""
+
+	if id != "" {
+		existing, existingDir, err := s.findByID(id)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return ArtifactVersion{}, fmt.Errorf("load existing artifact: %w", err)
+		}
+		if err == nil {
+			if req.Kind != "" && req.Kind != existing.Kind {
+				return ArtifactVersion{}, fmt.Errorf("artifact kind mismatch: have %q want %q", existing.Kind, req.Kind)
+			}
+			createdAt = existing.CreatedAt
+			version = existing.Version + 1
+			artDir = existingDir
+			if req.Kind == "" {
+				req.Kind = existing.Kind
+			}
+			if req.Scope == "" {
+				req.Scope = existing.Scope
+			}
+			if strings.TrimSpace(req.Title) == "" {
+				req.Title = existing.Title
+			}
+			if strings.TrimSpace(req.MimeType) == "" {
+				req.MimeType = existing.MimeType
+			}
+			if strings.TrimSpace(req.Source) == "" {
+				req.Source = existing.Source
+			}
+			if req.Metadata == nil {
+				req.Metadata = cloneMetadata(existing.Metadata)
+			} else {
+				req.Metadata = mergeMetadata(existing.Metadata, req.Metadata)
+			}
+		}
+	}
+
+	if id == "" {
+		id = generateID()
+	}
+	if req.Kind == "" {
+		return ArtifactVersion{}, fmt.Errorf("artifact kind is required")
+	}
+	if req.Scope == "" {
+		req.Scope = ScopeSession
+	}
+	if strings.TrimSpace(req.Title) == "" {
+		req.Title = string(req.Kind)
+	}
+	if strings.TrimSpace(req.MimeType) == "" {
+		req.MimeType = MarkdownMimeType
+	}
+	if artDir == "" {
+		artDir = filepath.Join(s.baseDir, string(req.Kind), id)
+	}
+
 	if err := os.MkdirAll(artDir, 0o755); err != nil {
 		return ArtifactVersion{}, fmt.Errorf("create artifact dir: %w", err)
 	}
 
-	// Write content
-	contentPath := filepath.Join(artDir, "v1.content")
+	contentPath := filepath.Join(artDir, fmt.Sprintf("v%d.md", version))
 	if err := os.WriteFile(contentPath, req.Content, 0o644); err != nil {
 		return ArtifactVersion{}, fmt.Errorf("write content: %w", err)
 	}
 
-	// Write metadata
 	art := Artifact{
 		ID:          id,
 		Kind:        req.Kind,
@@ -42,9 +102,10 @@ func (s *LocalStore) Save(_ context.Context, req SaveRequest) (ArtifactVersion, 
 		Title:       req.Title,
 		MimeType:    req.MimeType,
 		Source:      req.Source,
-		CreatedAt:   time.Now(),
-		Version:     1,
-		Metadata:    req.Metadata,
+		CreatedAt:   createdAt,
+		UpdatedAt:   now,
+		Version:     version,
+		Metadata:    cloneMetadata(req.Metadata),
 		ContentPath: contentPath,
 	}
 	metaData, err := json.Marshal(art)
@@ -57,34 +118,38 @@ func (s *LocalStore) Save(_ context.Context, req SaveRequest) (ArtifactVersion, 
 
 	return ArtifactVersion{
 		ArtifactID:  id,
-		Version:     1,
+		Version:     version,
 		ContentPath: contentPath,
-		CreatedAt:   art.CreatedAt,
+		CreatedAt:   createdAt,
+		UpdatedAt:   now,
 	}, nil
 }
 
 func (s *LocalStore) Load(_ context.Context, req LoadRequest) (Artifact, error) {
-	// Search for artifact by ID across all kind directories
-	entries, err := os.ReadDir(s.baseDir)
+	art, artDir, err := s.findByID(req.ID)
 	if err != nil {
-		return Artifact{}, fmt.Errorf("read base dir: %w", err)
+		if errors.Is(err, os.ErrNotExist) {
+			return Artifact{}, fmt.Errorf("artifact not found: %s", req.ID)
+		}
+		return Artifact{}, err
 	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		metaPath := filepath.Join(s.baseDir, entry.Name(), req.ID, "meta.json")
-		data, err := os.ReadFile(metaPath)
-		if err != nil {
-			continue
-		}
-		var art Artifact
-		if err := json.Unmarshal(data, &art); err != nil {
-			continue
-		}
+
+	if req.Version <= 0 || req.Version == art.Version {
 		return art, nil
 	}
-	return Artifact{}, fmt.Errorf("artifact not found: %s", req.ID)
+
+	contentPath := filepath.Join(artDir, fmt.Sprintf("v%d.md", req.Version))
+	info, err := os.Stat(contentPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Artifact{}, fmt.Errorf("artifact version not found: %s@v%d", req.ID, req.Version)
+		}
+		return Artifact{}, fmt.Errorf("stat content version: %w", err)
+	}
+	art.Version = req.Version
+	art.UpdatedAt = info.ModTime()
+	art.ContentPath = contentPath
+	return art, nil
 }
 
 func (s *LocalStore) List(_ context.Context, req ListRequest) ([]ArtifactRef, error) {
@@ -109,20 +174,29 @@ func (s *LocalStore) List(_ context.Context, req ListRequest) ([]ArtifactRef, er
 		}
 		for _, artDir := range artDirs {
 			metaPath := filepath.Join(s.baseDir, kindDir.Name(), artDir.Name(), "meta.json")
-			data, err := os.ReadFile(metaPath)
+			art, err := loadMetadata(metaPath)
 			if err != nil {
-				continue
-			}
-			var art Artifact
-			if err := json.Unmarshal(data, &art); err != nil {
 				continue
 			}
 			if req.Scope != "" && art.Scope != req.Scope {
 				continue
 			}
-			refs = append(refs, ArtifactRef{ID: art.ID, Kind: art.Kind, Title: art.Title})
+			refs = append(refs, ArtifactRef{
+				ID:        art.ID,
+				Kind:      art.Kind,
+				Scope:     art.Scope,
+				Title:     art.Title,
+				Version:   art.Version,
+				UpdatedAt: art.UpdatedAt,
+			})
 		}
 	}
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].UpdatedAt.Equal(refs[j].UpdatedAt) {
+			return refs[i].Title < refs[j].Title
+		}
+		return refs[i].UpdatedAt.After(refs[j].UpdatedAt)
+	})
 	return refs, nil
 }
 
@@ -138,17 +212,106 @@ func (s *LocalStore) Delete(_ context.Context, req DeleteRequest) error {
 }
 
 func (s *LocalStore) Versions(_ context.Context, req VersionsRequest) ([]ArtifactVersion, error) {
-	// Simplified: returns only latest version for now
-	art, err := s.Load(context.Background(), LoadRequest{ID: req.ID})
+	art, artDir, err := s.findByID(req.ID)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("artifact not found: %s", req.ID)
+		}
 		return nil, err
 	}
-	return []ArtifactVersion{{
-		ArtifactID:  art.ID,
-		Version:     art.Version,
-		ContentPath: art.ContentPath,
-		CreatedAt:   art.CreatedAt,
-	}}, nil
+
+	entries, err := os.ReadDir(artDir)
+	if err != nil {
+		return nil, fmt.Errorf("read artifact dir: %w", err)
+	}
+
+	versions := make([]ArtifactVersion, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "v") || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+		versionNumber, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(entry.Name(), "v"), ".md"))
+		if err != nil {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		versions = append(versions, ArtifactVersion{
+			ArtifactID:  art.ID,
+			Version:     versionNumber,
+			ContentPath: filepath.Join(artDir, entry.Name()),
+			CreatedAt:   art.CreatedAt,
+			UpdatedAt:   info.ModTime(),
+		})
+	}
+	if len(versions) == 0 {
+		return nil, fmt.Errorf("artifact not found: %s", req.ID)
+	}
+	sort.Slice(versions, func(i, j int) bool {
+		return versions[i].Version > versions[j].Version
+	})
+	return versions, nil
+}
+
+func (s *LocalStore) findByID(id string) (Artifact, string, error) {
+	entries, err := os.ReadDir(s.baseDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Artifact{}, "", os.ErrNotExist
+		}
+		return Artifact{}, "", fmt.Errorf("read base dir: %w", err)
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		artDir := filepath.Join(s.baseDir, entry.Name(), id)
+		art, err := loadMetadata(filepath.Join(artDir, "meta.json"))
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			continue
+		}
+		return art, artDir, nil
+	}
+	return Artifact{}, "", os.ErrNotExist
+}
+
+func loadMetadata(metaPath string) (Artifact, error) {
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		return Artifact{}, err
+	}
+	var art Artifact
+	if err := json.Unmarshal(data, &art); err != nil {
+		return Artifact{}, err
+	}
+	return art, nil
+}
+
+func cloneMetadata(metadata map[string]any) map[string]any {
+	if metadata == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(metadata))
+	for key, value := range metadata {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func mergeMetadata(base map[string]any, overrides map[string]any) map[string]any {
+	merged := cloneMetadata(base)
+	if merged == nil {
+		merged = make(map[string]any, len(overrides))
+	}
+	for key, value := range overrides {
+		merged[key] = value
+	}
+	return merged
 }
 
 func generateID() string {

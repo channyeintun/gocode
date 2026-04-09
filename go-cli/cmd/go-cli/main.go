@@ -19,6 +19,7 @@ import (
 
 	"github.com/channyeintun/go-cli/internal/agent"
 	"github.com/channyeintun/go-cli/internal/api"
+	artifactspkg "github.com/channyeintun/go-cli/internal/artifacts"
 	"github.com/channyeintun/go-cli/internal/compact"
 	"github.com/channyeintun/go-cli/internal/config"
 	costpkg "github.com/channyeintun/go-cli/internal/cost"
@@ -117,6 +118,8 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	permissionCtx := newPermissionContext(cfg.PermissionMode)
 	tracker := costpkg.NewTracker()
 	sessionStore := session.NewStore(session.DefaultBaseDir())
+	artifactStore := artifactspkg.NewLocalStore(filepath.Join(filepath.Dir(session.DefaultBaseDir()), "artifacts"))
+	artifactManager := artifactspkg.NewManager(artifactStore)
 	sessionID, err := newSessionID()
 	if err != nil {
 		return err
@@ -173,13 +176,21 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				Role:    api.RoleUser,
 				Content: payload.Text,
 			})
+			messagesBeforeQuery := len(messages)
+			planArtifactID := ""
+			if mode == agent.ModePlan {
+				planArtifactID, err = ensurePlanArtifact(ctx, bridge, artifactManager, sessionID, payload.Text)
+				if err != nil {
+					return err
+				}
+			}
 
 			deps := agent.QueryDeps{
 				CallModel: func(callCtx context.Context, req api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
 					return trackModelStream(callCtx, bridge, tracker, client, req)
 				},
 				ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-					return executeToolCalls(callCtx, bridge, registry, permissionCtx, tracker, calls)
+					return executeToolCalls(callCtx, bridge, registry, permissionCtx, tracker, artifactManager, sessionID, calls)
 				},
 				CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
 					pipeline := compact.NewPipeline(client.Capabilities().MaxContextWindow, nil)
@@ -210,21 +221,29 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 
 			stream := agent.QueryStream(ctx, agent.QueryRequest{
 				Messages:     messages,
-				SystemPrompt: defaultSystemPrompt(),
+				SystemPrompt: systemPromptForMode(mode),
 				Mode:         mode,
 				SessionID:    sessionID,
 				Tools:        registry.Definitions(),
 				MaxTokens:    client.Capabilities().MaxOutputTokens,
 			}, deps)
 
+			queryFailed := false
 			for event, streamErr := range stream {
 				if streamErr != nil {
+					queryFailed = true
 					if emitErr := bridge.EmitError(streamErr.Error(), false); emitErr != nil {
 						return emitErr
 					}
 					break
 				}
 				if err := bridge.EmitEvent(event); err != nil {
+					return err
+				}
+			}
+
+			if mode == agent.ModePlan && !queryFailed {
+				if err := finalizePlanArtifact(ctx, bridge, artifactManager, planArtifactID, sessionID, payload.Text, messages, messagesBeforeQuery); err != nil {
 					return err
 				}
 			}
@@ -368,12 +387,22 @@ func defaultSystemPrompt() string {
 	return "You are Go CLI, a pragmatic coding assistant. Be concise, prefer inspecting files before changing them, and use tools when needed."
 }
 
+func systemPromptForMode(mode agent.ExecutionMode) string {
+	prompt := defaultSystemPrompt()
+	if mode == agent.ModePlan {
+		return prompt + "\n\nWhen plan mode is active, respond with a concrete markdown implementation plan before proposing file mutations. Keep the plan actionable and review-friendly."
+	}
+	return prompt
+}
+
 func executeToolCalls(
 	ctx context.Context,
 	bridge *ipc.Bridge,
 	registry *toolpkg.Registry,
 	permissionCtx *permissions.Context,
 	tracker *costpkg.Tracker,
+	artifactManager *artifactspkg.Manager,
+	sessionID string,
 	calls []api.ToolCall,
 ) ([]api.ToolResult, error) {
 	results := make([]api.ToolResult, len(calls))
@@ -444,11 +473,19 @@ func executeToolCalls(
 			spillPath := result.Output.SpillPath
 			truncated := result.Output.Truncated
 			if !result.Output.IsError {
-				budgetedOutput, spill, err := toolpkg.ApplyBudget(budget, call.ID, output)
-				if err == nil {
-					output = budgetedOutput
-					spillPath = spill
-					truncated = truncated || spill != ""
+				budgetedOutput, artifact, err := budgetToolOutput(ctx, artifactManager, sessionID, budget, call, output)
+				output = budgetedOutput
+				if err != nil {
+					if emitErr := bridge.EmitError(fmt.Sprintf("persist tool-log artifact: %v", err), true); emitErr != nil {
+						return nil, emitErr
+					}
+				}
+				if artifact.ID != "" {
+					spillPath = artifact.ContentPath
+					truncated = true
+					if err := emitArtifactCreated(bridge, artifact); err != nil {
+						return nil, err
+					}
 				}
 			}
 
@@ -916,6 +953,173 @@ func emitTextResponse(bridge *ipc.Bridge, text string) error {
 		}
 	}
 	return bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "end_turn"})
+}
+
+func ensurePlanArtifact(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	artifactManager *artifactspkg.Manager,
+	sessionID string,
+	userRequest string,
+) (string, error) {
+	content := artifactspkg.DraftImplementationPlanMarkdown(userRequest)
+	artifact, _, created, err := artifactManager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
+		Kind:    artifactspkg.KindImplementationPlan,
+		Scope:   artifactspkg.ScopeSession,
+		Title:   "Implementation Plan",
+		Source:  "planner",
+		Content: content,
+		Metadata: map[string]any{
+			"mode": "plan",
+		},
+	}, sessionID, "active")
+	if err != nil {
+		if emitErr := bridge.EmitError(fmt.Sprintf("persist implementation plan artifact: %v", err), true); emitErr != nil {
+			return "", emitErr
+		}
+		return "", nil
+	}
+	if created {
+		if err := emitArtifactCreated(bridge, artifact); err != nil {
+			return "", err
+		}
+	}
+	if err := emitArtifactUpdated(bridge, artifact, content); err != nil {
+		return "", err
+	}
+	return artifact.ID, nil
+}
+
+func finalizePlanArtifact(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	artifactManager *artifactspkg.Manager,
+	artifactID string,
+	sessionID string,
+	userRequest string,
+	messages []api.Message,
+	fromIndex int,
+) error {
+	plan := latestAssistantMessageSince(messages, fromIndex)
+	if strings.TrimSpace(plan) == "" {
+		return nil
+	}
+
+	content := artifactspkg.RenderImplementationPlanMarkdown(userRequest, plan)
+	request := artifactspkg.MarkdownRequest{
+		ID:      artifactID,
+		Kind:    artifactspkg.KindImplementationPlan,
+		Scope:   artifactspkg.ScopeSession,
+		Title:   "Implementation Plan",
+		Source:  "planner",
+		Content: content,
+		Metadata: map[string]any{
+			"mode": "plan",
+		},
+	}
+
+	var (
+		artifact artifactspkg.Artifact
+		created  bool
+		err      error
+	)
+	if strings.TrimSpace(artifactID) == "" {
+		artifact, _, created, err = artifactManager.UpsertSessionMarkdown(ctx, request, sessionID, "active")
+	} else {
+		artifact, _, created, err = artifactManager.SaveMarkdown(ctx, request)
+	}
+	if err != nil {
+		if emitErr := bridge.EmitError(fmt.Sprintf("update implementation plan artifact: %v", err), true); emitErr != nil {
+			return emitErr
+		}
+		return nil
+	}
+	if created {
+		if err := emitArtifactCreated(bridge, artifact); err != nil {
+			return err
+		}
+	}
+	return emitArtifactUpdated(bridge, artifact, content)
+}
+
+func emitArtifactCreated(bridge *ipc.Bridge, artifact artifactspkg.Artifact) error {
+	return bridge.Emit(ipc.EventArtifactCreated, ipc.ArtifactCreatedPayload{
+		ID:    artifact.ID,
+		Kind:  string(artifact.Kind),
+		Title: artifact.Title,
+	})
+}
+
+func emitArtifactUpdated(bridge *ipc.Bridge, artifact artifactspkg.Artifact, content string) error {
+	return bridge.Emit(ipc.EventArtifactUpdated, ipc.ArtifactUpdatedPayload{
+		ID:      artifact.ID,
+		Content: content,
+	})
+}
+
+func latestAssistantMessageSince(messages []api.Message, fromIndex int) string {
+	if fromIndex < 0 {
+		fromIndex = 0
+	}
+	if fromIndex > len(messages) {
+		fromIndex = len(messages)
+	}
+	for index := len(messages) - 1; index >= fromIndex; index-- {
+		message := messages[index]
+		if message.Role != api.RoleAssistant {
+			continue
+		}
+		if strings.TrimSpace(message.Content) == "" {
+			continue
+		}
+		return message.Content
+	}
+	return ""
+}
+
+func budgetToolOutput(
+	ctx context.Context,
+	artifactManager *artifactspkg.Manager,
+	sessionID string,
+	budget toolpkg.ResultBudget,
+	call api.ToolCall,
+	output string,
+) (string, artifactspkg.Artifact, error) {
+	if len(output) <= budget.MaxChars {
+		return output, artifactspkg.Artifact{}, nil
+	}
+	if artifactManager == nil {
+		return truncateOutputPreview(output, budget.PreviewLen, "", len(output)), artifactspkg.Artifact{}, nil
+	}
+
+	artifact, _, _, err := artifactManager.SaveMarkdown(ctx, artifactspkg.MarkdownRequest{
+		Kind:    artifactspkg.KindToolLog,
+		Scope:   artifactspkg.ScopeSession,
+		Title:   fmt.Sprintf("Tool Log: %s", call.Name),
+		Source:  call.Name,
+		Content: artifactspkg.RenderToolLogMarkdown(sessionID, call.Name, call.ID, call.Input, output),
+		Metadata: map[string]any{
+			"session_id":   sessionID,
+			"tool_call_id": call.ID,
+			"tool_name":    call.Name,
+		},
+	})
+	if err != nil {
+		return truncateOutputPreview(output, budget.PreviewLen, "", len(output)), artifactspkg.Artifact{}, err
+	}
+
+	return truncateOutputPreview(output, budget.PreviewLen, artifact.ContentPath, len(output)), artifact, nil
+}
+
+func truncateOutputPreview(output string, previewLen int, artifactPath string, totalChars int) string {
+	if previewLen <= 0 || previewLen > len(output) {
+		previewLen = len(output)
+	}
+	preview := output[:previewLen]
+	if artifactPath == "" {
+		return fmt.Sprintf("%s\n\n[Output truncated (%d chars).]", preview, totalChars)
+	}
+	return fmt.Sprintf("%s\n\n[Output truncated. Full markdown artifact saved to %s (%d chars)]", preview, artifactPath, totalChars)
 }
 
 func formatCostSummary(snapshot costpkg.TrackerSnapshot, activeModelID string) string {

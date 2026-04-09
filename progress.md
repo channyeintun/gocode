@@ -117,10 +117,10 @@
 ### `internal/artifacts/`
 - [x] `types.go` — 10 artifact kinds, Scope (session/user), Artifact/ArtifactVersion/ArtifactRef
 - [x] `service.go` — Service interface (Save/Load/List/Delete/Versions)
-- [x] `store.go` — LocalStore filesystem implementation
-- [ ] `manager.go` — Plan/task/walkthrough artifact lifecycle
-- [ ] Wire artifacts into tool budgeting spillover
-- [ ] Wire artifacts into planning mode
+- [x] `store.go` — LocalStore filesystem implementation with markdown version history
+- [x] `manager.go` — Markdown artifact lifecycle manager for implementation plans and tool logs
+- [x] Wire artifacts into tool budgeting spillover
+- [x] Wire artifacts into planning mode
 
 ### `tui/` — Ink Frontend
 - [x] `package.json` — React 19, Ink 7, TypeScript 6
@@ -176,7 +176,7 @@
 | Permissions | ✅ | ✅ (stdio permission prompts + session allow rules) |
 | Cost Tracking | ✅ | ✅ (API usage, token totals, tool duration, TUI updates) |
 | Hooks | ✅ | ❌ (not wired) |
-| Artifacts | ✅ | ❌ (not wired) |
+| Artifacts | ✅ | ✅ (markdown-backed plan artifacts + tool-log spillover wired) |
 | Session | ✅ | ✅ (live save + restore wired for transcript, mode, model, cwd) |
 | Config | ✅ | ✅ |
 | Skills | ✅ | ❌ (not wired) |
@@ -184,4 +184,4 @@
 | Ink TUI | ✅ | ❌ (not built) |
 | CLI Entrypoint | ✅ | ✅ (live stdio engine) |
 
-**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The stdio engine now persists and restores transcript + session metadata, supports runtime `/model` switching, and exposes `/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/usage`, and `/resume` over the stdio command path. The next concrete task is planner/artifact wiring or deeper compaction work beyond the current manual trigger.
+**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The stdio engine now persists and restores transcript + session metadata, supports runtime `/model` switching, exposes `/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/usage`, and `/resume` over the stdio command path, and emits markdown-backed implementation-plan/tool-log artifacts during planning and oversized tool execution. The next concrete task is planner enforcement or deeper compaction work beyond the current manual trigger.

@@ -33,8 +33,9 @@ type Artifact struct {
 	Scope       Scope          `json:"scope"`
 	Title       string         `json:"title"`
 	MimeType    string         `json:"mime_type"`
-	Source      string         `json:"source"`  // tool or producer name
+	Source      string         `json:"source"` // tool or producer name
 	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 	Version     int            `json:"version"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	ContentPath string         `json:"content_path"` // path to content file
@@ -46,11 +47,15 @@ type ArtifactVersion struct {
 	Version     int       `json:"version"`
 	ContentPath string    `json:"content_path"`
 	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // ArtifactRef is a lightweight reference to an artifact.
 type ArtifactRef struct {
-	ID    string `json:"id"`
-	Kind  Kind   `json:"kind"`
-	Title string `json:"title"`
+	ID        string    `json:"id"`
+	Kind      Kind      `json:"kind"`
+	Scope     Scope     `json:"scope"`
+	Title     string    `json:"title"`
+	Version   int       `json:"version"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

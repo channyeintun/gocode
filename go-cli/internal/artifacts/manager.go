@@ -1,0 +1,217 @@
+package artifacts
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+)
+
+// MarkdownMimeType is the canonical MIME type for user-facing artifacts.
+const MarkdownMimeType = "text/markdown; charset=utf-8"
+
+// Manager coordinates markdown-backed artifact lifecycle operations.
+type Manager struct {
+	store Service
+}
+
+// MarkdownRequest describes a markdown artifact save or update.
+type MarkdownRequest struct {
+	ID       string
+	Kind     Kind
+	Scope    Scope
+	Title    string
+	Source   string
+	Content  string
+	Metadata map[string]any
+}
+
+// NewManager constructs a markdown artifact manager.
+func NewManager(store Service) *Manager {
+	return &Manager{store: store}
+}
+
+// SaveMarkdown creates or updates a markdown artifact.
+func (m *Manager) SaveMarkdown(ctx context.Context, req MarkdownRequest) (Artifact, ArtifactVersion, bool, error) {
+	if m == nil || m.store == nil {
+		return Artifact{}, ArtifactVersion{}, false, fmt.Errorf("artifact manager is not configured")
+	}
+
+	created := strings.TrimSpace(req.ID) == ""
+	version, err := m.store.Save(ctx, SaveRequest{
+		ID:       strings.TrimSpace(req.ID),
+		Kind:     req.Kind,
+		Scope:    req.Scope,
+		Title:    req.Title,
+		MimeType: MarkdownMimeType,
+		Source:   req.Source,
+		Content:  []byte(req.Content),
+		Metadata: cloneMetadata(req.Metadata),
+	})
+	if err != nil {
+		return Artifact{}, ArtifactVersion{}, false, err
+	}
+
+	art, err := m.store.Load(ctx, LoadRequest{ID: version.ArtifactID})
+	if err != nil {
+		return Artifact{}, ArtifactVersion{}, false, err
+	}
+
+	return art, version, created && version.Version == 1, nil
+}
+
+// LoadMarkdown retrieves the markdown content for the requested artifact version.
+func (m *Manager) LoadMarkdown(ctx context.Context, id string, version int) (Artifact, string, error) {
+	if m == nil || m.store == nil {
+		return Artifact{}, "", fmt.Errorf("artifact manager is not configured")
+	}
+
+	art, err := m.store.Load(ctx, LoadRequest{ID: id, Version: version})
+	if err != nil {
+		return Artifact{}, "", err
+	}
+
+	data, err := os.ReadFile(art.ContentPath)
+	if err != nil {
+		return Artifact{}, "", fmt.Errorf("read artifact content: %w", err)
+	}
+
+	return art, string(data), nil
+}
+
+// FindSessionArtifact finds the latest session-scoped artifact matching the provided slot.
+func (m *Manager) FindSessionArtifact(ctx context.Context, kind Kind, scope Scope, sessionID string, slot string) (Artifact, bool, error) {
+	if m == nil || m.store == nil {
+		return Artifact{}, false, fmt.Errorf("artifact manager is not configured")
+	}
+
+	refs, err := m.store.List(ctx, ListRequest{Kind: kind, Scope: scope})
+	if err != nil {
+		return Artifact{}, false, err
+	}
+
+	for _, ref := range refs {
+		art, err := m.store.Load(ctx, LoadRequest{ID: ref.ID})
+		if err != nil {
+			continue
+		}
+		if metadataString(art.Metadata, "session_id") != sessionID {
+			continue
+		}
+		if strings.TrimSpace(slot) != "" && metadataString(art.Metadata, "slot") != slot {
+			continue
+		}
+		return art, true, nil
+	}
+
+	return Artifact{}, false, nil
+}
+
+// UpsertSessionMarkdown updates an existing session artifact when present, or creates one.
+func (m *Manager) UpsertSessionMarkdown(ctx context.Context, req MarkdownRequest, sessionID string, slot string) (Artifact, ArtifactVersion, bool, error) {
+	existing, found, err := m.FindSessionArtifact(ctx, req.Kind, req.Scope, sessionID, slot)
+	if err != nil {
+		return Artifact{}, ArtifactVersion{}, false, err
+	}
+	if found {
+		req.ID = existing.ID
+	}
+
+	metadata := cloneMetadata(req.Metadata)
+	if metadata == nil {
+		metadata = make(map[string]any, 2)
+	}
+	metadata["session_id"] = sessionID
+	if strings.TrimSpace(slot) != "" {
+		metadata["slot"] = slot
+	}
+	req.Metadata = metadata
+
+	return m.SaveMarkdown(ctx, req)
+}
+
+// DraftImplementationPlanMarkdown renders the initial in-progress plan artifact.
+func DraftImplementationPlanMarkdown(userRequest string) string {
+	return RenderImplementationPlanMarkdown(userRequest, "_Planning in progress._")
+}
+
+// RenderImplementationPlanMarkdown wraps a plan response with the captured request.
+func RenderImplementationPlanMarkdown(userRequest string, plan string) string {
+	request := strings.TrimSpace(userRequest)
+	if request == "" {
+		request = "No request captured."
+	}
+
+	plan = strings.TrimSpace(plan)
+	if plan == "" {
+		plan = "_Planning in progress._"
+	}
+
+	return strings.TrimSpace(fmt.Sprintf(`# Implementation Plan
+
+## Request
+
+%s
+
+---
+
+%s
+`, blockquote(request), plan)) + "\n"
+}
+
+// RenderToolLogMarkdown formats an oversized tool result as a markdown artifact.
+func RenderToolLogMarkdown(sessionID string, toolName string, toolCallID string, rawInput string, output string) string {
+	var builder strings.Builder
+	builder.WriteString("# Tool Log\n\n")
+	builder.WriteString("## Details\n\n")
+	builder.WriteString("- Session ID: " + sessionID + "\n")
+	builder.WriteString("- Tool: " + toolName + "\n")
+	builder.WriteString("- Tool Call ID: " + toolCallID + "\n\n")
+
+	if strings.TrimSpace(rawInput) != "" {
+		builder.WriteString("## Input\n\n")
+		builder.WriteString("~~~json\n")
+		builder.WriteString(strings.TrimSpace(rawInput))
+		if !strings.HasSuffix(rawInput, "\n") {
+			builder.WriteString("\n")
+		}
+		builder.WriteString("~~~\n\n")
+	}
+
+	builder.WriteString("## Output\n\n")
+	builder.WriteString("~~~text\n")
+	builder.WriteString(output)
+	if !strings.HasSuffix(output, "\n") {
+		builder.WriteString("\n")
+	}
+	builder.WriteString("~~~\n")
+
+	return builder.String()
+}
+
+func metadataString(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return ""
+	}
+	stringValue, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return stringValue
+}
+
+func blockquote(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			lines[i] = ">"
+			continue
+		}
+		lines[i] = "> " + line
+	}
+	return strings.Join(lines, "\n")
+}
