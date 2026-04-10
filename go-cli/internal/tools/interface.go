@@ -20,10 +20,14 @@ type ToolInput struct {
 
 // ToolOutput holds a tool's result.
 type ToolOutput struct {
-	Output    string
-	IsError   bool
-	Truncated bool
-	SpillPath string // non-empty if result was spilled to disk
+	Output     string
+	IsError    bool
+	Truncated  bool
+	SpillPath  string // non-empty if result was spilled to disk
+	FilePath   string
+	Preview    string
+	Insertions int
+	Deletions  int
 }
 
 // Tool is the interface every tool must implement.

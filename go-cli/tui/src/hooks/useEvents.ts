@@ -54,6 +54,10 @@ export interface UIToolCall {
   truncated?: boolean;
   progressBytes?: number;
   permissionRequestId?: string;
+  filePath?: string;
+  preview?: string;
+  insertions?: number;
+  deletions?: number;
 }
 
 export interface EngineUIState {
@@ -227,6 +231,10 @@ export function useEvents(initialModel: string, initialMode: string) {
             truncated: p.truncated,
             error: undefined,
             permissionRequestId: undefined,
+            filePath: p.file_path,
+            preview: p.preview,
+            insertions: p.insertions,
+            deletions: p.deletions,
           }),
         }));
         break;
@@ -511,6 +519,22 @@ function upsertToolCall(
             nextToolCall.permissionRequestId !== undefined
               ? nextToolCall.permissionRequestId
               : toolCall.permissionRequestId,
+          filePath:
+            nextToolCall.filePath !== undefined
+              ? nextToolCall.filePath
+              : toolCall.filePath,
+          preview:
+            nextToolCall.preview !== undefined
+              ? nextToolCall.preview
+              : toolCall.preview,
+          insertions:
+            nextToolCall.insertions !== undefined
+              ? nextToolCall.insertions
+              : toolCall.insertions,
+          deletions:
+            nextToolCall.deletions !== undefined
+              ? nextToolCall.deletions
+              : toolCall.deletions,
         }
       : toolCall,
   );

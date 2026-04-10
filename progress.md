@@ -2,6 +2,7 @@
 
 ## 2026-04-10
 
+- Implemented Phase 4 groundwork by enriching file write/edit tool results with inline change metadata and short diff previews, then rendering those previews in the TUI transcript.
 - Implemented Phase 3 of `plan.md` by replacing generic tool transcript summaries with tool-aware renderers for bash, file operations, grep/glob, git, and web tools.
 - Kept the sourcecode-style inline transcript layout while making tool rows describe the operation more clearly across running, waiting, success, and failure states.
 - Implemented Phase 2 of `plan.md` against upstream sourcecode references by rendering tool-use entries inline in the transcript instead of in a separate floating widget.

@@ -693,11 +693,15 @@ func executeToolCalls(
 			}
 
 			if err := bridge.Emit(ipc.EventToolResult, ipc.ToolResultPayload{
-				ToolID:    call.ID,
-				Output:    output,
-				Truncated: truncated || spillPath != "",
-				Name:      call.Name,
-				Input:     call.Input,
+				ToolID:     call.ID,
+				Output:     output,
+				Truncated:  truncated || spillPath != "",
+				Name:       call.Name,
+				Input:      call.Input,
+				FilePath:   result.Output.FilePath,
+				Preview:    result.Output.Preview,
+				Insertions: result.Output.Insertions,
+				Deletions:  result.Output.Deletions,
 			}); err != nil {
 				return nil, err
 			}

@@ -71,12 +71,19 @@ func (t *FileWriteTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 	}
 
 	writeType := "updated"
+	oldContent := ""
 	if _, err := os.Stat(filePath); err != nil {
 		if os.IsNotExist(err) {
 			writeType = "created"
 		} else {
 			return ToolOutput{}, fmt.Errorf("stat file %q: %w", filePath, err)
 		}
+	} else {
+		previousBytes, err := os.ReadFile(filePath)
+		if err != nil {
+			return ToolOutput{}, fmt.Errorf("read existing file %q: %w", filePath, err)
+		}
+		oldContent = string(previousBytes)
 	}
 
 	trackFileBeforeWrite(filePath)
@@ -90,5 +97,13 @@ func (t *FileWriteTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 		return ToolOutput{}, fmt.Errorf("write file %q: %w", filePath, err)
 	}
 
-	return ToolOutput{Output: fmt.Sprintf("File %s successfully: %s", writeType, filePath)}, nil
+	preview, insertions, deletions := buildFileDiffPreview(oldContent, content)
+
+	return ToolOutput{
+		Output:     fmt.Sprintf("File %s successfully: %s", writeType, filePath),
+		FilePath:   filePath,
+		Preview:    preview,
+		Insertions: insertions,
+		Deletions:  deletions,
+	}, nil
 }

@@ -118,7 +118,14 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 		if err := os.WriteFile(filePath, []byte(newString), 0o644); err != nil {
 			return ToolOutput{}, fmt.Errorf("write file %q: %w", filePath, err)
 		}
-		return ToolOutput{Output: fmt.Sprintf("File initialized successfully: %s", filePath)}, nil
+		preview, insertions, deletions := buildFileDiffPreview(content, newString)
+		return ToolOutput{
+			Output:     fmt.Sprintf("File initialized successfully: %s", filePath),
+			FilePath:   filePath,
+			Preview:    preview,
+			Insertions: insertions,
+			Deletions:  deletions,
+		}, nil
 	}
 
 	matchCount := strings.Count(content, oldString)
@@ -146,8 +153,14 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 		return ToolOutput{}, fmt.Errorf("write file %q: %w", filePath, err)
 	}
 
+	preview, insertions, deletions := buildFileDiffPreview(content, updatedContent)
+
 	return ToolOutput{
-		Output: fmt.Sprintf("Edited file successfully: %s (%d replacement%s)", filePath, replacements, pluralSuffix(replacements)),
+		Output:     fmt.Sprintf("Edited file successfully: %s (%d replacement%s)", filePath, replacements, pluralSuffix(replacements)),
+		FilePath:   filePath,
+		Preview:    preview,
+		Insertions: insertions,
+		Deletions:  deletions,
 	}, nil
 }
 

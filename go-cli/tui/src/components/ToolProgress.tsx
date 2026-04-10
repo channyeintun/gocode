@@ -216,11 +216,7 @@ function renderSuccess(toolCall: UIToolCall) {
   switch (toolCall.name) {
     case "file_write":
     case "file_edit":
-      return (
-        <Text color="green">
-          {summarizeFileMutation(toolCall.output, toolCall.truncated)}
-        </Text>
-      );
+      return <MarkdownText text={summarizeFileMutation(toolCall)} />;
     case "file_read":
       return (
         <MarkdownText
@@ -302,11 +298,27 @@ function summarizeOutput(raw: string, truncated?: boolean): string {
   return shortened;
 }
 
-function summarizeFileMutation(raw?: string, truncated?: boolean): string {
-  if (!raw) {
-    return truncated ? "Completed. Output truncated." : "Completed.";
+function summarizeFileMutation(toolCall: UIToolCall): string {
+  const parts: string[] = [];
+
+  if (toolCall.output) {
+    parts.push(summarizeOutput(toolCall.output, toolCall.truncated));
+  } else {
+    parts.push(
+      toolCall.truncated ? "Completed. Output truncated." : "Completed.",
+    );
   }
-  return summarizeOutput(raw, truncated);
+
+  const statLine = formatMutationStats(toolCall.insertions, toolCall.deletions);
+  if (statLine) {
+    parts.push(statLine);
+  }
+
+  if (toolCall.preview) {
+    parts.push(["```diff", toolCall.preview, "```"].join("\n"));
+  }
+
+  return parts.join("\n\n");
 }
 
 function summarizeFileRead(raw?: string, truncated?: boolean): string {
@@ -399,4 +411,17 @@ function basenameOrFallback(value: string): string {
   }
   const parts = value.split("/");
   return parts[parts.length - 1] || value;
+}
+
+function formatMutationStats(insertions?: number, deletions?: number): string {
+  const additions = insertions ?? 0;
+  const removals = deletions ?? 0;
+  const parts: string[] = [];
+  if (additions > 0) {
+    parts.push(`Added ${additions} ${additions === 1 ? "line" : "lines"}`);
+  }
+  if (removals > 0) {
+    parts.push(`Removed ${removals} ${removals === 1 ? "line" : "lines"}`);
+  }
+  return parts.join(", ");
 }

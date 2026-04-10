@@ -64,6 +64,10 @@ export interface ToolResultPayload {
   truncated: boolean;
   name?: string;
   input?: string;
+  file_path?: string;
+  preview?: string;
+  insertions?: number;
+  deletions?: number;
 }
 
 export interface ToolErrorPayload {
