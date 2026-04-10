@@ -39,7 +39,7 @@ export interface EngineUIState {
   model: string;
   cost: { totalUsd: number; inputTokens: number; outputTokens: number };
   artifacts: UIArtifact[];
-  activeTool: { id: string; name: string } | null;
+  activeTool: { id: string; name: string; input: string } | null;
   compact: {
     active: boolean;
     strategy: string;
@@ -117,26 +117,29 @@ export function useEvents(initialModel: string, initialMode: string) {
       }
       case "turn_complete": {
         const p = event.payload as TurnCompletePayload;
-        setUIState((s) => ({
-          ...s,
-          messages:
-            s.streamedText.trim().length > 0
-              ? [...s.messages, createMessage("assistant", s.streamedText.trim())]
-              : s.messages,
-          streamedText: "",
-          thinkingText: "",
-          isStreaming: false,
-          activeTool: null,
-          compact: null,
-          statusLine: `Turn complete (${p.stop_reason})`,
-        }));
+        setUIState((s) => {
+          const text = s.streamedText.trim();
+          const newMessages = text.length > 0
+            ? [...s.messages, createMessage("assistant", text)]
+            : [...s.messages, createMessage("assistant", "(Model returned an empty response)")];
+          return {
+            ...s,
+            messages: newMessages,
+            streamedText: "",
+            thinkingText: "",
+            isStreaming: false,
+            activeTool: null,
+            compact: null,
+            statusLine: `Turn complete (${p.stop_reason})`,
+          };
+        });
         break;
       }
       case "tool_start": {
         const p = event.payload as ToolStartPayload;
         setUIState((s) => ({
           ...s,
-          activeTool: { id: p.tool_id, name: p.name },
+          activeTool: { id: p.tool_id, name: p.name, input: p.input },
         }));
         break;
       }

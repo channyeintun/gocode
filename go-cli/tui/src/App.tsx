@@ -129,7 +129,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         )}
 
         {uiState.activeTool && (
-          <ToolProgress toolName={uiState.activeTool.name} />
+          <ToolProgress toolName={uiState.activeTool.name} toolInput={uiState.activeTool.input} />
         )}
       </Box>
 

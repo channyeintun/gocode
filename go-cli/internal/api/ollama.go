@@ -190,6 +190,11 @@ func (c *OllamaClient) handleChunk(
 			return errStopStream
 		}
 	}
+	if chunk.Message.Thinking != "" {
+		if !yield(ModelEvent{Type: ModelEventThinking, Text: chunk.Message.Thinking}, nil) {
+			return errStopStream
+		}
+	}
 	if chunk.Message.Content != "" {
 		if !yield(ModelEvent{Type: ModelEventToken, Text: chunk.Message.Content}, nil) {
 			return errStopStream
@@ -200,6 +205,7 @@ func (c *OllamaClient) handleChunk(
 		if err != nil {
 			return fmt.Errorf("encode Ollama tool call args: %w", err)
 		}
+		state.hasToolCall = true
 		if !yield(ModelEvent{
 			Type: ModelEventToolCall,
 			ToolCall: &ToolCall{
@@ -213,7 +219,11 @@ func (c *OllamaClient) handleChunk(
 	}
 	if chunk.Done && !state.sentStop {
 		state.sentStop = true
-		if !yield(ModelEvent{Type: ModelEventStop, StopReason: mapOllamaStopReason(chunk.DoneReason)}, nil) {
+		stopReason := mapOllamaStopReason(chunk.DoneReason)
+		if state.hasToolCall && stopReason != "tool_use" {
+			stopReason = "tool_use"
+		}
+		if !yield(ModelEvent{Type: ModelEventStop, StopReason: stopReason}, nil) {
 			return errStopStream
 		}
 	}
@@ -366,6 +376,7 @@ type ollamaOptions struct {
 type ollamaMessage struct {
 	Role      string           `json:"role"`
 	Content   string           `json:"content,omitempty"`
+	Thinking  string           `json:"thinking,omitempty"`
 	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"`
 }
 
@@ -399,6 +410,7 @@ type ollamaChatResponse struct {
 }
 
 type ollamaStreamState struct {
-	usage    *Usage
-	sentStop bool
+	usage       *Usage
+	sentStop    bool
+	hasToolCall bool
 }
