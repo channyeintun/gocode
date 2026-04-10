@@ -222,6 +222,9 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 		if err := emitModelChanged(bridge, activeModelID, client); err != nil {
 			return err
 		}
+		if err := emitContextWindowUsage(bridge, client, messages); err != nil {
+			return err
+		}
 	}
 	if startupModelErr != nil {
 		if err := bridge.EmitError(fmt.Sprintf("initialize model %q: %v", activeModelID, startupModelErr), true); err != nil {
@@ -296,6 +299,9 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				Content: payload.Text,
 				Images:  images,
 			})
+			if err := emitContextWindowUsage(bridge, client, messages); err != nil {
+				return err
+			}
 			availableSkills, _ := skillspkg.LoadAll(cwd)
 			messagesBeforeQuery := len(messages)
 			planner := agent.NewPlanner(mode, sessionID, artifactManager)
@@ -330,6 +336,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						Tracker:   tracker,
 						Messages:  messages,
 					})
+					_ = emitContextWindowUsage(bridge, client, messages)
 				},
 				Clock: time.Now,
 			}
@@ -1014,6 +1021,16 @@ func emitModelChanged(bridge *ipc.Bridge, activeModelID string, client api.LLMCl
 	return bridge.Emit(ipc.EventModelChanged, payload)
 }
 
+func emitContextWindowUsage(bridge *ipc.Bridge, client api.LLMClient, messages []api.Message) error {
+	if client == nil {
+		return nil
+	}
+
+	return bridge.Emit(ipc.EventContextWindow, ipc.ContextWindowPayload{
+		CurrentUsage: compact.EstimateConversationTokens(messages),
+	})
+}
+
 func emitSessionUpdated(bridge *ipc.Bridge, sessionID, title string) error {
 	return bridge.Emit(ipc.EventSessionUpdated, ipc.SessionUpdatedPayload{
 		SessionID: sessionID,
@@ -1140,6 +1157,9 @@ func handleSlashCommand(
 		if err := emitModelChanged(bridge, activeModelID, *client); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
+		if err := emitContextWindowUsage(bridge, *client, messages); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
 		if err := emitTextResponse(bridge, fmt.Sprintf("Set model to %s", activeModelID)); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
@@ -1199,6 +1219,9 @@ func handleSlashCommand(
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		if err := bridge.Emit(ipc.EventCompactEnd, ipc.CompactEndPayload{TokensAfter: tokensAfter}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := emitContextWindowUsage(bridge, *client, messages); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		if err := emitTextResponse(bridge, fmt.Sprintf("Compacted conversation with %s. Tokens %d -> %d.", result.Strategy, tokensBefore, tokensAfter)); err != nil {
@@ -1285,6 +1308,9 @@ func handleSlashCommand(
 		if err := emitModelChanged(bridge, activeModelID, *client); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
+		if err := emitContextWindowUsage(bridge, *client, messages); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
 		if err := bridge.Emit(ipc.EventModeChanged, ipc.ModeChangedPayload{Mode: string(mode)}); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
@@ -1313,6 +1339,9 @@ func handleSlashCommand(
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		if err := emitSessionUpdated(bridge, sessionID, ""); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := emitContextWindowUsage(bridge, *client, messages); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		if err := emitTextResponse(bridge, "Conversation cleared. New session started."); err != nil {

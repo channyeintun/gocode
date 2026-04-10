@@ -14,6 +14,7 @@ interface StatusBarProps {
   sessionTitle?: string | null;
   maxContextWindow?: number | null;
   maxOutputTokens?: number | null;
+  currentContextUsage?: number | null;
   totalCostUsd: number;
   inputTokens: number;
   outputTokens: number;
@@ -27,6 +28,7 @@ const StatusBar: FC<StatusBarProps> = ({
   sessionTitle,
   maxContextWindow,
   maxOutputTokens,
+  currentContextUsage,
   totalCostUsd,
   inputTokens,
   outputTokens,
@@ -46,7 +48,7 @@ const StatusBar: FC<StatusBarProps> = ({
     maxContextWindow,
     maxOutputTokens,
   );
-  const contextTokens = inputTokens + outputTokens;
+  const contextTokens = currentContextUsage ?? inputTokens + outputTokens;
   const contextPercent = Math.min(
     999,
     contextWindow > 0 ? Math.round((contextTokens / contextWindow) * 100) : 0,

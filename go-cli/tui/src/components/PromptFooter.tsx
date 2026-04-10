@@ -10,6 +10,7 @@ interface PromptFooterProps {
   model: string;
   maxContextWindow?: number | null;
   maxOutputTokens?: number | null;
+  currentContextUsage?: number | null;
   isLoading: boolean;
   disabled?: boolean;
   promptValue: string;
@@ -26,6 +27,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
   model,
   maxContextWindow,
   maxOutputTokens,
+  currentContextUsage,
   isLoading,
   disabled,
   promptValue,
@@ -58,7 +60,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
     () => getWrappedLineSegments(promptValue, promptTextColumns).length,
     [promptTextColumns, promptValue],
   );
-  const tokenUsage = inputTokens + outputTokens;
+  const tokenUsage = currentContextUsage ?? inputTokens + outputTokens;
   const tokenWarning = useMemo(
     () =>
       calculateTokenWarningState(

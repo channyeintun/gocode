@@ -4,6 +4,7 @@ import type {
   ArtifactUpdatedPayload,
   CompactEndPayload,
   CompactStartPayload,
+  ContextWindowPayload,
   CostUpdatePayload,
   ErrorPayload,
   ModeChangedPayload,
@@ -75,6 +76,7 @@ export interface EngineUIState {
   sessionTitle: string | null;
   maxContextWindow: number | null;
   maxOutputTokens: number | null;
+  currentContextUsage: number | null;
   cost: { totalUsd: number; inputTokens: number; outputTokens: number };
   artifacts: UIArtifact[];
   toolCalls: UIToolCall[];
@@ -102,6 +104,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   sessionTitle: null,
   maxContextWindow: null,
   maxOutputTokens: null,
+  currentContextUsage: null,
   cost: { totalUsd: 0, inputTokens: 0, outputTokens: 0 },
   artifacts: [],
   toolCalls: [],
@@ -346,6 +349,17 @@ export function useEvents(initialModel: string, initialMode: string) {
             typeof p.max_output_tokens === "number" && p.max_output_tokens > 0
               ? p.max_output_tokens
               : s.maxOutputTokens,
+        }));
+        break;
+      }
+      case "context_window": {
+        const p = event.payload as ContextWindowPayload;
+        setUIState((s) => ({
+          ...s,
+          currentContextUsage:
+            typeof p.current_usage === "number" && p.current_usage >= 0
+              ? p.current_usage
+              : s.currentContextUsage,
         }));
         break;
       }

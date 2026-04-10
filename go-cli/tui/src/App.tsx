@@ -134,6 +134,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         sessionTitle={uiState.sessionTitle}
         maxContextWindow={uiState.maxContextWindow}
         maxOutputTokens={uiState.maxOutputTokens}
+        currentContextUsage={uiState.currentContextUsage}
         totalCostUsd={uiState.cost.totalUsd}
         inputTokens={uiState.cost.inputTokens}
         outputTokens={uiState.cost.outputTokens}
@@ -225,6 +226,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             model={uiState.model}
             maxContextWindow={uiState.maxContextWindow}
             maxOutputTokens={uiState.maxOutputTokens}
+            currentContextUsage={uiState.currentContextUsage}
             isLoading={uiState.isStreaming}
             disabled={isPromptDisabled}
             promptValue={prompt.value}

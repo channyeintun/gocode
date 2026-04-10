@@ -26,11 +26,12 @@ const (
 	EventPermissionRequest EventType = "permission_request"
 
 	// Session state
-	EventModeChanged  EventType = "mode_changed"
-	EventModelChanged EventType = "model_changed"
-	EventCostUpdate   EventType = "cost_update"
-	EventCompactStart EventType = "compact_start"
-	EventCompactEnd   EventType = "compact_end"
+	EventModeChanged   EventType = "mode_changed"
+	EventModelChanged  EventType = "model_changed"
+	EventContextWindow EventType = "context_window"
+	EventCostUpdate    EventType = "cost_update"
+	EventCompactStart  EventType = "compact_start"
+	EventCompactEnd    EventType = "compact_end"
 
 	// Artifacts
 	EventArtifactCreated EventType = "artifact_created"
@@ -129,6 +130,10 @@ type ModelChangedPayload struct {
 	Model            string `json:"model"`
 	MaxContextWindow int    `json:"max_context_window,omitempty"`
 	MaxOutputTokens  int    `json:"max_output_tokens,omitempty"`
+}
+
+type ContextWindowPayload struct {
+	CurrentUsage int `json:"current_usage"`
 }
 
 type CostUpdatePayload struct {

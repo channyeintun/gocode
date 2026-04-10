@@ -10,6 +10,7 @@ export type EventType =
   | "permission_request"
   | "mode_changed"
   | "model_changed"
+  | "context_window"
   | "cost_update"
   | "compact_start"
   | "compact_end"
@@ -111,6 +112,10 @@ export interface ModelChangedPayload {
   model: string;
   max_context_window?: number;
   max_output_tokens?: number;
+}
+
+export interface ContextWindowPayload {
+  current_usage: number;
 }
 
 export interface CostUpdatePayload {
