@@ -46,6 +46,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     uiState,
     handleEvent,
     clearStream,
+    cancelActiveTurn,
     clearPermission,
     appendUserMessage,
     beginAssistantTurn,
@@ -110,7 +111,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     feedback?: string,
   ) => {
     if (uiState.pendingPermission) {
-      beginAssistantTurn();
       clearPermission(decision);
       engine.sendPermissionResponse(
         uiState.pendingPermission.request_id,
@@ -118,6 +118,11 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         feedback,
       );
     }
+  };
+
+  const handleCancel = () => {
+    cancelActiveTurn();
+    engine.sendCancel();
   };
 
   const isEngineReady = uiState.ready || engine.ready;
@@ -219,7 +224,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             onSubmit={handleSubmit}
             onImagePaste={handleImagePaste}
             onModeToggle={engine.sendModeToggle}
-            onCancel={engine.sendCancel}
+            onCancel={handleCancel}
             disabled={isPromptDisabled}
           />
           <PromptFooter

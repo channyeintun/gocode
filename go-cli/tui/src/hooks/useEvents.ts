@@ -213,6 +213,16 @@ export function useEvents(initialModel: string, initialMode: string) {
       case "turn_complete": {
         const p = event.payload as TurnCompletePayload;
         setUIState((s) => {
+          if (p.stop_reason === "cancelled") {
+            return {
+              ...s,
+              liveAssistantBlocks: [],
+              isStreaming: false,
+              compact: null,
+              statusLine: "Turn cancelled",
+            };
+          }
+
           const blocks: UIAssistantBlock[] = assistantBlocksHaveContent(
             s.liveAssistantBlocks,
           )
@@ -238,6 +248,7 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolStartPayload;
         setUIState((s) => ({
           ...s,
+          isStreaming: false,
           transcript: appendTranscriptEntry(s.transcript, {
             id: p.tool_id,
             kind: "tool_call",
@@ -355,6 +366,7 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as PermissionRequestPayload;
         setUIState((s) => ({
           ...s,
+          isStreaming: false,
           pendingPermission: p,
           transcript: appendTranscriptEntry(s.transcript, {
             id: p.tool_id,
@@ -520,9 +532,19 @@ export function useEvents(initialModel: string, initialMode: string) {
     setUIState((s) => ({
       ...s,
       liveAssistantBlocks: [],
+      isStreaming: false,
       compact: null,
       statusLine: null,
       error: null,
+    }));
+  }, []);
+
+  const cancelActiveTurn = useCallback(() => {
+    setUIState((s) => ({
+      ...s,
+      isStreaming: false,
+      compact: null,
+      statusLine: "Cancellation requested...",
     }));
   }, []);
 
@@ -575,6 +597,7 @@ export function useEvents(initialModel: string, initialMode: string) {
     uiState,
     handleEvent,
     clearStream,
+    cancelActiveTurn,
     clearPermission,
     appendUserMessage,
     beginAssistantTurn,
