@@ -2,7 +2,7 @@
 
 ## Working Rules
 
-- Follow [plan.md](/Users/channyeintun/Documents/go-code/plan.md) as the execution baseline.
+- Follow [plan.md](/Users/channyeintun/Documents/gocode/plan.md) as the execution baseline.
 - Reference `sourcecode/` first for every feature or behavior change.
 - Do not add tests.
 - After each completed task: update this file, run formatting, and create a git commit.

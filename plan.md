@@ -2,7 +2,7 @@
 
 ## Goal
 
-Bring `go-cli/tui` as close as possible to the interaction model and visual behavior used in `sourcecode`, with priority on:
+Bring `gocode/tui` as close as possible to the interaction model and visual behavior used in `sourcecode`, with priority on:
 
 - main prompt input
 - permission prompt input

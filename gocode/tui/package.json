@@ -1,0 +1,29 @@
+{
+  "name": "gocode-tui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "gocode": "bin/gocode.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node bin/gocode.js",
+    "dev": "tsc --watch",
+    "install-engine": "cd .. && go build -o tui/engine/gocode-engine ./cmd/gocode/",
+    "setup": "npm install && npm run build && npm run install-engine"
+  },
+  "dependencies": {
+    "cli-highlight": "^2.1.11",
+    "ink": "^7.0.0",
+    "ink-spinner": "^5.0.0",
+    "marked": "^15.0.12",
+    "react": "^19.2.5",
+    "react-devtools-core": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "@types/react": "^19.2.14",
+    "typescript": "^6.0.2"
+  }
+}

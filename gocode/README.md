@@ -2,16 +2,6 @@
 
 An agentic coding CLI powered by LLMs. Think, plan, and execute code changes from your terminal.
 
-## Architecture & Vision
-
-`gocode` is built on three core pillars:
-
-1.  **TUI (React/Ink):** A highly interactive terminal UI that provides real-time feedback, grouped tool execution transcripts, and dynamic progress indicators.
-2.  **Go Engine:** A high-performance backend that handles the agent loop, tool execution (bash, file system, git, search), and project-level orchestration with built-in permission gating.
-3.  **Artifacts:** A structured way to view and manage complex outputs like implementation plans, walkthroughs, and technical feedback in a dedicated panel.
-
-![Agentic Coding CLI Architecture](./docs/architecture.png)
-
 ## Install
 
 ### macOS / Linux (one command)
@@ -163,8 +153,6 @@ When the agent wants to run a command or write a file, you'll see a permission p
 
 Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, etc.) always require explicit approval, even with `[s]`.
 
-Background shell sessions are also supported through the `bash` tool by setting `background=true`, then following up with `command_status` and `send_command_input` using the returned `CommandId`.
-
 ## Tools
 
 The agent has access to:
@@ -172,13 +160,17 @@ The agent has access to:
 | Tool | Description |
 |------|-------------|
 | **bash** | Execute shell commands |
+| **list_dir** | List directory contents as structured JSON lines |
 | **file_read** | Read file contents |
 | **file_write** | Create or overwrite files |
 | **file_edit** | Find-and-replace edits in files |
+| **multi_replace_file_content** | Apply multiple validated block replacements in one file write |
 | **glob** | Find files by pattern |
 | **grep** | Search file contents (ripgrep) |
 | **web_search** | Search the web |
 | **web_fetch** | Fetch and read a URL |
+| **command_status** | Check unread output and state for a background command |
+| **send_command_input** | Send stdin to a background command |
 | **git** | Read-only git operations (status, diff, log, blame) |
 
 ## Configuration
@@ -200,9 +192,6 @@ Environment variables override the config file:
 | `GOCODE_API_KEY` | API key (overrides provider-specific keys) |
 | `GOCODE_BASE_URL` | Custom API base URL |
 | `GOCODE_PERMISSION_MODE` | `default`, `autoApprove`, or `bypassPermissions` |
-| `USE_LOCAL_MODEL` | Opt in to using Ollama for internal helper tasks like compaction |
-
-`USE_LOCAL_MODEL` does not change the main chat model. It only enables local routing for internal helper tasks that are already wired for it. Right now that means compaction.
 
 ## Architecture
 
@@ -237,4 +226,4 @@ make install           # Install to /usr/local/bin
 
 ## License
 
-See [LICENSE](LICENSE).
+See [LICENSE](../LICENSE).
