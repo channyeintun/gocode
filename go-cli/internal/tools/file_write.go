@@ -79,6 +79,8 @@ func (t *FileWriteTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 		}
 	}
 
+	trackFileBeforeWrite(filePath)
+
 	parentDir := filepath.Dir(filePath)
 	if err := os.MkdirAll(parentDir, 0o755); err != nil {
 		return ToolOutput{}, fmt.Errorf("create parent directory %q: %w", parentDir, err)

@@ -9,8 +9,9 @@ import (
 
 // Registry holds all registered tools.
 type Registry struct {
-	mu    sync.RWMutex
-	tools map[string]Tool
+	mu          sync.RWMutex
+	tools       map[string]Tool
+	FileHistory *FileHistory
 }
 
 // NewRegistry creates a registry preloaded with built-in tools.

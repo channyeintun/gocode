@@ -107,6 +107,7 @@
 - [x] Wire query engine into the event loop (replace stub response)
 - [x] Slash command dispatch (`/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/resume`)
   - Also implemented: `/usage`, `/plan-mode`, `/model default`
+  - Also implemented: `/clear`, `/help`, `/status`, `/sessions`, `/diff`
 
 ### `internal/config/`
 
@@ -122,7 +123,7 @@
 
 - [x] `types.go` — 9 hook types, Payload, Response
 - [x] `runner.go` — Shell script hook executor (~/.config/go-cli/hooks/)
-- [ ] Wire hooks into tool execution lifecycle
+- [x] Wire hooks into tool execution lifecycle (pre_tool_use / post_tool_use / session_start)
 - [ ] Wire hooks into compaction lifecycle
 
 ### `internal/session/`
@@ -130,6 +131,7 @@
 - [x] `store.go` — NDJSON transcript persistence, metadata save/load, ListSessions
 - [x] `restore.go` — Resume conversation/model/mode state from transcript + metadata
 - [x] Wire session save into query loop
+- [x] `title.go` — Session title generation via local model (async after first query)
 
 ### `internal/artifacts/`
 
@@ -189,6 +191,46 @@
 
 ---
 
+## Phase 3: Enhancements (Source Code Parity)
+
+### `internal/agent/` — CLAUDE.md / Memory File Loading
+
+- [x] `memory_files.go` — Discover and load instruction files (CLAUDE.md, .claude/CLAUDE.md, .claude/rules/*.md, CLAUDE.local.md) walking from cwd to root
+- [x] User memory: ~/.claude/CLAUDE.md
+- [x] Project memory: directory hierarchy walk with priority ordering
+- [x] Local memory: CLAUDE.local.md (untracked project instructions)
+- [x] Wire into SystemContext and system prompt composition
+
+### `internal/session/` — Session Title Generation
+
+- [x] `title.go` — Generate 3-7 word titles via local model (Ollama)
+- [x] Async title generation after first successful query
+- [x] Title persisted into session metadata
+
+### `internal/hooks/` — Lifecycle Hook Wiring
+
+- [x] session_start hook fires at engine boot
+- [x] pre_tool_use hook fires before each approved tool call (can deny)
+- [x] post_tool_use hook fires after successful tool results
+
+### `cmd/go-cli/` — New Slash Commands
+
+- [x] `/clear` — Clear conversation and start new session
+- [x] `/help` — Show all available slash commands
+- [x] `/status` — Show session ID, elapsed, mode, model, message count, cost
+- [x] `/sessions` — List recent sessions with metadata
+- [x] `/diff` — Show git diff (with optional args like --staged)
+
+### `internal/tools/` — File History Tracking
+
+- [x] `file_history.go` — SHA-256 content-addressed backup store, snapshot/rewind support
+- [x] Track file state before write/edit operations
+- [x] Snapshot creation and rewind to any checkpoint
+- [x] Diff stats between snapshot and current state
+- [x] Wire into file_write and file_edit tools via global tracker
+
+---
+
 ## Summary
 
 | Area           | Scaffolded           | Wired/Working                                                                   |
@@ -200,13 +242,15 @@
 | Compaction     | ✅ (Strategies A+B+C done) | ⚠️ (proactive compaction now wired; tests remain pending)               |
 | Permissions    | ✅                   | ✅ (stdio permission prompts + session allow rules)                             |
 | Cost Tracking  | ✅                   | ✅ (API usage, token totals, tool duration, TUI updates)                        |
-| Hooks          | ✅                   | ❌ (not wired)                                                                  |
+| Hooks          | ✅                   | ✅ (pre/post tool + session_start wired; compaction hooks pending)               |
 | Artifacts      | ✅                   | ✅ (markdown-backed plan artifacts + tool-log spillover wired)                  |
-| Session        | ✅                   | ✅ (live save + restore wired for transcript, mode, model, cwd)                 |
+| Session        | ✅                   | ✅ (live save + restore + title generation wired)                               |
 | Config         | ✅                   | ✅                                                                              |
 | Skills         | ✅                   | ✅ (auto-select matching skills and inject their markdown instructions per turn) |
-| Local Model    | ✅                   | ✅ (Ollama Query + compaction routing wired; session title generation remains follow-up) |
+| Local Model    | ✅                   | ✅ (Ollama Query + compaction routing + session title generation wired)          |
 | Ink TUI        | ✅                   | ✅ (default CLI launches Ink parent, Go child over NDJSON; status/permission/artifact rendering validated) |
 | CLI Entrypoint | ✅                   | ✅ (live stdio engine)                                                          |
+| Memory Files   | ✅                   | ✅ (CLAUDE.md + .claude/rules + CLAUDE.local.md hierarchy loading wired)        |
+| File History   | ✅                   | ✅ (content-addressed backup + snapshot/rewind wired into file write/edit)      |
 
-**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The default CLI path now launches the Ink frontend as the parent process and runs the Go engine as a stdio child over NDJSON, with status, artifact, compaction, permission/error states, preserved conversation history, and live assistant/tool activity rendered in the TUI while the engine remains recoverable if the configured model is unavailable at startup. The stdio engine persists and restores transcript + session metadata, supports runtime `/model` switching, exposes `/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/usage`, and `/resume` over the stdio command path, emits markdown-backed implementation-plan/tool-log artifacts during planning and oversized tool execution, keeps plan mode read-only through planner enforcement, avoids creating implementation-plan artifacts for simple plan-mode Q&A turns, auto-selects matching markdown skills into the per-turn system prompt, and now shapes requests by model capability: native tool definitions are withheld for text-only models, `ultrathink` only enables extended thinking on supported models, context thresholds already track each model's window, and tool-output budgets scale with model output capacity. The next concrete task is session title generation with the local model and any remaining non-hook follow-ups before hooks.
+**Current state:** All four provider clients, the Bash tool, and the file read/write/edit/glob/grep/web_search/web_fetch/git tools are implemented, along with the streaming executor needed to overlap safe tool calls. The default CLI path now launches the Ink frontend as the parent process and runs the Go engine as a stdio child over NDJSON, with status, artifact, compaction, permission/error states, preserved conversation history, and live assistant/tool activity rendered in the TUI while the engine remains recoverable if the configured model is unavailable at startup. The stdio engine persists and restores transcript + session metadata, generates session titles via local model after the first query, supports runtime `/model` switching, exposes `/plan`, `/fast`, `/compact`, `/model`, `/cost`, `/usage`, `/resume`, `/clear`, `/help`, `/status`, `/sessions`, and `/diff` over the stdio command path, emits markdown-backed implementation-plan/tool-log artifacts during planning and oversized tool execution, keeps plan mode read-only through planner enforcement, loads CLAUDE.md/CLAUDE.local.md/.claude/rules/*.md project instruction files into the system prompt, tracks file edit history for undo/rewind with content-addressed backups, fires pre/post-tool and session lifecycle hooks from ~/.config/go-cli/hooks/, and now shapes requests by model capability: native tool definitions are withheld for text-only models, `ultrathink` only enables extended thinking on supported models, context thresholds already track each model's window, and tool-output budgets scale with model output capacity.

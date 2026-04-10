@@ -25,6 +25,7 @@ import (
 	"github.com/channyeintun/go-cli/internal/compact"
 	"github.com/channyeintun/go-cli/internal/config"
 	costpkg "github.com/channyeintun/go-cli/internal/cost"
+	"github.com/channyeintun/go-cli/internal/hooks"
 	"github.com/channyeintun/go-cli/internal/ipc"
 	"github.com/channyeintun/go-cli/internal/localmodel"
 	"github.com/channyeintun/go-cli/internal/permissions"
@@ -181,13 +182,17 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	mode := parseExecutionMode(cfg.DefaultMode)
 	permissionCtx := newPermissionContext(cfg.PermissionMode)
 	tracker := costpkg.NewTracker()
+	hookRunner := hooks.NewRunner(hooks.DefaultHooksDir())
 	sessionStore := session.NewStore(session.DefaultBaseDir())
 	artifactStore := artifactspkg.NewLocalStore(filepath.Join(filepath.Dir(session.DefaultBaseDir()), "artifacts"))
 	artifactManager := artifactspkg.NewManager(artifactStore)
+	sessionTitleGenerated := false
 	sessionID, err := newSessionID()
 	if err != nil {
 		return err
 	}
+	fileHistory := toolpkg.NewFileHistory(toolpkg.DefaultFileHistoryDir(sessionStore.SessionDir(sessionID)))
+	toolpkg.SetGlobalFileHistory(fileHistory)
 	startedAt := time.Now()
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -218,6 +223,12 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 
 	// Start the message router — single reader goroutine for the bridge.
 	router := ipc.NewMessageRouter(ctx, bridge)
+
+	// Fire session_start hooks (best-effort)
+	_, _ = hookRunner.Run(ctx, hooks.Payload{
+		Type:      hooks.HookSessionStart,
+		SessionID: sessionID,
+	})
 
 	// Main event loop: read client messages and dispatch
 	for {
@@ -267,7 +278,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					return trackModelStream(callCtx, bridge, tracker, client, req)
 				},
 				ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-					return executeToolCalls(callCtx, bridge, router, registry, permissionCtx, tracker, planner, artifactManager, sessionID, client.Capabilities().MaxOutputTokens, calls)
+					return executeToolCalls(callCtx, bridge, router, registry, permissionCtx, tracker, planner, artifactManager, hookRunner, sessionID, client.Capabilities().MaxOutputTokens, calls)
 				},
 				CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
 					pipeline := newCompactionPipeline(bridge, tracker, client)
@@ -353,6 +364,28 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					if err := emitArtifactUpdated(bridge, update.Artifact, update.Content); err != nil {
 						return err
 					}
+				}
+
+				// Generate session title after the first successful query
+				if !sessionTitleGenerated && len(messages) > 0 {
+					sessionTitleGenerated = true
+					go func() {
+						modelRouter := localmodel.NewRouter(client)
+						title := session.GenerateTitle(modelRouter, messages)
+						if title != "" {
+							_ = sessionStore.SaveMetadata(session.Metadata{
+								SessionID:    sessionID,
+								CreatedAt:    startedAt,
+								UpdatedAt:    time.Now(),
+								Mode:         string(mode),
+								Model:        activeModelID,
+								CWD:          cwd,
+								Branch:       agent.LoadTurnContext().GitBranch,
+								TotalCostUSD: tracker.Snapshot().TotalCostUSD,
+								Title:        title,
+							})
+						}
+					}()
 				}
 			}
 		case ipc.MsgSlashCommand:
@@ -525,6 +558,7 @@ func executeToolCalls(
 	tracker *costpkg.Tracker,
 	planner *agent.Planner,
 	artifactManager *artifactspkg.Manager,
+	hookRunner *hooks.Runner,
 	sessionID string,
 	maxOutputTokens int,
 	calls []api.ToolCall,
@@ -579,6 +613,33 @@ func executeToolCalls(
 		}); err != nil {
 			return nil, err
 		}
+
+		// Fire pre_tool_use hook
+		hookDenied := false
+		if hookRunner != nil {
+			responses, _ := hookRunner.Run(ctx, hooks.Payload{
+				Type:      hooks.HookPreToolUse,
+				SessionID: sessionID,
+				ToolName:  call.Name,
+				ToolInput: call.Input,
+			})
+			for _, resp := range responses {
+				if resp.Action == "deny" {
+					reason := resp.Message
+					if reason == "" {
+						reason = "blocked by pre_tool_use hook"
+					}
+					results[index] = api.ToolResult{ToolCallID: call.ID, Output: reason, IsError: true}
+					_ = bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: call.ID, Error: reason})
+					hookDenied = true
+					break
+				}
+			}
+		}
+		if hookDenied {
+			continue
+		}
+
 		approved = append(approved, pendingCall)
 	}
 
@@ -637,6 +698,17 @@ func executeToolCalls(
 				Truncated: truncated || spillPath != "",
 			}); err != nil {
 				return nil, err
+			}
+
+			// Fire post_tool_use hook
+			if hookRunner != nil {
+				_, _ = hookRunner.Run(ctx, hooks.Payload{
+					Type:      hooks.HookPostToolUse,
+					SessionID: sessionID,
+					ToolName:  call.Name,
+					ToolInput: call.Input,
+					Output:    output,
+				})
 			}
 		}
 	}
@@ -1113,6 +1185,63 @@ func handleSlashCommand(
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "clear":
+		messages = messages[:0]
+		newID, err := newSessionID()
+		if err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		sessionID = newID
+		startedAt = time.Now()
+		if err := persistSessionState(store, sessionStateParams{
+			SessionID: sessionID,
+			CreatedAt: startedAt,
+			Mode:      mode,
+			Model:     activeModelID,
+			CWD:       cwd,
+			Branch:    agent.LoadTurnContext().GitBranch,
+			Tracker:   tracker,
+			Messages:  messages,
+		}); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		if err := emitTextResponse(bridge, "Conversation cleared. New session started."); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "help":
+		helpText := formatHelpText()
+		if err := emitTextResponse(bridge, helpText); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "status":
+		statusText := formatStatusText(sessionID, startedAt, mode, activeModelID, cwd, len(messages), tracker)
+		if err := emitTextResponse(bridge, statusText); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "sessions":
+		sessions, err := store.ListSessions()
+		if err != nil {
+			if emitErr := bridge.EmitError(fmt.Sprintf("list sessions: %v", err), true); emitErr != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+		if err := emitTextResponse(bridge, formatSessionList(sessions, sessionID)); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "diff":
+		diffOutput := gitDiff(args)
+		if strings.TrimSpace(diffOutput) == "" {
+			diffOutput = "No changes detected."
+		}
+		if err := emitTextResponse(bridge, diffOutput); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
 	default:
 		if err := bridge.EmitError(fmt.Sprintf("unknown slash command: %s", payload.Command), true); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
@@ -1209,6 +1338,90 @@ func stringParamFromMap(params map[string]any, key string) (string, bool) {
 	}
 	stringValue, ok := value.(string)
 	return stringValue, ok
+}
+
+func formatHelpText() string {
+	return `Available slash commands:
+
+  /plan          Switch to plan mode (read-only until approved)
+  /fast          Switch to fast mode (direct execution)
+  /model [name]  Show or switch the active model
+  /cost          Show token usage and cost breakdown
+  /usage         Alias for /cost
+  /compact       Compact the conversation to save context
+  /resume [id]   Resume a previous session
+  /clear         Clear conversation and start a new session
+  /status        Show current session status
+  /sessions      List recent sessions
+  /diff [args]   Show git diff (optionally with args like --staged)
+  /help          Show this help message`
+}
+
+func formatStatusText(sessionID string, startedAt time.Time, mode agent.ExecutionMode, model string, cwd string, msgCount int, tracker *costpkg.Tracker) string {
+	elapsed := time.Since(startedAt).Round(time.Second)
+	snap := tracker.Snapshot()
+	return fmt.Sprintf(
+		"Session: %s\nStarted: %s (%s ago)\nMode: %s\nModel: %s\nCWD: %s\nMessages: %d\nCost: $%.4f\nTokens: %d in / %d out",
+		sessionID,
+		startedAt.Format(time.RFC3339),
+		elapsed,
+		string(mode),
+		model,
+		cwd,
+		msgCount,
+		snap.TotalCostUSD,
+		snap.TotalInputTokens,
+		snap.TotalOutputTokens,
+	)
+}
+
+func formatSessionList(sessions []session.Metadata, currentID string) string {
+	if len(sessions) == 0 {
+		return "No sessions found."
+	}
+	var b strings.Builder
+	b.WriteString("Recent sessions:\n\n")
+	shown := 0
+	for _, meta := range sessions {
+		if shown >= 20 {
+			break
+		}
+		marker := "  "
+		if meta.SessionID == currentID {
+			marker = "* "
+		}
+		title := meta.Title
+		if title == "" {
+			title = "(untitled)"
+		}
+		b.WriteString(fmt.Sprintf("%s%s  %s  %s  %s  $%.4f\n",
+			marker,
+			meta.SessionID[:8],
+			meta.UpdatedAt.Format("2006-01-02 15:04"),
+			meta.Model,
+			title,
+			meta.TotalCostUSD,
+		))
+		shown++
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func gitDiff(args string) string {
+	parts := []string{"diff", "--stat"}
+	if strings.TrimSpace(args) != "" {
+		parts = strings.Fields("diff " + args)
+	}
+	cmd := exec.Command("git", parts...)
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Sprintf("git diff error: %v", err)
+	}
+	result := strings.TrimSpace(string(out))
+	if len(result) > 5000 {
+		result = result[:5000] + "\n[truncated]"
+	}
+	return result
 }
 
 type sessionStateParams struct {
