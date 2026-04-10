@@ -199,30 +199,29 @@ func latestAssistantPlanSince(messages []api.Message, fromIndex int) string {
 }
 
 func shouldPersistImplementationPlan(userRequest string, assistantResponse string) bool {
-	request := strings.ToLower(strings.TrimSpace(userRequest))
+	request := normalizeIntentText(userRequest)
 	response := strings.ToLower(strings.TrimSpace(assistantResponse))
 
 	if request == "" && response == "" {
 		return false
 	}
 
-	if containsAny(request, planIntentTerms) {
-		return true
-	}
-
-	if looksLikeQuestion(request) && !containsAny(request, implementationIntentTerms) {
+	requestedPlan := containsAny(request, planIntentTerms)
+	requestedImplementation := containsAny(request, implementationIntentTerms)
+	if !requestedPlan && !requestedImplementation {
 		return false
 	}
 
-	if containsAny(response, explicitPlanResponseTerms) {
+	responseLooksLikePlan := containsAny(response, explicitPlanResponseTerms) || containsStructuredSteps(assistantResponse)
+	if !responseLooksLikePlan {
+		return false
+	}
+
+	if requestedPlan {
 		return true
 	}
 
-	if containsAny(response, implementationIntentTerms) && containsStructuredSteps(response) {
-		return true
-	}
-
-	return false
+	return requestedImplementation
 }
 
 var planIntentTerms = []string{
@@ -296,6 +295,7 @@ func containsAny(text string, terms []string) bool {
 }
 
 func looksLikeQuestion(text string) bool {
+	text = normalizeIntentText(text)
 	if strings.Contains(text, "?") {
 		return true
 	}
@@ -305,6 +305,14 @@ func looksLikeQuestion(text string) bool {
 		}
 	}
 	return false
+}
+
+func normalizeIntentText(text string) string {
+	text = strings.ToLower(strings.TrimSpace(text))
+	for _, prefix := range []string{"please ", "kindly ", "pls "} {
+		text = strings.TrimPrefix(text, prefix)
+	}
+	return text
 }
 
 func containsStructuredSteps(text string) bool {

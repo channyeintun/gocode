@@ -17,6 +17,12 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
   statusLabel,
   model,
 }) => {
+  const activeThinkingIndex =
+    statusLabel === "Thinking" ? findLastBlockIndex(blocks, "thinking") : -1;
+  const showStatusRow = !(
+    statusLabel === "Thinking" && activeThinkingIndex >= 0
+  );
+
   return (
     <MessageRow
       markerColor="green"
@@ -29,13 +35,21 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
       meta={model ? <Text dimColor>{model}</Text> : null}
     >
       <Box flexDirection="column">
-        <Text color="gray">
-          <Spinner type="dots" /> {statusLabel}
-        </Text>
+        {showStatusRow ? (
+          <Text color="gray">
+            <Spinner type="dots" /> {statusLabel}
+          </Text>
+        ) : null}
         {blocks.map((block, index) => (
-          <Box key={`${block.kind}-${index}`} marginTop={1}>
+          <Box
+            key={`${block.kind}-${index}`}
+            marginTop={showStatusRow || index > 0 ? 1 : 0}
+          >
             {block.kind === "thinking" ? (
-              <AssistantThinkingMessage text={block.text} streaming />
+              <AssistantThinkingMessage
+                text={block.text}
+                streaming={index === activeThinkingIndex}
+              />
             ) : (
               <MarkdownText
                 text={block.text}
@@ -50,3 +64,15 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
 };
 
 export default StreamingAssistantMessage;
+
+function findLastBlockIndex(
+  blocks: UIAssistantBlock[],
+  kind: UIAssistantBlock["kind"],
+): number {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    if (blocks[index]?.kind === kind) {
+      return index;
+    }
+  }
+  return -1;
+}

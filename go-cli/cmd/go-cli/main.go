@@ -589,7 +589,7 @@ func defaultSystemPrompt() string {
 func systemPromptForMode(mode agent.ExecutionMode) string {
 	prompt := defaultSystemPrompt()
 	if mode == agent.ModePlan {
-		return prompt + "\n\nWhen plan mode is active, respond with a concrete markdown implementation plan before proposing file mutations. Keep the plan actionable and review-friendly. " + agent.PlanModePromptHint()
+		return prompt + "\n\nWhen plan mode is active, use read tools to explore before any writes. For implementation tasks, respond with a concrete markdown implementation plan before proposing file mutations. For research, explanation, review, or other non-implementation requests, answer directly instead of fabricating an implementation plan. Keep real implementation plans actionable and review-friendly. " + agent.PlanModePromptHint()
 	}
 	return prompt
 }
