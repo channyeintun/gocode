@@ -15,6 +15,15 @@ Bring `go-cli/tui` as close as possible to the interaction model and visual beha
 
 No planned parity work remains in this pass.
 
+## Post-Parity Stabilization
+
+Current follow-up fixes focus on:
+
+1. Queue prompt submissions that arrive during an active turn instead of clearing the live response.
+2. Keep the live assistant status visible across tool execution and permission waits.
+3. Make Esc interruption reliable while a turn is active.
+4. Render file-read results explicitly instead of hiding them inside grouped workspace exploration summaries.
+
 ### Deferred Follow-up
 
 1. Full scroll/fullscreen primitives and a true virtualized transcript list remain deferred because the upstream implementation depends on custom renderer internals that stock Ink does not expose. The anchored render cap plus transcript paging/jump controls are the accepted local substitute for now.

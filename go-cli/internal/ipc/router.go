@@ -42,6 +42,15 @@ func (r *MessageRouter) readLoop() {
 			close(r.incoming)
 			return
 		}
+		if msg.Type == MsgCancel {
+			r.mu.Lock()
+			fn := r.cancelFunc
+			r.mu.Unlock()
+			if fn != nil {
+				fn()
+			}
+			continue
+		}
 		r.incoming <- msg
 	}
 }

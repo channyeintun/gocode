@@ -1,4 +1,4 @@
-import React, { type FC, useEffect, useState } from "react";
+import React, { type FC, useCallback, useEffect, useState } from "react";
 import { Box, Text } from "ink";
 import { useEngine } from "./hooks/useEngine.js";
 import { useEvents } from "./hooks/useEvents.js";
@@ -25,6 +25,12 @@ interface AppProps {
   mode: string;
 }
 
+interface QueuedPrompt {
+  id: number;
+  text: string;
+  images: UserInputImagePayload[];
+}
+
 function toUserInputImagePayload(
   id: number,
   image: PastedImageData,
@@ -42,6 +48,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const prompt = usePromptHistory();
   const [promptImages, setPromptImages] = useState<UserInputImagePayload[]>([]);
   const [nextImageId, setNextImageId] = useState(1);
+  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([]);
+  const [nextQueuedPromptId, setNextQueuedPromptId] = useState(1);
   const {
     uiState,
     handleEvent,
@@ -62,6 +70,23 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         artifact.kind !== "implementation-plan" && artifact.kind !== "tool-log",
     )
     .slice(0, 2);
+  const isEngineReady = uiState.ready || engine.ready;
+
+  const submitPrompt = useCallback(
+    (text: string, images: UserInputImagePayload[]) => {
+      appendUserMessage(text);
+      clearStream();
+      beginAssistantTurn();
+      if (text.startsWith("/") && images.length === 0) {
+        const [cmd, ...rest] = text.slice(1).split(" ");
+        engine.sendCommand(cmd!, rest.join(" "));
+        return;
+      }
+
+      engine.sendInput(text, images);
+    },
+    [appendUserMessage, beginAssistantTurn, clearStream, engine],
+  );
 
   useEffect(() => {
     setPromptImages((current) => {
@@ -70,6 +95,28 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       return next.length === current.length ? current : next;
     });
   }, [prompt.value]);
+
+  useEffect(() => {
+    if (!isEngineReady || uiState.isStreaming || uiState.pendingPermission) {
+      return;
+    }
+
+    const nextPrompt = queuedPrompts[0];
+    if (!nextPrompt) {
+      return;
+    }
+
+    setQueuedPrompts((current) =>
+      current[0]?.id === nextPrompt.id ? current.slice(1) : current,
+    );
+    submitPrompt(nextPrompt.text, nextPrompt.images);
+  }, [
+    isEngineReady,
+    queuedPrompts,
+    submitPrompt,
+    uiState.isStreaming,
+    uiState.pendingPermission,
+  ]);
 
   const handleImagePaste = (images: PastedImageData[]) => {
     let startId = nextImageId;
@@ -95,15 +142,22 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       current.filter((image) => !referencedIds.has(image.id)),
     );
 
-    appendUserMessage(text);
-    clearStream();
-    beginAssistantTurn();
-    if (text.startsWith("/") && images.length === 0) {
-      const [cmd, ...rest] = text.slice(1).split(" ");
-      engine.sendCommand(cmd!, rest.join(" "));
-    } else {
-      engine.sendInput(text, images);
+    if (
+      uiState.isStreaming ||
+      uiState.pendingPermission ||
+      queuedPrompts.length
+    ) {
+      const queuedPrompt: QueuedPrompt = {
+        id: nextQueuedPromptId,
+        text,
+        images,
+      };
+      setQueuedPrompts((current) => [...current, queuedPrompt]);
+      setNextQueuedPromptId((current) => current + 1);
+      return;
     }
+
+    submitPrompt(text, images);
   };
 
   const handlePermissionResponse = (
@@ -121,11 +175,12 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   };
 
   const handleCancel = () => {
+    if (!uiState.isStreaming) {
+      return;
+    }
     cancelActiveTurn();
     engine.sendCancel();
   };
-
-  const isEngineReady = uiState.ready || engine.ready;
 
   const isPromptDisabled =
     !isEngineReady || !!engine.error || uiState.pendingPermission !== null;
@@ -182,6 +237,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           transcript={uiState.transcript}
           liveBlocks={uiState.liveAssistantBlocks}
           isStreaming={uiState.isStreaming}
+          activeTurnStatus={uiState.activeTurnStatus}
           model={uiState.model}
         />
 
@@ -217,6 +273,24 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         />
       ) : (
         <Box flexDirection="column">
+          {queuedPrompts.length > 0 && (
+            <Box flexDirection="column" paddingLeft={1} marginBottom={1}>
+              <Text color="yellow">
+                Queued prompts ({queuedPrompts.length})
+              </Text>
+              {queuedPrompts.slice(0, 3).map((queuedPrompt) => (
+                <Box key={queuedPrompt.id} flexDirection="row">
+                  <Text dimColor>{"> "}</Text>
+                  <Text dimColor>{summarizeQueuedPrompt(queuedPrompt)}</Text>
+                </Box>
+              ))}
+              {queuedPrompts.length > 3 && (
+                <Text
+                  dimColor
+                >{`+${queuedPrompts.length - 3} more queued`}</Text>
+              )}
+            </Box>
+          )}
           <Input
             prompt={prompt}
             mode={uiState.mode}
@@ -247,3 +321,20 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 };
 
 export default App;
+
+function summarizeQueuedPrompt(queuedPrompt: QueuedPrompt): string {
+  const flattened = queuedPrompt.text.replace(/\s+/g, " ").trim();
+  const summary =
+    flattened.length > 88 ? `${flattened.slice(0, 85)}...` : flattened;
+
+  if (queuedPrompt.images.length === 0) {
+    return summary;
+  }
+
+  const suffix =
+    queuedPrompt.images.length === 1
+      ? " [1 image]"
+      : ` [${queuedPrompt.images.length} images]`;
+
+  return `${summary}${suffix}`;
+}

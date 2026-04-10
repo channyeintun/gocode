@@ -90,11 +90,21 @@ export interface UIRateLimits {
   sevenDay: UIRateLimitWindow | null;
 }
 
+export type UIActiveTurnStatus =
+  | "idle"
+  | "working"
+  | "thinking"
+  | "responding"
+  | "running_tools"
+  | "waiting_permission"
+  | "cancelling";
+
 export interface EngineUIState {
   ready: boolean;
   messages: UIMessage[];
   transcript: UITranscriptEntry[];
   liveAssistantBlocks: UIAssistantBlock[];
+  activeTurnStatus: UIActiveTurnStatus;
   mode: string;
   model: string;
   sessionId: string | null;
@@ -123,6 +133,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   messages: [],
   transcript: [],
   liveAssistantBlocks: [],
+  activeTurnStatus: "idle",
   mode,
   model,
   sessionId: null,
@@ -192,6 +203,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             "text",
             p.text,
           ),
+          activeTurnStatus: "responding",
           isStreaming: true,
           statusLine: null,
         }));
@@ -206,6 +218,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             "thinking",
             p.text,
           ),
+          activeTurnStatus: "thinking",
           isStreaming: true,
         }));
         break;
@@ -217,6 +230,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             return {
               ...s,
               liveAssistantBlocks: [],
+              activeTurnStatus: "idle",
               isStreaming: false,
               compact: null,
               statusLine: "Turn cancelled",
@@ -237,6 +251,7 @@ export function useEvents(initialModel: string, initialMode: string) {
               kind: "message",
             }),
             liveAssistantBlocks: [],
+            activeTurnStatus: "idle",
             isStreaming: false,
             compact: null,
             statusLine: `Turn complete (${p.stop_reason})`,
@@ -248,7 +263,8 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolStartPayload;
         setUIState((s) => ({
           ...s,
-          isStreaming: false,
+          activeTurnStatus: "running_tools",
+          isStreaming: true,
           transcript: appendTranscriptEntry(s.transcript, {
             id: p.tool_id,
             kind: "tool_call",
@@ -271,6 +287,8 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolProgressPayload;
         setUIState((s) => ({
           ...s,
+          activeTurnStatus: "running_tools",
+          isStreaming: true,
           transcript: appendTranscriptEntry(s.transcript, {
             id: p.tool_id,
             kind: "tool_call",
@@ -289,6 +307,8 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolResultPayload;
         setUIState((s) => ({
           ...s,
+          activeTurnStatus: "working",
+          isStreaming: true,
           transcript: appendTranscriptEntry(s.transcript, {
             id: p.tool_id,
             kind: "tool_call",
@@ -314,6 +334,8 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolErrorPayload;
         setUIState((s) => ({
           ...s,
+          activeTurnStatus: "working",
+          isStreaming: true,
           transcript: appendTranscriptEntry(s.transcript, {
             id: p.tool_id,
             kind: "tool_call",
@@ -366,7 +388,8 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as PermissionRequestPayload;
         setUIState((s) => ({
           ...s,
-          isStreaming: false,
+          activeTurnStatus: "waiting_permission",
+          isStreaming: true,
           pendingPermission: p,
           transcript: appendTranscriptEntry(s.transcript, {
             id: p.tool_id,
@@ -485,6 +508,7 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as SessionRestoredPayload;
         setUIState((s) => ({
           ...s,
+          activeTurnStatus: "idle",
           ready: true,
           mode: p.mode,
           sessionId: p.session_id,
@@ -519,6 +543,7 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ErrorPayload;
         setUIState((s) => ({
           ...s,
+          activeTurnStatus: "idle",
           error: p.message,
           isStreaming: false,
           compact: null,
@@ -532,6 +557,7 @@ export function useEvents(initialModel: string, initialMode: string) {
     setUIState((s) => ({
       ...s,
       liveAssistantBlocks: [],
+      activeTurnStatus: "idle",
       isStreaming: false,
       compact: null,
       statusLine: null,
@@ -542,7 +568,8 @@ export function useEvents(initialModel: string, initialMode: string) {
   const cancelActiveTurn = useCallback(() => {
     setUIState((s) => ({
       ...s,
-      isStreaming: false,
+      activeTurnStatus: s.isStreaming ? "cancelling" : s.activeTurnStatus,
+      isStreaming: s.isStreaming,
       compact: null,
       statusLine: "Cancellation requested...",
     }));
@@ -551,6 +578,12 @@ export function useEvents(initialModel: string, initialMode: string) {
   const clearPermission = useCallback((decision?: string) => {
     setUIState((s) => ({
       ...s,
+      activeTurnStatus:
+        decision === "allow" ||
+        decision === "always_allow" ||
+        decision === "allow_all_session"
+          ? "running_tools"
+          : "working",
       pendingPermission: null,
       toolCalls: s.pendingPermission
         ? upsertToolCall(s.toolCalls, {
@@ -587,6 +620,7 @@ export function useEvents(initialModel: string, initialMode: string) {
     setUIState((s) => ({
       ...s,
       liveAssistantBlocks: [],
+      activeTurnStatus: "working",
       error: null,
       statusLine: null,
       isStreaming: true,

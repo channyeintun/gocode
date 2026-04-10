@@ -1,6 +1,7 @@
 import React, { type FC, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Text, useInput } from "ink";
 import type {
+  UIActiveTurnStatus,
   UIAssistantBlock,
   UIAssistantMessage,
   UIMessage,
@@ -20,6 +21,7 @@ interface StreamOutputProps {
   transcript: UITranscriptEntry[];
   liveBlocks: UIAssistantBlock[];
   isStreaming: boolean;
+  activeTurnStatus: UIActiveTurnStatus;
   model: string;
 }
 
@@ -47,6 +49,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
   transcript,
   liveBlocks,
   isStreaming,
+  activeTurnStatus,
   model,
 }) => {
   const [sliceStartOverride, setSliceStartOverride] = useState<number | null>(
@@ -196,7 +199,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
         <StreamingAssistantMessage
           blocks={liveBlocks}
           model={model}
-          statusLabel={streamingStatusLabel(liveBlocks)}
+          statusLabel={activeTurnStatusLabel(liveBlocks, activeTurnStatus)}
         />
       ) : null}
     </Box>
@@ -256,7 +259,27 @@ function buildTranscriptBlocks(
   return blocks;
 }
 
-function streamingStatusLabel(blocks: UIAssistantBlock[]): string {
+function activeTurnStatusLabel(
+  blocks: UIAssistantBlock[],
+  activeTurnStatus: UIActiveTurnStatus,
+): string {
+  switch (activeTurnStatus) {
+    case "thinking":
+      return "Thinking";
+    case "responding":
+      return "Responding";
+    case "running_tools":
+      return "Running tools";
+    case "waiting_permission":
+      return "Waiting for permission";
+    case "cancelling":
+      return "Cancelling";
+    case "working":
+    case "idle":
+    default:
+      break;
+  }
+
   const lastBlock = blocks[blocks.length - 1];
   if (!lastBlock) {
     return "Working";
@@ -353,7 +376,6 @@ function clampSliceStart(value: number, maxSliceStart: number): number {
 
 function toolGroupKind(toolCall: UIToolCall): ToolCallGroup["kind"] | null {
   switch (toolCall.name) {
-    case "file_read":
     case "grep":
     case "glob":
     case "web_search":

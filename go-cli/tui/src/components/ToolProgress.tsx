@@ -338,7 +338,16 @@ function summarizeFileRead(raw?: string, truncated?: boolean): string {
   if (!raw) {
     return truncated ? "Read completed. Output truncated." : "Read completed.";
   }
-  return summarizeOutput(raw, truncated);
+
+  const lines = raw.trimEnd().split("\n");
+  const previewLines = lines.slice(0, 32);
+  const codePreview = ["```", previewLines.join("\n"), "```"].join("\n");
+
+  if (truncated || lines.length > previewLines.length) {
+    return `${codePreview}\n\n_Output truncated._`;
+  }
+
+  return codePreview;
 }
 
 function summarizeSearchMatches(
