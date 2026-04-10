@@ -583,7 +583,7 @@ func parseExecutionMode(mode string) agent.ExecutionMode {
 }
 
 func defaultSystemPrompt() string {
-	return "You are Go CLI, a pragmatic coding assistant. Be concise, prefer inspecting files before changing them, and use tools when needed.\n\nIMPORTANT: Always use absolute paths with file tools. The working directory is provided in the environment context below — use it to construct absolute paths. For example, if the working directory is /home/user/project, use /home/user/project/file.txt instead of file.txt.\nAlways use tools to answer questions — do NOT just make a plan without acting. Call tools immediately when you need information."
+	return "You are Go CLI, a pragmatic coding assistant. Be concise, prefer inspecting files before changing them, and use tools when needed.\n\nIMPORTANT: Always use absolute paths with file tools. The working directory is provided in the environment context below — use it to construct absolute paths. For example, if the working directory is /home/user/project, use /home/user/project/file.txt instead of file.txt.\nAlways use tools to answer questions — do NOT just make a plan without acting. Call tools immediately when you need information.\nUse these exact tool names when calling tools: bash, file_read, file_write, file_edit, glob, grep, web_search, web_fetch, git. Do not invent alternate names like file_search or read_file."
 }
 
 func systemPromptForMode(mode agent.ExecutionMode) string {
@@ -614,6 +614,15 @@ func executeToolCalls(
 	budget := toolpkg.DefaultResultBudgetForModel(filepath.Join(os.TempDir(), "go-cli-session"), maxOutputTokens)
 
 	for index, call := range calls {
+		call, err := normalizeToolCall(call)
+		if err != nil {
+			results[index] = api.ToolResult{ToolCallID: calls[index].ID, Output: err.Error(), IsError: true}
+			if emitErr := bridge.Emit(ipc.EventToolError, ipc.ToolErrorPayload{ToolID: calls[index].ID, Name: calls[index].Name, Input: calls[index].Input, Error: err.Error()}); emitErr != nil {
+				return nil, emitErr
+			}
+			continue
+		}
+
 		tool, err := registry.Get(call.Name)
 		if err != nil {
 			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
@@ -1814,4 +1823,135 @@ func decodeToolInput(call api.ToolCall) (toolpkg.ToolInput, error) {
 		Params: params,
 		Raw:    call.Input,
 	}, nil
+}
+
+func normalizeToolCall(call api.ToolCall) (api.ToolCall, error) {
+	alias := strings.TrimSpace(call.Name)
+	switch alias {
+	case "file_search", "grep_search", "read_file":
+	default:
+		return call, nil
+	}
+
+	params := make(map[string]any)
+	raw := strings.TrimSpace(call.Input)
+	if raw != "" {
+		if err := json.Unmarshal([]byte(raw), &params); err != nil {
+			return api.ToolCall{}, fmt.Errorf("decode tool input for %q: %w", call.Name, err)
+		}
+	}
+
+	normalized := call
+	normalizedParams := cloneToolParams(params)
+
+	switch alias {
+	case "file_search":
+		normalized.Name = "glob"
+		if pattern, ok := stringParamFromMap(normalizedParams, "pattern"); !ok || strings.TrimSpace(pattern) == "" {
+			if query, ok := stringParamFromMap(normalizedParams, "query"); ok && strings.TrimSpace(query) != "" {
+				normalizedParams["pattern"] = normalizeFileSearchPattern(query)
+			}
+		}
+		if _, ok := stringParamFromMap(normalizedParams, "path"); !ok {
+			if includePattern, ok := stringParamFromMap(normalizedParams, "includePattern"); ok && strings.TrimSpace(includePattern) != "" && !looksLikeGlob(includePattern) {
+				normalizedParams["path"] = includePattern
+			}
+		}
+	case "grep_search":
+		normalized.Name = "grep"
+		if pattern, ok := stringParamFromMap(normalizedParams, "pattern"); !ok || strings.TrimSpace(pattern) == "" {
+			if query, ok := stringParamFromMap(normalizedParams, "query"); ok && strings.TrimSpace(query) != "" {
+				if isRegexp, ok := normalizedParams["isRegexp"].(bool); ok && !isRegexp {
+					normalizedParams["pattern"] = regexp.QuoteMeta(query)
+				} else {
+					normalizedParams["pattern"] = query
+				}
+			}
+		}
+		if _, ok := stringParamFromMap(normalizedParams, "path"); !ok {
+			if includePattern, ok := stringParamFromMap(normalizedParams, "includePattern"); ok && strings.TrimSpace(includePattern) != "" {
+				if looksLikeGlob(includePattern) {
+					normalizedParams["glob"] = includePattern
+				} else {
+					normalizedParams["path"] = includePattern
+				}
+			}
+		}
+		if _, ok := normalizedParams["head_limit"]; !ok {
+			if maxResults, ok := intParamFromMap(normalizedParams, "maxResults"); ok && maxResults > 0 {
+				normalizedParams["head_limit"] = maxResults
+			}
+		}
+	case "read_file":
+		normalized.Name = "file_read"
+		renameToolParam(normalizedParams, "filePath", "file_path")
+		renameToolParam(normalizedParams, "startLine", "start_line")
+		renameToolParam(normalizedParams, "endLine", "end_line")
+	}
+
+	encoded, err := json.Marshal(normalizedParams)
+	if err != nil {
+		return api.ToolCall{}, fmt.Errorf("encode normalized tool input for %q: %w", call.Name, err)
+	}
+	normalized.Input = string(encoded)
+	return normalized, nil
+}
+
+func cloneToolParams(params map[string]any) map[string]any {
+	cloned := make(map[string]any, len(params))
+	for key, value := range params {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func renameToolParam(params map[string]any, from, to string) {
+	if _, exists := params[to]; exists {
+		return
+	}
+	value, ok := params[from]
+	if !ok {
+		return
+	}
+	params[to] = value
+}
+
+func normalizeFileSearchPattern(query string) string {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" || filepath.IsAbs(trimmed) || looksLikeGlob(trimmed) {
+		return trimmed
+	}
+
+	normalized := strings.TrimPrefix(filepath.ToSlash(trimmed), "./")
+	if normalized == "" {
+		return trimmed
+	}
+	if strings.HasSuffix(normalized, "/") {
+		return "**/" + strings.TrimSuffix(normalized, "/") + "/**"
+	}
+	if strings.Contains(normalized, "/") {
+		return "**/" + normalized + "*"
+	}
+	return "**/*" + normalized + "*"
+}
+
+func looksLikeGlob(value string) bool {
+	return strings.ContainsAny(value, "*?[]{}")
+}
+
+func intParamFromMap(params map[string]any, key string) (int, bool) {
+	value, ok := params[key]
+	if !ok {
+		return 0, false
+	}
+	switch v := value.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	default:
+		return 0, false
+	}
 }
