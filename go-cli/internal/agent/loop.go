@@ -127,6 +127,16 @@ func invokeModelWithRecovery(
 			continue
 		}
 
+		if errors.As(err, &apiErr) && apiErr.Type == api.ErrOverloaded {
+			if !yield(newEvent(ipc.EventError, ipc.ErrorPayload{
+				Message:     fmt.Sprintf("Model error (attempt %d/3): %s — retrying...", attempt+1, apiErr.Message),
+				Recoverable: true,
+			}), nil) {
+				return modelTurn{}, context.Canceled
+			}
+			continue
+		}
+
 		if !errors.As(err, &apiErr) || apiErr.Type != api.ErrPromptTooLong || deps.CompactMessages == nil {
 			return modelTurn{}, err
 		}

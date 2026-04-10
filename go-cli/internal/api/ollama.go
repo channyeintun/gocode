@@ -341,6 +341,8 @@ func classifyOllamaErrorType(statusCode int, message string) APIErrorType {
 		return ErrOverloaded
 	case strings.Contains(lowerMessage, "context") && strings.Contains(lowerMessage, "limit"):
 		return ErrPromptTooLong
+	case strings.Contains(lowerMessage, "ggml_assert"):
+		return ErrOverloaded
 	default:
 		return ErrUnknown
 	}
