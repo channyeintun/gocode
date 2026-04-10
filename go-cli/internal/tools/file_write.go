@@ -61,7 +61,8 @@ func (t *FileWriteTool) Execute(ctx context.Context, input ToolInput) (ToolOutpu
 		return ToolOutput{}, fmt.Errorf("file_write requires file_path")
 	}
 	if !filepath.IsAbs(filePath) {
-		return ToolOutput{}, fmt.Errorf("file_write requires an absolute file_path")
+		cwd, _ := os.Getwd()
+		filePath = filepath.Join(cwd, filePath)
 	}
 
 	content, ok := stringParam(input.Params, "content")

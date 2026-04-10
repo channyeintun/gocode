@@ -531,7 +531,7 @@ func parseExecutionMode(mode string) agent.ExecutionMode {
 }
 
 func defaultSystemPrompt() string {
-	return "You are Go CLI, a pragmatic coding assistant. Be concise, prefer inspecting files before changing them, and use tools when needed."
+	return "You are Go CLI, a pragmatic coding assistant. Be concise, prefer inspecting files before changing them, and use tools when needed.\n\nIMPORTANT: Always use absolute paths with file tools. The working directory is provided in the environment context below — use it to construct absolute paths. For example, if the working directory is /home/user/project, use /home/user/project/file.txt instead of file.txt.\nAlways use tools to answer questions — do NOT just make a plan without acting. Call tools immediately when you need information."
 }
 
 func systemPromptForMode(mode agent.ExecutionMode) string {

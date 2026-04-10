@@ -16,7 +16,7 @@ const (
 	planStatusDraft    = "draft"
 	planStatusFinal    = "final"
 	planArtifactTitle  = "Implementation Plan"
-	planModePromptHint = "When plan mode is active, stay read-only: produce or revise the implementation plan, do not call write tools, and tell the user to switch to /fast when they want implementation to begin."
+	planModePromptHint = "When plan mode is active, you MUST still use read tools (file_read, glob, grep, bash with read-only commands like ls/cat/find) to gather information. Only avoid write tools (file_write, file_edit). Produce or revise the implementation plan, and tell the user to switch to /fast when they want implementation to begin."
 )
 
 // PlanArtifactUpdate describes a plan artifact mutation that should be emitted to the UI.

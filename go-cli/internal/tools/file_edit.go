@@ -69,7 +69,8 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 		return ToolOutput{}, fmt.Errorf("file_edit requires file_path")
 	}
 	if !filepath.IsAbs(filePath) {
-		return ToolOutput{}, fmt.Errorf("file_edit requires an absolute file_path")
+		cwd, _ := os.Getwd()
+		filePath = filepath.Join(cwd, filePath)
 	}
 
 	oldString, ok := stringParam(input.Params, "old_string")

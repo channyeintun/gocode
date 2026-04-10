@@ -14,10 +14,11 @@ type SystemContext struct {
 
 // TurnContext holds volatile context refreshed every user turn.
 type TurnContext struct {
-	CurrentDir string
-	GitBranch  string
-	GitStatus  string
-	RecentLog  string
+	CurrentDir       string
+	GitBranch        string
+	GitStatus        string
+	RecentLog        string
+	DirectoryListing string
 }
 
 // LoadSystemContext gathers session-stable git info.
@@ -44,6 +45,7 @@ func LoadTurnContext() TurnContext {
 	}
 	ctx.GitStatus = status
 	ctx.RecentLog = gitCommand("log", "--oneline", "-n", "5")
+	ctx.DirectoryListing = listDirectory(ctx.CurrentDir)
 	return ctx
 }
 
@@ -61,6 +63,9 @@ func FormatContextPrompt(sys SystemContext, turn TurnContext) string {
 	if turn.RecentLog != "" {
 		b.WriteString("\nRecent commits:\n" + turn.RecentLog + "\n")
 	}
+	if turn.DirectoryListing != "" {
+		b.WriteString("\nFiles and directories in working directory:\n" + turn.DirectoryListing + "\n")
+	}
 	b.WriteString("</environment>\n")
 	return b.String()
 }
@@ -72,4 +77,29 @@ func gitCommand(args ...string) string {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// listDirectory returns a compact listing of the working directory (files and dirs, one level deep).
+func listDirectory(dir string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		if e.IsDir() {
+			b.WriteString(name + "/\n")
+		} else {
+			b.WriteString(name + "\n")
+		}
+	}
+	listing := strings.TrimSpace(b.String())
+	if len(listing) > 2000 {
+		listing = listing[:2000] + "\n[truncated]"
+	}
+	return listing
 }

@@ -63,7 +63,8 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 		return ToolOutput{}, fmt.Errorf("file_read requires file_path")
 	}
 	if !filepath.IsAbs(filePath) {
-		return ToolOutput{}, fmt.Errorf("file_read requires an absolute file_path")
+		cwd, _ := os.Getwd()
+		filePath = filepath.Join(cwd, filePath)
 	}
 
 	info, err := os.Stat(filePath)
