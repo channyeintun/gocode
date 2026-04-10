@@ -22,7 +22,6 @@ Current follow-up fixes focus on:
 1. Queue prompt submissions that arrive during an active turn instead of clearing the live response.
 2. Keep the live assistant status visible across tool execution and permission waits.
 3. Make Esc interruption reliable while a turn is active.
-4. Render file-read results explicitly instead of hiding them inside grouped workspace exploration summaries.
 
 ### Deferred Follow-up
 

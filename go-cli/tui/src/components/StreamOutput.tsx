@@ -376,6 +376,7 @@ function clampSliceStart(value: number, maxSliceStart: number): number {
 
 function toolGroupKind(toolCall: UIToolCall): ToolCallGroup["kind"] | null {
   switch (toolCall.name) {
+    case "file_read":
     case "grep":
     case "glob":
     case "web_search":
