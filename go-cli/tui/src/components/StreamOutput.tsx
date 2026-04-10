@@ -1,8 +1,13 @@
-import React, { type FC } from "react";
+import React, { type FC, useMemo } from "react";
 import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
-import type { UIMessage } from "../hooks/useEvents.js";
+import type {
+  UIMessage,
+  UIToolCall,
+  UITranscriptEntry,
+} from "../hooks/useEvents.js";
 import MarkdownText from "./MarkdownText.js";
+import ToolProgress from "./ToolProgress.js";
 
 function truncateThinking(text: string): string {
   const lines = text.split("\n").filter((l) => l.trim().length > 0);
@@ -12,6 +17,8 @@ function truncateThinking(text: string): string {
 
 interface StreamOutputProps {
   messages: UIMessage[];
+  toolCalls: UIToolCall[];
+  transcript: UITranscriptEntry[];
   liveText: string;
   liveThinkingText: string;
   isStreaming: boolean;
@@ -19,28 +26,60 @@ interface StreamOutputProps {
 
 const StreamOutput: FC<StreamOutputProps> = ({
   messages,
+  toolCalls,
+  transcript,
   liveText,
   liveThinkingText,
   isStreaming,
 }) => {
-  if (messages.length === 0 && !liveText && !liveThinkingText && !isStreaming) {
+  const messageById = useMemo(
+    () => new Map(messages.map((message) => [message.id, message])),
+    [messages],
+  );
+  const toolCallById = useMemo(
+    () => new Map(toolCalls.map((toolCall) => [toolCall.id, toolCall])),
+    [toolCalls],
+  );
+
+  if (
+    transcript.length === 0 &&
+    !liveText &&
+    !liveThinkingText &&
+    !isStreaming
+  ) {
     return null;
   }
 
   return (
     <Box flexDirection="column" paddingLeft={1} marginTop={1}>
-      {messages.map((message) => (
-        <Box key={message.id} flexDirection="column" marginBottom={1}>
-          <Text color={message.role === "user" ? "cyan" : "green"} bold>
-            {message.role === "user" ? "You" : "Assistant"}
-          </Text>
-          {message.role === "assistant" ? (
-            <MarkdownText text={message.text} />
-          ) : (
-            <Text>{message.text}</Text>
-          )}
-        </Box>
-      ))}
+      {transcript.map((entry) => {
+        if (entry.kind === "tool_call") {
+          const toolCall = toolCallById.get(entry.id);
+          if (!toolCall) {
+            return null;
+          }
+
+          return <ToolProgress key={entry.id} toolCall={toolCall} />;
+        }
+
+        const message = messageById.get(entry.id);
+        if (!message) {
+          return null;
+        }
+
+        return (
+          <Box key={message.id} flexDirection="column" marginBottom={1}>
+            <Text color={message.role === "user" ? "cyan" : "green"} bold>
+              {message.role === "user" ? "You" : "Assistant"}
+            </Text>
+            {message.role === "assistant" ? (
+              <MarkdownText text={message.text} />
+            ) : (
+              <Text>{message.text}</Text>
+            )}
+          </Box>
+        );
+      })}
 
       {isStreaming && (
         <Box flexDirection="column">

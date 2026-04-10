@@ -33,6 +33,11 @@ export interface UIMessage {
   text: string;
 }
 
+export interface UITranscriptEntry {
+  id: string;
+  kind: "message" | "tool_call";
+}
+
 export type UIToolStatus =
   | "running"
   | "waiting_permission"
@@ -54,6 +59,7 @@ export interface UIToolCall {
 export interface EngineUIState {
   ready: boolean;
   messages: UIMessage[];
+  transcript: UITranscriptEntry[];
   streamedText: string;
   thinkingText: string;
   mode: string;
@@ -76,6 +82,7 @@ export interface EngineUIState {
 const initialState = (model: string, mode: string): EngineUIState => ({
   ready: false,
   messages: [],
+  transcript: [],
   streamedText: "",
   thinkingText: "",
   mode,
@@ -140,19 +147,20 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as TurnCompletePayload;
         setUIState((s) => {
           const text = s.streamedText.trim();
-          const newMessages =
+          const message =
             text.length > 0
-              ? [...s.messages, createMessage("assistant", text)]
-              : [
-                  ...s.messages,
-                  createMessage(
-                    "assistant",
-                    "(Model returned an empty response)",
-                  ),
-                ];
+              ? createMessage("assistant", text)
+              : createMessage(
+                  "assistant",
+                  "(Model returned an empty response)",
+                );
           return {
             ...s,
-            messages: newMessages,
+            messages: [...s.messages, message],
+            transcript: appendTranscriptEntry(s.transcript, {
+              id: message.id,
+              kind: "message",
+            }),
             streamedText: "",
             thinkingText: "",
             isStreaming: false,
@@ -166,6 +174,10 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolStartPayload;
         setUIState((s) => ({
           ...s,
+          transcript: appendTranscriptEntry(s.transcript, {
+            id: p.tool_id,
+            kind: "tool_call",
+          }),
           toolCalls: upsertToolCall(s.toolCalls, {
             id: p.tool_id,
             name: p.name,
@@ -184,6 +196,10 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolProgressPayload;
         setUIState((s) => ({
           ...s,
+          transcript: appendTranscriptEntry(s.transcript, {
+            id: p.tool_id,
+            kind: "tool_call",
+          }),
           toolCalls: upsertToolCall(s.toolCalls, {
             id: p.tool_id,
             name: toolCallName(s.toolCalls, p.tool_id),
@@ -198,6 +214,10 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolResultPayload;
         setUIState((s) => ({
           ...s,
+          transcript: appendTranscriptEntry(s.transcript, {
+            id: p.tool_id,
+            kind: "tool_call",
+          }),
           toolCalls: upsertToolCall(s.toolCalls, {
             id: p.tool_id,
             name: p.name ?? toolCallName(s.toolCalls, p.tool_id),
@@ -215,6 +235,10 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as ToolErrorPayload;
         setUIState((s) => ({
           ...s,
+          transcript: appendTranscriptEntry(s.transcript, {
+            id: p.tool_id,
+            kind: "tool_call",
+          }),
           toolCalls: upsertToolCall(s.toolCalls, {
             id: p.tool_id,
             name: p.name ?? toolCallName(s.toolCalls, p.tool_id),
@@ -264,6 +288,10 @@ export function useEvents(initialModel: string, initialMode: string) {
         setUIState((s) => ({
           ...s,
           pendingPermission: p,
+          transcript: appendTranscriptEntry(s.transcript, {
+            id: p.tool_id,
+            kind: "tool_call",
+          }),
           toolCalls: upsertToolCall(s.toolCalls, {
             id: p.tool_id,
             name: p.tool,
@@ -387,10 +415,17 @@ export function useEvents(initialModel: string, initialMode: string) {
   }, []);
 
   const appendUserMessage = useCallback((text: string) => {
-    setUIState((s) => ({
-      ...s,
-      messages: [...s.messages, createMessage("user", text)],
-    }));
+    setUIState((s) => {
+      const message = createMessage("user", text);
+      return {
+        ...s,
+        messages: [...s.messages, message],
+        transcript: appendTranscriptEntry(s.transcript, {
+          id: message.id,
+          kind: "message",
+        }),
+      };
+    });
   }, []);
 
   const beginAssistantTurn = useCallback(() => {
@@ -422,6 +457,20 @@ function upsertArtifact(
     (artifact) => artifact.id !== nextArtifact.id,
   );
   return [nextArtifact, ...remaining];
+}
+
+function appendTranscriptEntry(
+  transcript: UITranscriptEntry[],
+  entry: UITranscriptEntry,
+): UITranscriptEntry[] {
+  if (
+    transcript.some(
+      (current) => current.id === entry.id && current.kind === entry.kind,
+    )
+  ) {
+    return transcript;
+  }
+  return [...transcript, entry];
 }
 
 function upsertToolCall(

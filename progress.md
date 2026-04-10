@@ -2,10 +2,12 @@
 
 ## 2026-04-10
 
+- Implemented Phase 2 of `plan.md` against upstream sourcecode references by rendering tool-use entries inline in the transcript instead of in a separate floating widget.
+- Added transcript ordering state in `useEvents` so user messages, tool calls, and assistant messages render in event order during a turn.
+- Reworked `ToolProgress.tsx` into a sourcecode-style tool row with status dots and indented response content for running, permission-waiting, completed, and failed states.
 - Implemented Phase 1 of `plan.md` for tool-use parity: replaced the TUI's transient single-tool state with persistent tool-call state keyed by tool id.
 - Added explicit frontend payload typing for `tool_progress`, `tool_result`, and `tool_error`, and enriched Go-side tool result/error payloads so tool rows can survive failures before execution completes.
 - Updated engine permission events to include `tool_id` and moved `tool_start` earlier in execution so permission waits and denials attach to the correct tool-use entry.
-- Kept the current active-tool area wired to the new state model so the UI remains stable while Phase 2 transcript rendering is implemented.
 - Created `plan.md` first for sourcecode-aligned tool-use parity work, with phased implementation steps and explicit upstream references.
 - Referenced upstream sourcecode input behavior before implementation, primarily `sourcecode/hooks/useArrowKeyHistory.tsx` and `sourcecode/components/PromptInput/PromptInputFooter.tsx`.
 - Ported a sourcecode-inspired TUI input improvement into `go-cli/tui`: prompt history on Up/Down, persistent draft restore, placeholder text, and a footer hint row for primary shortcuts.

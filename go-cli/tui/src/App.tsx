@@ -1,19 +1,14 @@
 import React, { type FC, useEffect } from "react";
 import { Box, Text } from "ink";
 import { useEngine } from "./hooks/useEngine.js";
-import { useEvents, type UIToolCall } from "./hooks/useEvents.js";
+import { useEvents } from "./hooks/useEvents.js";
 import ArtifactView from "./components/ArtifactView.js";
 import Input from "./components/Input.js";
 import PlanPanel from "./components/PlanPanel.js";
 import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
 import PermissionPrompt from "./components/PermissionPrompt.js";
-import ToolProgress from "./components/ToolProgress.js";
 import { usePromptHistory } from "./hooks/usePromptHistory.js";
-
-type ActiveToolCall = UIToolCall & {
-  status: "running" | "waiting_permission";
-};
 
 interface AppProps {
   enginePath: string;
@@ -42,7 +37,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         artifact.kind !== "implementation-plan" && artifact.kind !== "tool-log",
     )
     .slice(0, 2);
-  const activeTool = findActiveTool(uiState.toolCalls);
 
   // Dispatch incoming events to the UI state handler
   useEffect(() => {
@@ -122,6 +116,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
         <StreamOutput
           messages={uiState.messages}
+          toolCalls={uiState.toolCalls}
+          transcript={uiState.transcript}
           liveText={uiState.streamedText}
           liveThinkingText={uiState.thinkingText}
           isStreaming={uiState.isStreaming}
@@ -142,15 +138,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
         {recentArtifacts.length > 0 && (
           <ArtifactView artifacts={recentArtifacts} />
-        )}
-
-        {activeTool && (
-          <ToolProgress
-            toolName={activeTool.name}
-            toolInput={activeTool.input}
-            status={activeTool.status}
-            progressBytes={activeTool.progressBytes}
-          />
         )}
       </Box>
 
@@ -182,16 +169,3 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 };
 
 export default App;
-
-function findActiveTool(toolCalls: UIToolCall[]): ActiveToolCall | null {
-  for (let index = toolCalls.length - 1; index >= 0; index -= 1) {
-    const toolCall = toolCalls[index];
-    if (toolCall?.status === "running") {
-      return toolCall as ActiveToolCall;
-    }
-    if (toolCall?.status === "waiting_permission") {
-      return toolCall as ActiveToolCall;
-    }
-  }
-  return null;
-}
