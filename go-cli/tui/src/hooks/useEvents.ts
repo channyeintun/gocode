@@ -179,7 +179,11 @@ export function useEvents(initialModel: string, initialMode: string) {
       }
       case "permission_request": {
         const p = event.payload as PermissionRequestPayload;
-        setUIState((s) => ({ ...s, pendingPermission: p }));
+        setUIState((s) => ({
+          ...s,
+          pendingPermission: p,
+          isStreaming: false,
+        }));
         break;
       }
       case "mode_changed": {
@@ -284,12 +288,24 @@ export function useEvents(initialModel: string, initialMode: string) {
     }));
   }, []);
 
+  const beginAssistantTurn = useCallback(() => {
+    setUIState((s) => ({
+      ...s,
+      streamedText: "",
+      thinkingText: "",
+      error: null,
+      statusLine: null,
+      isStreaming: true,
+    }));
+  }, []);
+
   return {
     uiState,
     handleEvent,
     clearStream,
     clearPermission,
     appendUserMessage,
+    beginAssistantTurn,
   };
 }
 

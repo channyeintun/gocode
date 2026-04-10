@@ -24,6 +24,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     clearStream,
     clearPermission,
     appendUserMessage,
+    beginAssistantTurn,
   } = useEvents(model, mode);
   const planArtifact =
     uiState.artifacts.find(
@@ -42,6 +43,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const handleSubmit = (text: string) => {
     appendUserMessage(text);
     clearStream();
+    beginAssistantTurn();
     if (text.startsWith("/")) {
       const [cmd, ...rest] = text.slice(1).split(" ");
       engine.sendCommand(cmd!, rest.join(" "));
