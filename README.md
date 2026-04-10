@@ -10,7 +10,7 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 curl -fsSL https://raw.githubusercontent.com/channyeintun/go-code/main/go-cli/install.sh | sh
 ```
 
-This requires published GitHub release assets for your platform. If no release has been published yet, the installer will return `404`.
+This requires published GitHub release assets for your platform. The installer prefers direct platform binaries and falls back to the older `.tar.gz` archive format for older releases.
 
 The installer chooses a writable install directory automatically:
 
@@ -35,25 +35,27 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ### Manual install
 
-Download the archive for your platform from [Releases](https://github.com/channyeintun/go-code/releases):
+Download the two binaries for your platform from [Releases](https://github.com/channyeintun/go-code/releases):
 
-| Platform         | Archive                        |
-|------------------|--------------------------------|
-| macOS Apple Silicon | `gocode-darwin-arm64.tar.gz` |
-| macOS Intel      | `gocode-darwin-amd64.tar.gz`   |
-| Linux x86_64     | `gocode-linux-amd64.tar.gz`    |
-| Linux ARM64      | `gocode-linux-arm64.tar.gz`    |
+| Platform            | `gocode` asset         | `gocode-engine` asset         |
+|---------------------|------------------------|-------------------------------|
+| macOS Apple Silicon | `gocode-darwin-arm64`  | `gocode-engine-darwin-arm64`  |
+| macOS Intel         | `gocode-darwin-amd64`  | `gocode-engine-darwin-amd64`  |
+| Linux x86_64        | `gocode-linux-amd64`   | `gocode-engine-linux-amd64`   |
+| Linux ARM64         | `gocode-linux-arm64`   | `gocode-engine-linux-arm64`   |
 
-Extract and copy both files to a directory in your `PATH`:
+Download and copy both files to a directory in your `PATH`:
 
 ```bash
-tar -xzf gocode-darwin-arm64.tar.gz
-cd gocode-darwin-arm64
+curl -fsSL -o gocode https://github.com/channyeintun/go-code/releases/latest/download/gocode-darwin-arm64
+curl -fsSL -o gocode-engine https://github.com/channyeintun/go-code/releases/latest/download/gocode-engine-darwin-arm64
 sudo install -m 755 gocode /usr/local/bin/gocode
 sudo install -m 755 gocode-engine /usr/local/bin/gocode-engine
 ```
 
 `install -m 755` is used instead of `cp` so the binary is copied and marked executable in one step.
+
+Older releases may only include `gocode-<platform>.tar.gz`. The installer still supports that layout as a fallback.
 
 If you do not want to use `sudo`, install to a user-owned directory instead:
 

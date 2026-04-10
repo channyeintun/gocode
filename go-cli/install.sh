@@ -30,6 +30,8 @@ case "$OS" in
 esac
 
 PLATFORM="${OS}-${ARCH}"
+BINARY_ASSET="${BINARY_NAME}-${PLATFORM}"
+ENGINE_ASSET="${ENGINE_NAME}-${PLATFORM}"
 ARCHIVE="${BINARY_NAME}-${PLATFORM}.tar.gz"
 
 if [ -z "$INSTALL_DIR" ]; then
@@ -48,42 +50,67 @@ fi
 
 echo "Detected platform: ${PLATFORM}"
 
-# Get latest release URL
-LATEST_URL="https://github.com/${REPO}/releases/latest/download/${ARCHIVE}"
-echo "Downloading ${LATEST_URL}..."
+BINARY_URL="https://github.com/${REPO}/releases/latest/download/${BINARY_ASSET}"
+ENGINE_URL="https://github.com/${REPO}/releases/latest/download/${ENGINE_ASSET}"
+ARCHIVE_URL="https://github.com/${REPO}/releases/latest/download/${ARCHIVE}"
 
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-if ! curl -fsSL "$LATEST_URL" -o "$TMPDIR/$ARCHIVE"; then
-  echo ""
-  echo "Install failed: release asset not found for ${ARCHIVE}."
-  echo ""
-  echo "This usually means GitHub release assets have not been published yet."
-  echo ""
-  echo "If you are the maintainer, publish a GitHub release that includes:"
-  echo "  ${ARCHIVE}"
-  echo ""
-  echo "If you already have a local build, install manually instead:"
-  echo "  mkdir -p \"\$HOME/.local/bin\""
-  echo "  install -m 755 gocode \"\$HOME/.local/bin/gocode\""
-  echo "  install -m 755 gocode-engine \"\$HOME/.local/bin/gocode-engine\""
-  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-  exit 1
+download_asset() {
+  url="$1"
+  dest="$2"
+  curl -fsSL "$url" -o "$dest" 2>/dev/null
+}
+
+install_binary() {
+  src="$1"
+  dest="$2"
+
+  if [ "$USE_SUDO" = "false" ]; then
+    install -m 755 "$src" "$dest"
+  else
+    sudo install -m 755 "$src" "$dest"
+  fi
+}
+
+echo "Trying direct release binaries..."
+if download_asset "$BINARY_URL" "$TMPDIR/$BINARY_ASSET" && \
+  download_asset "$ENGINE_URL" "$TMPDIR/$ENGINE_ASSET"; then
+  BINARY_SOURCE="$TMPDIR/$BINARY_ASSET"
+  ENGINE_SOURCE="$TMPDIR/$ENGINE_ASSET"
+else
+  rm -f "$TMPDIR/$BINARY_ASSET" "$TMPDIR/$ENGINE_ASSET"
+  echo "Direct release binaries not found; trying legacy archive ${ARCHIVE}..."
+  if download_asset "$ARCHIVE_URL" "$TMPDIR/$ARCHIVE"; then
+    tar -xzf "$TMPDIR/$ARCHIVE" -C "$TMPDIR"
+    BINARY_SOURCE="$TMPDIR/${BINARY_NAME}-${PLATFORM}/${BINARY_NAME}"
+    ENGINE_SOURCE="$TMPDIR/${BINARY_NAME}-${PLATFORM}/${ENGINE_NAME}"
+  else
+    echo ""
+    echo "Install failed: no release assets found for ${PLATFORM}."
+    echo ""
+    echo "Expected one of these release asset sets:"
+    echo "  ${BINARY_ASSET}"
+    echo "  ${ENGINE_ASSET}"
+    echo "or:"
+    echo "  ${ARCHIVE}"
+    echo ""
+    echo "This usually means the latest GitHub release has not been published for your platform yet."
+    echo ""
+    echo "If you already have a local build, install manually instead:"
+    echo "  mkdir -p \"\$HOME/.local/bin\""
+    echo "  install -m 755 gocode \"\$HOME/.local/bin/gocode\""
+    echo "  install -m 755 gocode-engine \"\$HOME/.local/bin/gocode-engine\""
+    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+    exit 1
+  fi
 fi
-tar -xzf "$TMPDIR/$ARCHIVE" -C "$TMPDIR"
 
 # Install binaries
 echo "Installing to ${INSTALL_DIR}..."
-if [ "$USE_SUDO" = "false" ]; then
-  cp "$TMPDIR/${BINARY_NAME}-${PLATFORM}/${BINARY_NAME}" "$INSTALL_DIR/"
-  cp "$TMPDIR/${BINARY_NAME}-${PLATFORM}/${ENGINE_NAME}" "$INSTALL_DIR/"
-else
-  sudo cp "$TMPDIR/${BINARY_NAME}-${PLATFORM}/${BINARY_NAME}" "$INSTALL_DIR/"
-  sudo cp "$TMPDIR/${BINARY_NAME}-${PLATFORM}/${ENGINE_NAME}" "$INSTALL_DIR/"
-fi
-
-chmod +x "$INSTALL_DIR/$BINARY_NAME" "$INSTALL_DIR/$ENGINE_NAME"
+install_binary "$BINARY_SOURCE" "$INSTALL_DIR/$BINARY_NAME"
+install_binary "$ENGINE_SOURCE" "$INSTALL_DIR/$ENGINE_NAME"
 
 echo ""
 echo "gocode installed successfully!"
