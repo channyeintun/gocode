@@ -9,15 +9,15 @@
 
 ## Current Status
 
-| Phase                                      | Status      | Notes                                                                                                                                                                                                         |
-| ------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1. Layout and prompt foundation            | completed   | Cursor-aware editing, multiline entry, wrapped-line navigation, prompt footer groundwork, and clipboard image paste are in place. The image path now includes the required TUI and engine protocol expansion. |
-| 2. Permission UX parity                    | not started | Waiting for Phase 1 completion.                                                                                                                                                                               |
-| 3. Markdown and syntax highlighting parity | not started | Waiting for Phase 2 completion.                                                                                                                                                                               |
-| 4. Transcript/message-row parity           | not started | Waiting for Phase 3 completion.                                                                                                                                                                               |
-| 5a. Status line parity                     | not started | Waiting for Phase 4 completion.                                                                                                                                                                               |
-| 5b. Prompt footer parity                   | not started | Waiting for Phase 5a completion.                                                                                                                                                                              |
-| 6. Protocol follow-up                      | not started | Only if parity requires engine changes.                                                                                                                                                                       |
+| Phase                                      | Status      | Notes                                                                                                                                                                                                                                 |
+| ------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Layout and prompt foundation            | completed   | Cursor-aware editing, multiline entry, wrapped-line navigation, prompt footer groundwork, and clipboard image paste are in place. The image path now includes the required TUI and engine protocol expansion.                         |
+| 2. Permission UX parity                    | completed   | The permission prompt now uses a selectable flow with arrow-key focus, Enter confirmation, direct shortcut keys, and Esc mapped into the existing deny path. Amendment feedback is still blocked by the current engine payload shape. |
+| 3. Markdown and syntax highlighting parity | not started | Ready to begin. The next step is replacing `marked-terminal` with a renderer closer to the upstream token-based markdown pipeline.                                                                                                    |
+| 4. Transcript/message-row parity           | not started | Waiting for Phase 3 completion.                                                                                                                                                                                                       |
+| 5a. Status line parity                     | not started | Waiting for Phase 4 completion.                                                                                                                                                                                                       |
+| 5b. Prompt footer parity                   | not started | Waiting for Phase 5a completion.                                                                                                                                                                                                      |
+| 6. Protocol follow-up                      | not started | Only if parity requires engine changes.                                                                                                                                                                                               |
 
 ## Task Log
 
@@ -31,4 +31,7 @@
 - Completed: added clipboard image paste support with inline `[Image #N]` references, prompt attachment tracking, and image-aware submit handling based on the upstream prompt flow.
 - Completed: expanded the `user_input` payload and Go IPC bridge to carry image attachments, including a larger NDJSON line limit so base64 image payloads fit through stdio.
 - Completed: reject image input on non-vision models and serialize image blocks for Anthropic, OpenAI-compatible, and Gemini providers.
-- Next: begin Phase 2 by replacing the current permission box with a selectable permission prompt flow.
+- Completed: replaced the static `y/n/a/s` permission box with a selectable permission prompt modeled on the upstream flow, including focusable options, direct shortcuts, Enter confirmation, and an explicit Esc cancel path.
+- Completed: kept the Phase 2 implementation TUI-only because the current permission payload still exposes only `tool`, `command`, and `risk` plus the decision callback.
+- Documented gap: upstream-style amendment or feedback input is still not wired because the Go engine has no permission-response field for feedback text.
+- Next: begin Phase 3 by replacing `marked-terminal` with a markdown renderer closer to the upstream token-based pipeline.

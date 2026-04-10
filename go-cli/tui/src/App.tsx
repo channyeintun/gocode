@@ -193,6 +193,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           command={uiState.pendingPermission.command}
           risk={uiState.pendingPermission.risk}
           onRespond={handlePermissionResponse}
+          onCancel={() => handlePermissionResponse("deny")}
         />
       ) : (
         <Input
