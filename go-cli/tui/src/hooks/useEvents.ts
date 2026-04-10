@@ -70,6 +70,7 @@ export interface EngineUIState {
   thinkingText: string;
   mode: string;
   model: string;
+  sessionId: string | null;
   cost: { totalUsd: number; inputTokens: number; outputTokens: number };
   artifacts: UIArtifact[];
   toolCalls: UIToolCall[];
@@ -93,6 +94,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   thinkingText: "",
   mode,
   model,
+  sessionId: null,
   cost: { totalUsd: 0, inputTokens: 0, outputTokens: 0 },
   artifacts: [],
   toolCalls: [],
@@ -380,6 +382,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           ...s,
           ready: true,
           mode: p.mode,
+          sessionId: p.session_id,
           isStreaming: false,
           error: null,
           statusLine: `Resumed session ${p.session_id}`,

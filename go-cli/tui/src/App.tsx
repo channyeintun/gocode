@@ -126,6 +126,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         ready={uiState.ready || engine.ready}
         mode={uiState.mode}
         model={uiState.model}
+        sessionId={uiState.sessionId}
         totalCostUsd={uiState.cost.totalUsd}
         inputTokens={uiState.cost.inputTokens}
         outputTokens={uiState.cost.outputTokens}
