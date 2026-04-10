@@ -227,8 +227,26 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as TurnCompletePayload;
         setUIState((s) => {
           if (p.stop_reason === "cancelled") {
+            const hasPartialResponse = assistantBlocksHaveContent(
+              s.liveAssistantBlocks,
+            );
+            const partialMessage = hasPartialResponse
+              ? createAssistantMessage(s.liveAssistantBlocks, {
+                  model: s.model,
+                })
+              : null;
+
             return {
               ...s,
+              messages: partialMessage
+                ? [...s.messages, partialMessage]
+                : s.messages,
+              transcript: partialMessage
+                ? appendTranscriptEntry(s.transcript, {
+                    id: partialMessage.id,
+                    kind: "message",
+                  })
+                : s.transcript,
               liveAssistantBlocks: [],
               activeTurnStatus: "idle",
               isStreaming: false,
@@ -568,8 +586,6 @@ export function useEvents(initialModel: string, initialMode: string) {
   const cancelActiveTurn = useCallback(() => {
     setUIState((s) => ({
       ...s,
-      activeTurnStatus: s.isStreaming ? "cancelling" : s.activeTurnStatus,
-      isStreaming: s.isStreaming,
       compact: null,
       statusLine: "Cancellation requested...",
     }));
