@@ -1,7 +1,10 @@
 import path from "node:path";
 import React, { type FC } from "react";
 import { Box, Text } from "ink";
-import { formatTokenCount, inferContextWindow } from "../utils/modelContext.js";
+import {
+  formatTokenCount,
+  getApproxEffectiveContextWindow,
+} from "../utils/modelContext.js";
 
 interface StatusBarProps {
   ready: boolean;
@@ -28,11 +31,11 @@ const StatusBar: FC<StatusBarProps> = ({
   const workspaceLabel = path.basename(process.cwd());
   const sessionLabel = sessionId ? `session ${sessionId.slice(0, 8)}` : null;
   const modelLabel = formatModelLabel(model);
-  const contextWindow = inferContextWindow(model);
+  const contextWindow = getApproxEffectiveContextWindow(model);
   const contextTokens = inputTokens + outputTokens;
   const contextPercent = Math.min(
     999,
-    Math.round((contextTokens / contextWindow) * 100),
+    contextWindow > 0 ? Math.round((contextTokens / contextWindow) * 100) : 0,
   );
   const contextColor =
     contextPercent >= 90 ? "red" : contextPercent >= 70 ? "yellow" : "gray";

@@ -1,3 +1,8 @@
+const APPROX_MAX_RESERVED_OUTPUT_TOKENS = 20_000;
+const APPROX_AUTOCOMPACT_BUFFER_TOKENS = 13_000;
+const APPROX_WARNING_THRESHOLD_BUFFER_TOKENS = 20_000;
+const APPROX_MANUAL_COMPACT_BUFFER_TOKENS = 3_000;
+
 export function inferContextWindow(model: string): number {
   const normalized = model.toLowerCase();
 
@@ -31,6 +36,20 @@ export function inferContextWindow(model: string): number {
   return 128_000;
 }
 
+export function getApproxEffectiveContextWindow(model: string): number {
+  return Math.max(
+    0,
+    inferContextWindow(model) - APPROX_MAX_RESERVED_OUTPUT_TOKENS,
+  );
+}
+
+export function getApproxCompactThreshold(model: string): number {
+  return Math.max(
+    0,
+    getApproxEffectiveContextWindow(model) - APPROX_AUTOCOMPACT_BUFFER_TOKENS,
+  );
+}
+
 export function calculateApproxTokenWarningState(
   tokenUsage: number,
   model: string,
@@ -38,17 +57,32 @@ export function calculateApproxTokenWarningState(
   percentLeft: number;
   isWarning: boolean;
   isError: boolean;
+  effectiveContextWindow: number;
+  compactThreshold: number;
 } {
-  const contextWindow = inferContextWindow(model);
+  const effectiveContextWindow = getApproxEffectiveContextWindow(model);
+  const compactThreshold = getApproxCompactThreshold(model);
+  const warningThreshold = Math.max(
+    0,
+    compactThreshold - APPROX_WARNING_THRESHOLD_BUFFER_TOKENS,
+  );
+  const blockingLimit = Math.max(
+    0,
+    effectiveContextWindow - APPROX_MANUAL_COMPACT_BUFFER_TOKENS,
+  );
   const percentLeft = Math.max(
     0,
-    Math.round(((contextWindow - tokenUsage) / contextWindow) * 100),
+    compactThreshold > 0
+      ? Math.round(((compactThreshold - tokenUsage) / compactThreshold) * 100)
+      : 0,
   );
 
   return {
     percentLeft,
-    isWarning: percentLeft <= 15,
-    isError: percentLeft <= 8,
+    isWarning: compactThreshold > 0 && tokenUsage >= warningThreshold,
+    isError: effectiveContextWindow > 0 && tokenUsage >= blockingLimit,
+    effectiveContextWindow,
+    compactThreshold,
   };
 }
 

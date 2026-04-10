@@ -3,7 +3,6 @@ import { Box, Text } from "ink";
 import {
   calculateApproxTokenWarningState,
   formatTokenCount,
-  inferContextWindow,
 } from "../utils/modelContext.js";
 
 interface PromptFooterProps {
@@ -60,12 +59,11 @@ const PromptFooter: FC<PromptFooterProps> = ({
     () => calculateApproxTokenWarningState(tokenUsage, model),
     [model, tokenUsage],
   );
-  const contextWindow = useMemo(() => inferContextWindow(model), [model]);
   const showWrappedIndicator = promptValue.length > 0 && wrappedLineCount > 1;
   const activityLabel = isLoading ? "running" : disabled ? "blocked" : "ready";
   const hint = disabled ? DISABLED_HINT : INPUT_HINT;
   const warningText = tokenWarning.isWarning
-    ? `Context low (~${tokenWarning.percentLeft}% remaining) · ${formatTokenCount(tokenUsage)}/${formatTokenCount(contextWindow)} used · Run /compact before the next long turn`
+    ? `Compact soon (~${tokenWarning.percentLeft}% until threshold) · ${formatTokenCount(tokenUsage)}/${formatTokenCount(tokenWarning.effectiveContextWindow)} used · Run /compact before the next long turn`
     : null;
 
   return (
