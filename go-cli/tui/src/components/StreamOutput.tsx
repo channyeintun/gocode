@@ -4,6 +4,12 @@ import Spinner from "ink-spinner";
 import type { UIMessage } from "../hooks/useEvents.js";
 import MarkdownText from "./MarkdownText.js";
 
+function truncateThinking(text: string): string {
+  const lines = text.split("\n").filter((l) => l.trim().length > 0);
+  const tail = lines.slice(-4);
+  return tail.join("\n");
+}
+
 interface StreamOutputProps {
   messages: UIMessage[];
   liveText: string;
@@ -49,7 +55,9 @@ const StreamOutput: FC<StreamOutputProps> = ({
                 ? "Thinking"
                 : "Working"}
           </Text>
-          {liveThinkingText && !liveText && <Text color="gray">{liveThinkingText}</Text>}
+          {liveThinkingText && !liveText && (
+            <Text color="gray">{truncateThinking(liveThinkingText)}</Text>
+          )}
           {liveText && <MarkdownText text={liveText} />}
         </Box>
       )}

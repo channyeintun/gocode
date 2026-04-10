@@ -121,8 +121,9 @@ func (p *Planner) FinalizeTurn(ctx context.Context, artifactID string, userReque
 }
 
 // ValidateTool blocks write tools while plan mode is active.
+// ReadOnly and Execute tools (bash, git) are always allowed.
 func (p *Planner) ValidateTool(ctx context.Context, toolName string, permission toolpkg.PermissionLevel) error {
-	if p == nil || permission == toolpkg.PermissionReadOnly {
+	if p == nil || permission != toolpkg.PermissionWrite {
 		return nil
 	}
 	if p.mode != ModePlan || !ProfileForMode(p.mode).RequirePlanBeforeWrite {
