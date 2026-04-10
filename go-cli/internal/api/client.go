@@ -90,11 +90,12 @@ type ModelRequest struct {
 type ModelEventType int
 
 const (
-	ModelEventToken    ModelEventType = iota // text delta
-	ModelEventThinking                       // thinking delta
-	ModelEventToolCall                       // complete tool call
-	ModelEventStop                           // generation complete
-	ModelEventUsage                          // token counts
+	ModelEventToken      ModelEventType = iota // text delta
+	ModelEventThinking                         // thinking delta
+	ModelEventToolCall                         // complete tool call
+	ModelEventStop                             // generation complete
+	ModelEventUsage                            // token counts
+	ModelEventRateLimits                       // rate limit windows from provider headers
 )
 
 // ModelEvent is one event from a streaming model response.
@@ -104,6 +105,7 @@ type ModelEvent struct {
 	ToolCall   *ToolCall // for ToolCall
 	StopReason string    // for Stop: "end_turn", "tool_use", "max_tokens"
 	Usage      *Usage    // for Usage
+	RateLimits *RateLimits
 }
 
 // Usage reports token consumption for a model call.
@@ -112,6 +114,16 @@ type Usage struct {
 	OutputTokens        int `json:"output_tokens"`
 	CacheReadTokens     int `json:"cache_read_tokens,omitempty"`
 	CacheCreationTokens int `json:"cache_creation_tokens,omitempty"`
+}
+
+type RateLimitWindow struct {
+	Utilization float64 `json:"utilization"`
+	ResetsAt    int64   `json:"resets_at"`
+}
+
+type RateLimits struct {
+	FiveHour *RateLimitWindow `json:"five_hour,omitempty"`
+	SevenDay *RateLimitWindow `json:"seven_day,omitempty"`
 }
 
 // LLMClient is the universal interface for all model providers.

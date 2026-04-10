@@ -9,10 +9,10 @@
 
 ## Current Status
 
-| Phase                      | Status      | Notes                                                                                                                                                                                |
-| -------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 6. Protocol follow-up      | in progress | Permission amendment/feedback text is now wired through the IPC/TUI/tool execution path. Rate-limit data, cost-threshold notices, and block-oriented assistant messages remain open. |
-| 7. Deferred infrastructure | not started | Virtual transcript list requires scroll/fullscreen primitives the TUI does not yet have.                                                                                             |
+| Phase                      | Status      | Notes                                                                                                                                                                                           |
+| -------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6. Protocol follow-up      | in progress | Permission amendment/feedback text and raw 5h/7d Anthropic rate-limit windows are now wired through the IPC/TUI path. Cost-threshold notices and block-oriented assistant messages remain open. |
+| 7. Deferred infrastructure | not started | Virtual transcript list requires scroll/fullscreen primitives the TUI does not yet have.                                                                                                        |
 
 ## Task Log
 
@@ -24,3 +24,4 @@
 ### 2026-04-11
 
 - Completed: Phase 6 permission amendment/feedback text parity slice. The permission prompt now accepts an optional note, the IPC payload carries it, denials include it in the rejection reason, and approved tool executions append it to the emitted tool result so the model can see the user's note on the next turn.
+- Completed: Phase 6 rate-limit status-line slice. Anthropic response headers now emit raw 5-hour and 7-day utilization windows through the engine protocol, and the TUI status bar shows those percentages when the provider returns them.

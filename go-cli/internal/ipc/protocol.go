@@ -3,7 +3,7 @@ package ipc
 import "encoding/json"
 
 // ProtocolVersion is the current IPC protocol version.
-const ProtocolVersion = 4
+const ProtocolVersion = 5
 
 // --- Go → Ink (stdout): StreamEvent ---
 
@@ -26,12 +26,13 @@ const (
 	EventPermissionRequest EventType = "permission_request"
 
 	// Session state
-	EventModeChanged   EventType = "mode_changed"
-	EventModelChanged  EventType = "model_changed"
-	EventContextWindow EventType = "context_window"
-	EventCostUpdate    EventType = "cost_update"
-	EventCompactStart  EventType = "compact_start"
-	EventCompactEnd    EventType = "compact_end"
+	EventModeChanged     EventType = "mode_changed"
+	EventModelChanged    EventType = "model_changed"
+	EventContextWindow   EventType = "context_window"
+	EventCostUpdate      EventType = "cost_update"
+	EventRateLimitUpdate EventType = "rate_limit_update"
+	EventCompactStart    EventType = "compact_start"
+	EventCompactEnd      EventType = "compact_end"
 
 	// Artifacts
 	EventArtifactCreated EventType = "artifact_created"
@@ -140,6 +141,16 @@ type CostUpdatePayload struct {
 	TotalUSD     float64 `json:"total_usd"`
 	InputTokens  int     `json:"input_tokens"`
 	OutputTokens int     `json:"output_tokens"`
+}
+
+type RateLimitWindowPayload struct {
+	UsedPercentage float64 `json:"used_percentage"`
+	ResetsAt       int64   `json:"resets_at"`
+}
+
+type RateLimitUpdatePayload struct {
+	FiveHour *RateLimitWindowPayload `json:"five_hour,omitempty"`
+	SevenDay *RateLimitWindowPayload `json:"seven_day,omitempty"`
 }
 
 type CompactStartPayload struct {

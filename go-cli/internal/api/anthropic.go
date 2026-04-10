@@ -11,6 +11,7 @@ import (
 	"iter"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -82,6 +83,12 @@ func (c *AnthropicClient) Stream(ctx context.Context, req ModelRequest) (iter.Se
 		state := anthropicStreamState{
 			toolBlocks: make(map[int]*anthropicToolUseState),
 		}
+		rateLimits := extractAnthropicRateLimits(resp.Header)
+		if rateLimits != nil {
+			if !yield(ModelEvent{Type: ModelEventRateLimits, RateLimits: rateLimits}, nil) {
+				return
+			}
+		}
 
 		err := readSSE(ctx, resp.Body, func(eventName, data string) error {
 			return c.handleEvent(eventName, data, &state, yield)
@@ -94,6 +101,43 @@ func (c *AnthropicClient) Stream(ctx context.Context, req ModelRequest) (iter.Se
 			yield(ModelEvent{}, err)
 		}
 	}, nil
+}
+
+func extractAnthropicRateLimits(headers http.Header) *RateLimits {
+	if len(headers) == 0 {
+		return nil
+	}
+
+	rateLimits := &RateLimits{
+		FiveHour: extractAnthropicRateLimitWindow(headers, "5h"),
+		SevenDay: extractAnthropicRateLimitWindow(headers, "7d"),
+	}
+	if rateLimits.FiveHour == nil && rateLimits.SevenDay == nil {
+		return nil
+	}
+	return rateLimits
+}
+
+func extractAnthropicRateLimitWindow(headers http.Header, window string) *RateLimitWindow {
+	utilizationText := strings.TrimSpace(headers.Get("anthropic-ratelimit-unified-" + window + "-utilization"))
+	resetText := strings.TrimSpace(headers.Get("anthropic-ratelimit-unified-" + window + "-reset"))
+	if utilizationText == "" || resetText == "" {
+		return nil
+	}
+
+	utilization, err := strconv.ParseFloat(utilizationText, 64)
+	if err != nil {
+		return nil
+	}
+	resetsAt, err := strconv.ParseInt(resetText, 10, 64)
+	if err != nil {
+		return nil
+	}
+
+	return &RateLimitWindow{
+		Utilization: utilization,
+		ResetsAt:    resetsAt,
+	}
 }
 
 func (c *AnthropicClient) openStream(ctx context.Context, payload anthropicRequest) (*http.Response, error) {

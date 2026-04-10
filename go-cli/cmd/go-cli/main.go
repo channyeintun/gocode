@@ -1008,6 +1008,12 @@ func trackModelStream(
 				yield(api.ModelEvent{}, streamErr)
 				return
 			}
+			if event.Type == api.ModelEventRateLimits && event.RateLimits != nil {
+				if err := emitRateLimitUpdate(bridge, event.RateLimits); err != nil {
+					yield(api.ModelEvent{}, err)
+					return
+				}
+			}
 			if event.Type == api.ModelEventUsage && event.Usage != nil {
 				usage = mergeUsage(usage, *event.Usage)
 			}
@@ -1046,6 +1052,31 @@ func emitCostUpdate(bridge *ipc.Bridge, tracker *costpkg.Tracker) error {
 		InputTokens:  snapshot.TotalInputTokens,
 		OutputTokens: snapshot.TotalOutputTokens,
 	})
+}
+
+func emitRateLimitUpdate(bridge *ipc.Bridge, rateLimits *api.RateLimits) error {
+	if rateLimits == nil {
+		return nil
+	}
+
+	payload := ipc.RateLimitUpdatePayload{
+		FiveHour: toRateLimitWindowPayload(rateLimits.FiveHour),
+		SevenDay: toRateLimitWindowPayload(rateLimits.SevenDay),
+	}
+	if payload.FiveHour == nil && payload.SevenDay == nil {
+		return nil
+	}
+	return bridge.Emit(ipc.EventRateLimitUpdate, payload)
+}
+
+func toRateLimitWindowPayload(window *api.RateLimitWindow) *ipc.RateLimitWindowPayload {
+	if window == nil {
+		return nil
+	}
+	return &ipc.RateLimitWindowPayload{
+		UsedPercentage: window.Utilization * 100,
+		ResetsAt:       window.ResetsAt,
+	}
 }
 
 func emitModelChanged(bridge *ipc.Bridge, activeModelID string, client api.LLMClient) error {

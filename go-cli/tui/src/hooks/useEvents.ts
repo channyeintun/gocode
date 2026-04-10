@@ -10,6 +10,7 @@ import type {
   ModeChangedPayload,
   ModelChangedPayload,
   PermissionRequestPayload,
+  RateLimitUpdatePayload,
   ReadyPayload,
   SessionRestoredPayload,
   SessionUpdatedPayload,
@@ -64,6 +65,16 @@ export interface UIToolCall {
   deletions?: number;
 }
 
+export interface UIRateLimitWindow {
+  usedPercentage: number;
+  resetsAt: number;
+}
+
+export interface UIRateLimits {
+  fiveHour: UIRateLimitWindow | null;
+  sevenDay: UIRateLimitWindow | null;
+}
+
 export interface EngineUIState {
   ready: boolean;
   messages: UIMessage[];
@@ -78,6 +89,7 @@ export interface EngineUIState {
   maxOutputTokens: number | null;
   currentContextUsage: number | null;
   cost: { totalUsd: number; inputTokens: number; outputTokens: number };
+  rateLimits: UIRateLimits;
   artifacts: UIArtifact[];
   toolCalls: UIToolCall[];
   compact: {
@@ -106,6 +118,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   maxOutputTokens: null,
   currentContextUsage: null,
   cost: { totalUsd: 0, inputTokens: 0, outputTokens: 0 },
+  rateLimits: { fiveHour: null, sevenDay: null },
   artifacts: [],
   toolCalls: [],
   compact: null,
@@ -349,6 +362,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             typeof p.max_output_tokens === "number" && p.max_output_tokens > 0
               ? p.max_output_tokens
               : s.maxOutputTokens,
+          rateLimits: { fiveHour: null, sevenDay: null },
         }));
         break;
       }
@@ -371,6 +385,27 @@ export function useEvents(initialModel: string, initialMode: string) {
             totalUsd: p.total_usd,
             inputTokens: p.input_tokens,
             outputTokens: p.output_tokens,
+          },
+        }));
+        break;
+      }
+      case "rate_limit_update": {
+        const p = event.payload as RateLimitUpdatePayload;
+        setUIState((s) => ({
+          ...s,
+          rateLimits: {
+            fiveHour: p.five_hour
+              ? {
+                  usedPercentage: p.five_hour.used_percentage,
+                  resetsAt: p.five_hour.resets_at,
+                }
+              : null,
+            sevenDay: p.seven_day
+              ? {
+                  usedPercentage: p.seven_day.used_percentage,
+                  resetsAt: p.seven_day.resets_at,
+                }
+              : null,
           },
         }));
         break;

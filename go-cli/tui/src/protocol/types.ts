@@ -12,6 +12,7 @@ export type EventType =
   | "model_changed"
   | "context_window"
   | "cost_update"
+  | "rate_limit_update"
   | "compact_start"
   | "compact_end"
   | "artifact_created"
@@ -134,6 +135,16 @@ export interface CostUpdatePayload {
   total_usd: number;
   input_tokens: number;
   output_tokens: number;
+}
+
+export interface RateLimitWindowPayload {
+  used_percentage: number;
+  resets_at: number;
+}
+
+export interface RateLimitUpdatePayload {
+  five_hour?: RateLimitWindowPayload;
+  seven_day?: RateLimitWindowPayload;
 }
 
 export interface CompactStartPayload {
