@@ -15,8 +15,16 @@ interface InputProps {
   disabled?: boolean;
 }
 
+// Reserve enough room for the border, padding, and "> " prompt marker while
+// still leaving a minimally usable wrapped editor width on narrow terminals.
+const PROMPT_CHROME_COLUMNS = 7;
+const MIN_PROMPT_TEXT_COLUMNS = 8;
+
 function getPromptTextColumns(terminalColumns: number): number {
-  return Math.max(8, terminalColumns - 7);
+  return Math.max(
+    MIN_PROMPT_TEXT_COLUMNS,
+    terminalColumns - PROMPT_CHROME_COLUMNS,
+  );
 }
 
 function renderInputLines(
@@ -24,6 +32,8 @@ function renderInputLines(
   cursorOffset: number,
   columns: number,
 ): string[] {
+  // Leave one column for the block cursor so a cursor rendered at the visual end
+  // of a wrapped line does not spill onto an extra phantom segment.
   const wrapWidth = Math.max(1, columns - 1);
   const logicalLines = value.split("\n");
   const renderedLines: string[] = [];

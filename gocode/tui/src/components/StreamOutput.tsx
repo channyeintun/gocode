@@ -25,7 +25,11 @@ interface StreamOutputProps {
   model: string;
 }
 
+// Keep a few screens of recent transcript mounted without letting long sessions
+// bog down Ink diffing or grow memory usage indefinitely.
 const MAX_TRANSCRIPT_BLOCKS = 200;
+// Reveal hidden history in noticeable chunks without making each page jump so
+// large that the user loses their place in the conversation.
 const TRANSCRIPT_CAP_STEP = 50;
 
 type TranscriptSliceAnchor = {

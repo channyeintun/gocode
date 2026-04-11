@@ -84,6 +84,13 @@ function renderResponse(toolCall: UIToolCall) {
   return renderSuccess(toolCall);
 }
 
+// Keep generic tool previews tall enough to show a couple of meaningful lines
+// while preventing one verbose result from crowding out the surrounding turn.
+const MAX_SUMMARIZED_OUTPUT_LINES = 6;
+// Stay under roughly a full terminal card on common widths so preview text
+// remains scannable before the user drills into the full transcript or artifact.
+const MAX_SUMMARIZED_OUTPUT_CHARS = 320;
+
 function describeTool(toolCall: UIToolCall): ToolDescriptor {
   switch (toolCall.name) {
     case "bash":
@@ -278,10 +285,12 @@ function summarizeOutput(raw: string, truncated?: boolean): string {
   }
 
   const lines = trimmed.split("\n");
-  const clippedLines = lines.slice(0, 6);
+  const clippedLines = lines.slice(0, MAX_SUMMARIZED_OUTPUT_LINES);
   const clipped = clippedLines.join("\n");
   const shortened =
-    clipped.length > 320 ? `${clipped.slice(0, 317)}...` : clipped;
+    clipped.length > MAX_SUMMARIZED_OUTPUT_CHARS
+      ? `${clipped.slice(0, MAX_SUMMARIZED_OUTPUT_CHARS - 3)}...`
+      : clipped;
 
   if (
     lines.length > clippedLines.length ||
