@@ -17,7 +17,7 @@
 | Phase 1 file semantics and safety        | completed   | L     | Create, overwrite, and edit intent are now split; read hardening, high-risk file approvals, stable diff previews, and file-history coverage are landed. |
 | Phase 2 edit engine hardening            | completed   | L     | The edit ladder, structured failures, patch-grade edits, and post-edit diagnostics are now surfaced across file-mutating tools.                        |
 | Phase 3 subagent lineage and metadata    | completed   | M     | Stable invocation ids, structured child metadata, and stronger TUI attribution are now landed for child runs.                                            |
-| Phase 4 child lifecycle and policy hooks | not started | M     | Shared loop alignment plus subagent start/stop hooks and block-stop reasons are planned but not started.                                                |
+| Phase 4 child lifecycle and policy hooks | completed   | M     | Child runs now share the loop stop-control contract, honor start/stop hooks, and surface block-stop reasons in status and transcript state.            |
 
 ## Completion Dashboard
 
@@ -96,25 +96,25 @@ This section is the canonical phase tracker. A phase is only complete when its `
 
 ### Phase 4: Shared Child Lifecycle and Policy Hooks
 
-**Status:** not started
+**Status:** completed
 
 **Landed**
 
-- None yet.
+- Child runs now use the shared query-loop stop-control contract so hook-driven stop blocking happens inside the same iteration model as the main agent loop.
+- Subagents now fire optional child start hooks through the existing hook runner and inject any returned context into the delegated child prompt before the first iteration.
+- Child stop hooks can now block completion with explicit reasons, which are persisted back into the child transcript as follow-up context and surfaced in child metadata.
+- Background child status updates and final child results now carry stop-block reason and count metadata so blocked stops stay visible without opening raw transcripts.
 
 **Remaining to Finish**
 
-- Align child execution more explicitly with the main agent-loop contracts.
-- Add optional subagent start hooks.
-- Add optional subagent stop hooks with block-stop reasons.
-- Surface block-stop reasons in child status and transcript state.
+- None.
 
 **Exit Criteria Check**
 
-- [ ] Parent and child execution share the same core lifecycle concepts instead of drifting.
-- [ ] Child agents can be prevented from stopping early through explicit hook policy.
-- [ ] Child stop-block reasons remain visible and actionable.
-- [ ] Child isolation remains clear enough that parent context and artifact ownership are not polluted.
+- [x] Parent and child execution share the same core lifecycle concepts instead of drifting.
+- [x] Child agents can be prevented from stopping early through explicit hook policy.
+- [x] Child stop-block reasons remain visible and actionable.
+- [x] Child isolation remains clear enough that parent context and artifact ownership are not polluted.
 
 ## Task Log
 
@@ -134,6 +134,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Completed: finished Phase 2 by adding post-edit diagnostics for file-mutating tools and surfacing those diagnostics in the file-mutation UI when local Go or TypeScript checkers are available.
 - Completed: finished Phase 3 by assigning stable child invocation ids, returning structured child metadata from the `agent` flow, and updating the TUI background-agent state to consume that metadata directly.
 - Note: a dedicated per-child active-tool field remains optional future polish, but the current lifecycle, transcript, result-path, tool-list, and cost metadata already satisfies the Phase 3 debugging and attribution bar.
+- Completed: finished Phase 4 by aligning child stop control with the shared query loop, adding child start/stop hooks, and surfacing stop-block reasons in both child status metadata and the persisted transcript.
 
 ## Next Planning Baseline
 

@@ -141,6 +141,12 @@ function formatMeta(agent: UIBackgroundAgent): string {
   if (agent.lifecycleState) {
     parts.push(`state ${agent.lifecycleState}`);
   }
+  if (agent.stopBlockCount > 0) {
+    parts.push(`stop blocks ${agent.stopBlockCount}`);
+  }
+  if (agent.stopBlockReason) {
+    parts.push(`blocked ${truncate(agent.stopBlockReason, 48)}`);
+  }
 
   const costSummary = formatCostSummary(agent);
   if (costSummary) {

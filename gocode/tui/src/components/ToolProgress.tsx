@@ -388,6 +388,8 @@ interface AgentResultSummary {
     subagent_type?: string;
     lifecycle_state?: string;
     status_message?: string;
+    stop_block_reason?: string;
+    stop_block_count?: number;
     session_id?: string;
     transcript_path?: string;
     result_path?: string;
@@ -445,6 +447,15 @@ function summarizeAgentOutput(output?: string): string {
     }
     if (metadata?.lifecycle_state) {
       lines.push(`Lifecycle: ${metadata.lifecycle_state}`);
+    }
+    if (metadata?.stop_block_reason) {
+      lines.push(`Stop blocked: ${metadata.stop_block_reason}`);
+    }
+    if (
+      typeof metadata?.stop_block_count === "number" &&
+      metadata.stop_block_count > 0
+    ) {
+      lines.push(`Stop blocks: ${metadata.stop_block_count}`);
     }
     if (Array.isArray(metadata?.tools) && metadata.tools.length > 0) {
       lines.push(`Tools: ${metadata.tools.join(", ")}`);

@@ -13,6 +13,7 @@ import (
 	"github.com/channyeintun/gocode/internal/api"
 	artifactspkg "github.com/channyeintun/gocode/internal/artifacts"
 	costpkg "github.com/channyeintun/gocode/internal/cost"
+	"github.com/channyeintun/gocode/internal/hooks"
 	"github.com/channyeintun/gocode/internal/ipc"
 	"github.com/channyeintun/gocode/internal/permissions"
 	"github.com/channyeintun/gocode/internal/session"
@@ -72,6 +73,7 @@ func makeSubagentRunner(
 	parentTracker *costpkg.Tracker,
 	sessionStore *session.Store,
 	artifactManager *artifactspkg.Manager,
+	hookRunner *hooks.Runner,
 	client api.LLMClient,
 	activeModelID string,
 	cwd string,
@@ -95,10 +97,12 @@ func makeSubagentRunner(
 		}
 
 		execute := func(runCtx context.Context) (toolpkg.AgentRunResult, error) {
-			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, client, activeModelID, cwd)
+			return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, client, activeModelID, cwd, nil)
 		}
 		if req.Background {
-			launch := launchBackgroundAgent(ctx, bridge, strings.TrimSpace(req.Description), subagentType, invocationID, sessionStore, execute)
+			launch := launchBackgroundAgent(ctx, bridge, strings.TrimSpace(req.Description), subagentType, invocationID, sessionStore, func(runCtx context.Context, reportStatus func(toolpkg.AgentRunResult)) (toolpkg.AgentRunResult, error) {
+				return executeSubagent(runCtx, req, subagentType, invocationID, bridge, registry, permissionCtx, parentTracker, sessionStore, artifactManager, hookRunner, client, activeModelID, cwd, reportStatus)
+			})
 			launch.SubagentType = subagentType
 			launch.Tools = subagentToolNames(subagentType)
 			return withChildMetadata(launch, strings.TrimSpace(req.Description)), nil
@@ -122,22 +126,27 @@ func executeSubagent(
 	parentTracker *costpkg.Tracker,
 	sessionStore *session.Store,
 	artifactManager *artifactspkg.Manager,
+	hookRunner *hooks.Runner,
 	client api.LLMClient,
 	activeModelID string,
 	cwd string,
+	reportStatus func(toolpkg.AgentRunResult),
 ) (toolpkg.AgentRunResult, error) {
 	childSessionID := invocationID
 	childStartedAt := time.Now()
 	childTracker := costpkg.NewTracker()
-	childMessages := []api.Message{{Role: api.RoleUser, Content: req.Prompt}}
 	childRegistry := registry.CloneFiltered(subagentToolNames(subagentType))
 	childPermissionCtx := permissions.CloneContext(permissionCtx)
 	childBridge := ipc.NewBridge(strings.NewReader(""), io.Discard)
 	childTimingLogger := timing.NewSessionLogger(sessionStore.SessionDir(childSessionID))
 	childSkills, _ := skillspkg.LoadAll(cwd)
 	childMode := agent.ModeFast
+	startHookMessages := runChildStartHooks(ctx, hookRunner, childSessionID, invocationID, req, subagentType)
+	childMessages := []api.Message{{Role: api.RoleUser, Content: injectChildHookContext(req.Prompt, startHookMessages)}}
 	childPrompt := subagentSystemPrompt(subagentType, childRegistry.Definitions())
+	transcriptPath := filepath.Join(sessionStore.SessionDir(childSessionID), "transcript.ndjson")
 	resultFile := filepath.Join(sessionStore.SessionDir(childSessionID), "agent-result.json")
+	lifecycle := &childLifecycleTracker{}
 
 	if err := persistSessionState(sessionStore, sessionStateParams{
 		SessionID: childSessionID,
@@ -181,6 +190,9 @@ func executeSubagent(
 			selector := memoryRecallSelector{bridge: childBridge, tracker: childTracker, client: client}
 			return selector.Select(callCtx, files, userPrompt)
 		},
+		BeforeStop: func(callCtx context.Context, stopReq agent.StopRequest) (agent.StopDecision, error) {
+			return evaluateChildStopHooks(callCtx, hookRunner, childSessionID, invocationID, req, subagentType, stopReq, lifecycle, transcriptPath, resultFile, reportStatus)
+		},
 		ApplyResultBudget: func(current []api.Message) []api.Message {
 			return current
 		},
@@ -215,6 +227,7 @@ func executeSubagent(
 
 	for _, streamErr := range stream {
 		if streamErr != nil {
+			runChildStopFailureHooks(ctx, hookRunner, childSessionID, invocationID, req, subagentType, childMessages, streamErr)
 			return toolpkg.AgentRunResult{}, streamErr
 		}
 	}
@@ -241,14 +254,203 @@ func executeSubagent(
 		InvocationID:   invocationID,
 		SubagentType:   subagentType,
 		SessionID:      childSessionID,
-		TranscriptPath: filepath.Join(sessionStore.SessionDir(childSessionID), "transcript.ndjson"),
+		TranscriptPath: transcriptPath,
 		OutputFile:     resultFile,
 		Summary:        latestAssistantContent(childMessages),
 		TotalCostUSD:   childSnapshot.TotalCostUSD,
 		InputTokens:    childSnapshot.TotalInputTokens,
 		OutputTokens:   childSnapshot.TotalOutputTokens,
 		Tools:          toolDefinitionNames(childRegistry.Definitions()),
+		Metadata:       lifecycle.metadata(),
 	}, nil
+}
+
+type childLifecycleTracker struct {
+	stopBlockReason string
+	stopBlockCount  int
+}
+
+func (s *childLifecycleTracker) noteStopBlock(reason string) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "blocked by child stop hook"
+	}
+	s.stopBlockReason = reason
+	s.stopBlockCount++
+}
+
+func (s *childLifecycleTracker) metadata() *toolpkg.ChildAgentMetadata {
+	if s == nil || s.stopBlockCount == 0 {
+		return nil
+	}
+	return &toolpkg.ChildAgentMetadata{
+		StopBlockReason: s.stopBlockReason,
+		StopBlockCount:  s.stopBlockCount,
+	}
+}
+
+func runChildStartHooks(
+	ctx context.Context,
+	hookRunner *hooks.Runner,
+	childSessionID string,
+	invocationID string,
+	req toolpkg.AgentRunRequest,
+	subagentType string,
+) []string {
+	if hookRunner == nil {
+		return nil
+	}
+	responses, _ := hookRunner.Run(ctx, hooks.Payload{
+		Type:      hooks.HookSessionStart,
+		SessionID: childSessionID,
+		Extra: map[string]any{
+			"child_agent":       true,
+			"invocation_id":     invocationID,
+			"description":       req.Description,
+			"prompt":            req.Prompt,
+			"subagent_type":     subagentType,
+			"run_in_background": req.Background,
+		},
+	})
+	messages := make([]string, 0, len(responses))
+	for _, resp := range responses {
+		if message := strings.TrimSpace(resp.Message); message != "" {
+			messages = append(messages, message)
+		}
+	}
+	return messages
+}
+
+func injectChildHookContext(prompt string, hookMessages []string) string {
+	prompt = strings.TrimSpace(prompt)
+	if len(hookMessages) == 0 {
+		return prompt
+	}
+	lines := make([]string, 0, len(hookMessages)+3)
+	lines = append(lines, "Additional local child-agent context:")
+	for _, message := range hookMessages {
+		message = strings.TrimSpace(message)
+		if message == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- %s", message))
+	}
+	if prompt != "" {
+		lines = append(lines, "", "Delegated task:", prompt)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func evaluateChildStopHooks(
+	ctx context.Context,
+	hookRunner *hooks.Runner,
+	childSessionID string,
+	invocationID string,
+	req toolpkg.AgentRunRequest,
+	subagentType string,
+	stopReq agent.StopRequest,
+	lifecycle *childLifecycleTracker,
+	transcriptPath string,
+	resultFile string,
+	reportStatus func(toolpkg.AgentRunResult),
+) (agent.StopDecision, error) {
+	if hookRunner == nil {
+		return agent.StopDecision{}, nil
+	}
+	responses, err := hookRunner.Run(ctx, hooks.Payload{
+		Type:      hooks.HookStop,
+		SessionID: childSessionID,
+		Output:    stopReq.AssistantMessage.Content,
+		Extra: map[string]any{
+			"child_agent":       true,
+			"invocation_id":     invocationID,
+			"description":       req.Description,
+			"subagent_type":     subagentType,
+			"run_in_background": req.Background,
+			"stop_reason":       stopReq.StopReason,
+			"turn_count":        stopReq.TurnCount,
+		},
+	})
+	if err != nil {
+		return agent.StopDecision{}, err
+	}
+	blocked, reason := blockedChildStop(responses)
+	if !blocked {
+		return agent.StopDecision{}, nil
+	}
+	lifecycle.noteStopBlock(reason)
+	if reportStatus != nil {
+		reportStatus(toolpkg.AgentRunResult{
+			Status:         "running",
+			InvocationID:   invocationID,
+			SubagentType:   subagentType,
+			SessionID:      childSessionID,
+			TranscriptPath: transcriptPath,
+			OutputFile:     resultFile,
+			Metadata: &toolpkg.ChildAgentMetadata{
+				LifecycleState:  "stop_blocked",
+				StatusMessage:   reason,
+				StopBlockReason: lifecycle.stopBlockReason,
+				StopBlockCount:  lifecycle.stopBlockCount,
+			},
+		})
+	}
+	return agent.StopDecision{
+		Continue:        true,
+		Reason:          reason,
+		FollowUpMessage: childStopBlockedFollowUp(reason),
+	}, nil
+}
+
+func runChildStopFailureHooks(
+	ctx context.Context,
+	hookRunner *hooks.Runner,
+	childSessionID string,
+	invocationID string,
+	req toolpkg.AgentRunRequest,
+	subagentType string,
+	messages []api.Message,
+	err error,
+) {
+	if hookRunner == nil || err == nil {
+		return
+	}
+	_, _ = hookRunner.Run(ctx, hooks.Payload{
+		Type:      hooks.HookStopFailure,
+		SessionID: childSessionID,
+		Output:    latestAssistantContent(messages),
+		Error:     err.Error(),
+		Extra: map[string]any{
+			"child_agent":       true,
+			"invocation_id":     invocationID,
+			"description":       req.Description,
+			"subagent_type":     subagentType,
+			"run_in_background": req.Background,
+		},
+	})
+}
+
+func blockedChildStop(responses []hooks.Response) (bool, string) {
+	for _, resp := range responses {
+		action := strings.ToLower(strings.TrimSpace(resp.Action))
+		if action != "deny" && action != "stop" {
+			continue
+		}
+		reason := strings.TrimSpace(resp.Message)
+		if reason == "" {
+			reason = "blocked by child stop hook"
+		}
+		return true, reason
+	}
+	return false, ""
+}
+
+func childStopBlockedFollowUp(reason string) string {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return "A local stop hook blocked completion. Continue working until the stop condition is satisfied."
+	}
+	return fmt.Sprintf("A local stop hook blocked completion: %s\n\nContinue working until the stop condition is satisfied.", reason)
 }
 
 func withChildMetadata(result toolpkg.AgentRunResult, description string) toolpkg.AgentRunResult {
@@ -261,25 +463,37 @@ func buildChildMetadata(result toolpkg.AgentRunResult, description string) *tool
 	if invocationID == "" && result.AgentID == "" {
 		return nil
 	}
-	tools := append([]string(nil), result.Tools...)
-	return &toolpkg.ChildAgentMetadata{
-		InvocationID:   invocationID,
-		AgentID:        result.AgentID,
-		Description:    strings.TrimSpace(description),
-		SubagentType:   result.SubagentType,
-		LifecycleState: childLifecycleState(result.Status),
-		StatusMessage:  childStatusMessage(result),
-		SessionID:      result.SessionID,
-		TranscriptPath: result.TranscriptPath,
-		ResultPath:     result.OutputFile,
-		Tools:          tools,
+	metadata := &toolpkg.ChildAgentMetadata{}
+	if result.Metadata != nil {
+		*metadata = *result.Metadata
+		metadata.Tools = append([]string(nil), result.Metadata.Tools...)
 	}
+	metadata.InvocationID = firstNonEmpty(invocationID, metadata.InvocationID)
+	metadata.AgentID = firstNonEmpty(result.AgentID, metadata.AgentID)
+	metadata.Description = firstNonEmpty(strings.TrimSpace(description), metadata.Description)
+	metadata.SubagentType = firstNonEmpty(result.SubagentType, metadata.SubagentType)
+	metadata.LifecycleState = childLifecycleState(result.Status, metadata.LifecycleState)
+	if strings.TrimSpace(result.Summary) != "" || strings.TrimSpace(result.Error) != "" || strings.TrimSpace(metadata.StatusMessage) == "" {
+		metadata.StatusMessage = childStatusMessage(result)
+	}
+	metadata.SessionID = firstNonEmpty(result.SessionID, metadata.SessionID)
+	metadata.TranscriptPath = firstNonEmpty(result.TranscriptPath, metadata.TranscriptPath)
+	metadata.ResultPath = firstNonEmpty(result.OutputFile, metadata.ResultPath)
+	if len(result.Tools) > 0 {
+		metadata.Tools = append([]string(nil), result.Tools...)
+	}
+	return metadata
 }
 
-func childLifecycleState(status string) string {
+func childLifecycleState(status string, existing string) string {
 	switch strings.TrimSpace(status) {
 	case "", "async_launched":
 		return "launching"
+	case "running":
+		if strings.TrimSpace(existing) == "stop_blocked" {
+			return existing
+		}
+		return "running"
 	default:
 		return strings.TrimSpace(status)
 	}

@@ -28,6 +28,6 @@ type Payload struct {
 
 // Response is the result from a hook execution.
 type Response struct {
-	Action  string `json:"action,omitempty"`  // "allow", "deny", "ask", "stop", ""
+	Action  string `json:"action,omitempty"`  // "allow", "deny", "ask", "stop", ""; child stop hooks treat "deny" or "stop" as a block
 	Message string `json:"message,omitempty"` // feedback message for next iteration
 }

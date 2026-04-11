@@ -283,6 +283,8 @@ export interface ChildAgentMetadata {
   subagent_type?: string;
   lifecycle_state?: string;
   status_message?: string;
+  stop_block_reason?: string;
+  stop_block_count?: number;
   session_id?: string;
   transcript_path?: string;
   result_path?: string;

@@ -208,7 +208,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, client, activeModelID, cwd)))
+	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, hookRunner, client, activeModelID, cwd)))
 	registry.Register(toolpkg.NewAgentStatusTool(lookupBackgroundAgentStatus))
 	registry.Register(toolpkg.NewAgentStopTool(func(ctx context.Context, req toolpkg.AgentStopRequest) (toolpkg.AgentRunResult, error) {
 		return stopBackgroundAgent(ctx, bridge, req)

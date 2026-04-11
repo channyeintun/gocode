@@ -18,16 +18,18 @@ type AgentRunRequest struct {
 }
 
 type ChildAgentMetadata struct {
-	InvocationID   string   `json:"invocation_id,omitempty"`
-	AgentID        string   `json:"agent_id,omitempty"`
-	Description    string   `json:"description,omitempty"`
-	SubagentType   string   `json:"subagent_type,omitempty"`
-	LifecycleState string   `json:"lifecycle_state,omitempty"`
-	StatusMessage  string   `json:"status_message,omitempty"`
-	SessionID      string   `json:"session_id,omitempty"`
-	TranscriptPath string   `json:"transcript_path,omitempty"`
-	ResultPath     string   `json:"result_path,omitempty"`
-	Tools          []string `json:"tools,omitempty"`
+	InvocationID    string   `json:"invocation_id,omitempty"`
+	AgentID         string   `json:"agent_id,omitempty"`
+	Description     string   `json:"description,omitempty"`
+	SubagentType    string   `json:"subagent_type,omitempty"`
+	LifecycleState  string   `json:"lifecycle_state,omitempty"`
+	StatusMessage   string   `json:"status_message,omitempty"`
+	StopBlockReason string   `json:"stop_block_reason,omitempty"`
+	StopBlockCount  int      `json:"stop_block_count,omitempty"`
+	SessionID       string   `json:"session_id,omitempty"`
+	TranscriptPath  string   `json:"transcript_path,omitempty"`
+	ResultPath      string   `json:"result_path,omitempty"`
+	Tools           []string `json:"tools,omitempty"`
 }
 
 type AgentRunResult struct {

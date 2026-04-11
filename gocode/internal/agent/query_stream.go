@@ -38,12 +38,26 @@ type QueryDeps struct {
 	ExecuteToolBatch    func(context.Context, []api.ToolCall) ([]api.ToolResult, error)
 	CompactMessages     func(context.Context, []api.Message, CompactReason) ([]api.Message, error)
 	RecallMemory        func(context.Context, []MemoryFile, string) ([]MemoryRecallResult, error)
+	BeforeStop          func(context.Context, StopRequest) (StopDecision, error)
 	ApplyResultBudget   func([]api.Message) []api.Message
 	ObserveContinuation func(ContinuationTracker, string)
 	EmitTelemetry       func(ipc.StreamEvent) error
 	PersistMessages     func([]api.Message)
 	Cleanup             func()
 	Clock               func() time.Time
+}
+
+type StopRequest struct {
+	Messages         []api.Message
+	AssistantMessage api.Message
+	StopReason       string
+	TurnCount        int
+}
+
+type StopDecision struct {
+	Continue        bool
+	Reason          string
+	FollowUpMessage string
 }
 
 // QueryState tracks iteration state within a query.

@@ -113,16 +113,18 @@ func toIPCChildAgentMetadata(metadata *toolpkg.ChildAgentMetadata) *ipc.ChildAge
 	}
 	tools := append([]string(nil), metadata.Tools...)
 	return &ipc.ChildAgentMetadataPayload{
-		InvocationID:   metadata.InvocationID,
-		AgentID:        metadata.AgentID,
-		Description:    metadata.Description,
-		SubagentType:   metadata.SubagentType,
-		LifecycleState: metadata.LifecycleState,
-		StatusMessage:  metadata.StatusMessage,
-		SessionID:      metadata.SessionID,
-		TranscriptPath: metadata.TranscriptPath,
-		ResultPath:     metadata.ResultPath,
-		Tools:          tools,
+		InvocationID:    metadata.InvocationID,
+		AgentID:         metadata.AgentID,
+		Description:     metadata.Description,
+		SubagentType:    metadata.SubagentType,
+		LifecycleState:  metadata.LifecycleState,
+		StatusMessage:   metadata.StatusMessage,
+		StopBlockReason: metadata.StopBlockReason,
+		StopBlockCount:  metadata.StopBlockCount,
+		SessionID:       metadata.SessionID,
+		TranscriptPath:  metadata.TranscriptPath,
+		ResultPath:      metadata.ResultPath,
+		Tools:           tools,
 	}
 }
 
@@ -142,7 +144,7 @@ func launchBackgroundAgent(
 	subagentType string,
 	invocationID string,
 	sessionStore *session.Store,
-	execute func(context.Context) (toolpkg.AgentRunResult, error),
+	execute func(context.Context, func(toolpkg.AgentRunResult)) (toolpkg.AgentRunResult, error),
 ) toolpkg.AgentRunResult {
 	agentID := newBackgroundAgentID()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -172,7 +174,9 @@ func launchBackgroundAgent(
 
 	go func() {
 		defer close(bg.done)
-		result, err := execute(ctx)
+		result, err := execute(ctx, func(update toolpkg.AgentRunResult) {
+			updateBackgroundAgentRunningState(bridge, bg, update)
+		})
 		bg.mu.Lock()
 		defer bg.mu.Unlock()
 		defer scheduleBackgroundAgentCleanup(bg)
@@ -216,6 +220,42 @@ func launchBackgroundAgent(
 		TranscriptPath: transcriptPath,
 		OutputFile:     resultFile,
 	}
+}
+
+func updateBackgroundAgentRunningState(bridge *ipc.Bridge, bg *backgroundAgent, result toolpkg.AgentRunResult) {
+	if bg == nil {
+		return
+	}
+	bg.mu.Lock()
+	if !bg.running {
+		bg.mu.Unlock()
+		return
+	}
+	if result.AgentID == "" {
+		result.AgentID = bg.id
+	}
+	if result.InvocationID == "" {
+		result.InvocationID = bg.invocationID
+	}
+	if result.SubagentType == "" {
+		result.SubagentType = bg.subagentType
+	}
+	if result.Status == "" {
+		result.Status = "running"
+	}
+	if result.SessionID == "" {
+		result.SessionID = bg.result.SessionID
+	}
+	if result.TranscriptPath == "" {
+		result.TranscriptPath = bg.result.TranscriptPath
+	}
+	if result.OutputFile == "" {
+		result.OutputFile = bg.result.OutputFile
+	}
+	bg.result = withChildMetadata(result, bg.description)
+	current := bg.result
+	bg.mu.Unlock()
+	emitBackgroundAgentUpdated(bridge, bg, current)
 }
 
 func lookupBackgroundAgentStatus(ctx context.Context, req toolpkg.AgentStatusRequest) (toolpkg.AgentRunResult, error) {

@@ -114,6 +114,31 @@ func runIteration(
 	}
 
 	if turn.stopReason != "max_tokens" {
+		if deps.BeforeStop != nil {
+			decision, err := deps.BeforeStop(ctx, StopRequest{
+				Messages:         append([]api.Message(nil), state.Messages...),
+				AssistantMessage: assistantMessage,
+				StopReason:       normalizeStopReason(turn.stopReason),
+				TurnCount:        state.TurnCount,
+			})
+			if err != nil {
+				return err
+			}
+			if decision.Continue {
+				followUp := strings.TrimSpace(decision.FollowUpMessage)
+				if followUp == "" {
+					followUp = "A local stop hook blocked completion. Continue working until the stop condition is satisfied."
+					if strings.TrimSpace(decision.Reason) != "" {
+						followUp = fmt.Sprintf("A local stop hook blocked completion: %s\n\nContinue working until the stop condition is satisfied.", strings.TrimSpace(decision.Reason))
+					}
+				}
+				state.Messages = append(state.Messages, api.Message{
+					Role:    api.RoleUser,
+					Content: followUp,
+				})
+				return nil
+			}
+		}
 		state.StopRequested = true
 		if !yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: normalizeStopReason(turn.stopReason)}), nil) {
 			return context.Canceled

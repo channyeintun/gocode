@@ -118,6 +118,8 @@ export interface UIBackgroundAgent {
   summary: string;
   lifecycleState?: string;
   statusMessage?: string;
+  stopBlockReason?: string;
+  stopBlockCount: number;
   sessionId?: string;
   transcriptPath?: string;
   outputFile?: string;
@@ -877,6 +879,8 @@ export function useEvents(initialModel: string, initialMode: string) {
             ),
             lifecycleState: metadata.lifecycleState,
             statusMessage: metadata.statusMessage,
+            stopBlockReason: metadata.stopBlockReason,
+            stopBlockCount: metadata.stopBlockCount,
             sessionId: metadata.sessionId,
             transcriptPath: metadata.transcriptPath,
             outputFile: metadata.resultPath,
@@ -1402,6 +1406,8 @@ function parseBackgroundAgentResult(
     ),
     lifecycleState: metadata.lifecycleState,
     statusMessage: metadata.statusMessage,
+    stopBlockReason: metadata.stopBlockReason,
+    stopBlockCount: metadata.stopBlockCount,
     sessionId: metadata.sessionId,
     transcriptPath: metadata.transcriptPath,
     outputFile: metadata.resultPath,
@@ -1616,6 +1622,11 @@ function upsertBackgroundAgent(
         summary: nextAgent.summary || existing.summary,
         lifecycleState: nextAgent.lifecycleState || existing.lifecycleState,
         statusMessage: nextAgent.statusMessage || existing.statusMessage,
+        stopBlockReason: nextAgent.stopBlockReason || existing.stopBlockReason,
+        stopBlockCount:
+          nextAgent.stopBlockCount > 0
+            ? nextAgent.stopBlockCount
+            : existing.stopBlockCount,
         sessionId: nextAgent.sessionId ?? existing.sessionId,
         transcriptPath: nextAgent.transcriptPath ?? existing.transcriptPath,
         outputFile: nextAgent.outputFile ?? existing.outputFile,
@@ -1658,6 +1669,8 @@ function normalizeChildAgentMetadata(
   subagentType: string;
   lifecycleState?: string;
   statusMessage?: string;
+  stopBlockReason?: string;
+  stopBlockCount: number;
   sessionId?: string;
   transcriptPath?: string;
   resultPath?: string;
@@ -1673,6 +1686,8 @@ function normalizeChildAgentMetadata(
     ),
     lifecycleState: stringOrUndefined(metadata?.lifecycle_state),
     statusMessage: stringOrUndefined(metadata?.status_message),
+    stopBlockReason: stringOrUndefined(metadata?.stop_block_reason),
+    stopBlockCount: numberOrZero(metadata?.stop_block_count),
     sessionId: stringOrUndefined(metadata?.session_id || fallback?.sessionId),
     transcriptPath: stringOrUndefined(
       metadata?.transcript_path || fallback?.transcriptPath,
