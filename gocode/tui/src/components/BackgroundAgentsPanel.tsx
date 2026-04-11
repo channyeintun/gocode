@@ -6,10 +6,18 @@ interface BackgroundAgentsPanelProps {
   agents: UIBackgroundAgent[];
 }
 
-const MAX_VISIBLE_AGENTS = 4;
+const MAX_ACTIVE_AGENTS = 3;
+const MAX_RECENT_AGENTS = 3;
 
 const BackgroundAgentsPanel: FC<BackgroundAgentsPanelProps> = ({ agents }) => {
-  const visibleAgents = agents.slice(0, MAX_VISIBLE_AGENTS);
+  const activeAgents = agents.filter(isActiveAgent).slice(0, MAX_ACTIVE_AGENTS);
+  const recentAgents = agents
+    .filter((agent) => !isActiveAgent(agent))
+    .slice(0, MAX_RECENT_AGENTS);
+  const hiddenCount = Math.max(
+    0,
+    agents.length - activeAgents.length - recentAgents.length,
+  );
 
   return (
     <Box
@@ -19,34 +27,66 @@ const BackgroundAgentsPanel: FC<BackgroundAgentsPanelProps> = ({ agents }) => {
       paddingX={1}
       marginTop={1}
     >
-      <Text color="cyan">Background Agents</Text>
-      {visibleAgents.map((agent, index) => (
-        <Box
-          key={agent.agentId}
-          flexDirection="column"
-          marginTop={index === 0 ? 0 : 1}
-        >
-          <Box flexDirection="row" gap={1}>
-            <Text color={statusColor(agent.status)}>
-              {statusLabel(agent.status)}
-            </Text>
-            <Text bold>{agent.description || agent.agentId}</Text>
-            <Text dimColor>{formatSubagentType(agent.subagentType)}</Text>
-          </Box>
-          <Text dimColor>{truncate(agent.summary, 120)}</Text>
-          <Text dimColor>{formatMeta(agent)}</Text>
+      <Text color="cyan">
+        Background Agents
+        {renderCounts(activeAgents.length, recentAgents.length)}
+      </Text>
+
+      {activeAgents.length > 0 ? (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="cyan">Active</Text>
+          {activeAgents.map((agent, index) => (
+            <AgentRow
+              key={agent.agentId}
+              agent={agent}
+              marginTop={index === 0 ? 0 : 1}
+            />
+          ))}
         </Box>
-      ))}
-      {agents.length > MAX_VISIBLE_AGENTS ? (
-        <Text
-          dimColor
-        >{`+${agents.length - MAX_VISIBLE_AGENTS} more recent child agents`}</Text>
+      ) : null}
+
+      {recentAgents.length > 0 ? (
+        <Box flexDirection="column" marginTop={activeAgents.length > 0 ? 1 : 0}>
+          <Text color="gray">Recent</Text>
+          {recentAgents.map((agent, index) => (
+            <AgentRow
+              key={agent.agentId}
+              agent={agent}
+              marginTop={index === 0 ? 0 : 1}
+            />
+          ))}
+        </Box>
+      ) : null}
+
+      {hiddenCount > 0 ? (
+        <Text dimColor>{`+${hiddenCount} more retained child agents`}</Text>
       ) : null}
     </Box>
   );
 };
 
 export default BackgroundAgentsPanel;
+
+interface AgentRowProps {
+  agent: UIBackgroundAgent;
+  marginTop: number;
+}
+
+const AgentRow: FC<AgentRowProps> = ({ agent, marginTop }) => {
+  return (
+    <Box flexDirection="column" marginTop={marginTop}>
+      <Box flexDirection="row" gap={1}>
+        <Text color={statusColor(agent.status)}>
+          {statusLabel(agent.status)}
+        </Text>
+        <Text bold>{agent.description || agent.agentId}</Text>
+        <Text dimColor>{formatSubagentType(agent.subagentType)}</Text>
+      </Box>
+      <Text dimColor>{truncate(agent.summary, 120)}</Text>
+      <Text dimColor>{formatMeta(agent)}</Text>
+    </Box>
+  );
+};
 
 function statusLabel(status: string): string {
   switch (status) {
@@ -86,10 +126,13 @@ function formatSubagentType(subagentType: string): string {
 }
 
 function formatMeta(agent: UIBackgroundAgent): string {
-  const parts = [agent.agentId];
+  const parts = [agent.agentId, `updated ${formatUpdatedAt(agent.updatedAt)}`];
 
   if (agent.sessionId) {
     parts.push(agent.sessionId);
+  }
+  if (agent.transcriptPath) {
+    parts.push(`transcript ${basename(agent.transcriptPath)}`);
   }
   if (agent.outputFile) {
     parts.push(`result ${basename(agent.outputFile)}`);
@@ -98,9 +141,52 @@ function formatMeta(agent: UIBackgroundAgent): string {
   return parts.join(" | ");
 }
 
+function renderCounts(activeCount: number, recentCount: number): string {
+  const parts: string[] = [];
+
+  if (activeCount > 0) {
+    parts.push(`${activeCount} active`);
+  }
+  if (recentCount > 0) {
+    parts.push(`${recentCount} recent`);
+  }
+
+  return parts.length > 0 ? ` (${parts.join(", ")})` : "";
+}
+
+function isActiveAgent(agent: UIBackgroundAgent): boolean {
+  return agent.status === "running" || agent.status === "cancelling";
+}
+
 function basename(value: string): string {
   const parts = value.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? value;
+}
+
+function formatUpdatedAt(value: string): string {
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) {
+    return "recently";
+  }
+
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((Date.now() - timestamp) / 1000),
+  );
+  if (elapsedSeconds < 10) {
+    return "just now";
+  }
+  if (elapsedSeconds < 60) {
+    return `${elapsedSeconds}s ago`;
+  }
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  return `${elapsedHours}h ago`;
 }
 
 function truncate(value: string, limit: number): string {
