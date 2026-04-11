@@ -12,6 +12,13 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 
 ![Agentic Coding CLI Architecture](./docs/architecture.png)
 
+## Prerequisites
+
+- macOS or Linux
+- Bun 1.0+ to run the `gocode` launcher
+- One configured model provider: set the matching API key for Anthropic, OpenAI, Google, DeepSeek, Groq, or Mistral; or install Ollama for local models
+- Go 1.26+ only if you are building from source or rebuilding `gocode-engine` locally
+
 ## Install
 
 ### macOS / Linux (one command)
