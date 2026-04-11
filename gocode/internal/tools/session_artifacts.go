@@ -130,6 +130,7 @@ func (t *SaveImplementationPlanTool) Execute(ctx context.Context, input ToolInpu
 			Artifact: artifact,
 			Content:  content,
 			Created:  created,
+			Focused:  true,
 		}},
 	}, nil
 }
@@ -214,6 +215,7 @@ func (t *UpsertTaskListTool) Execute(ctx context.Context, input ToolInput) (Tool
 			Artifact: artifact,
 			Content:  content,
 			Created:  created,
+			Focused:  true,
 		}},
 	}, nil
 }
@@ -298,6 +300,7 @@ func (t *SaveWalkthroughTool) Execute(ctx context.Context, input ToolInput) (Too
 			Artifact: artifact,
 			Content:  content,
 			Created:  created,
+			Focused:  true,
 		}},
 	}, nil
 }

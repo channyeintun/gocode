@@ -1,9 +1,53 @@
 import React, { type FC } from "react";
 import { Box, Text } from "ink";
 import type { UIArtifact } from "../hooks/useEvents.js";
+import MarkdownText from "./MarkdownText.js";
 
 interface ArtifactViewProps {
   artifacts: UIArtifact[];
+}
+
+const kindLabel: Record<string, string> = {
+  "task-list": "Task List",
+  "implementation-plan": "Implementation Plan",
+  walkthrough: "Walkthrough",
+  "tool-log": "Tool Log",
+  "search-report": "Search Report",
+  "diff-preview": "Diff Preview",
+  diagram: "Diagram",
+  "codegen-output": "Codegen Output",
+  "compact-summary": "Compact Summary",
+  "knowledge-item": "Knowledge Item",
+};
+
+function artifactMeta(artifact: UIArtifact): string {
+  const parts: string[] = [];
+  const label = kindLabel[artifact.kind] ?? artifact.kind;
+  parts.push(label);
+  if (artifact.version > 0) {
+    parts.push(`v${artifact.version}`);
+  }
+  if (artifact.scope) {
+    parts.push(artifact.scope);
+  }
+  if (artifact.source) {
+    parts.push(`src:${artifact.source}`);
+  }
+  if (artifact.status) {
+    parts.push(`[${artifact.status}]`);
+  }
+  return parts.join("  ·  ");
+}
+
+function statusColor(status: string): string {
+  switch (status) {
+    case "final":
+      return "green";
+    case "draft":
+      return "yellow";
+    default:
+      return "gray";
+  }
 }
 
 const ArtifactView: FC<ArtifactViewProps> = ({ artifacts }) => {
@@ -20,31 +64,23 @@ const ArtifactView: FC<ArtifactViewProps> = ({ artifacts }) => {
           paddingX={1}
           marginTop={index === 0 ? 0 : 1}
         >
-          <Text bold>{artifact.title}</Text>
-          <Text color="gray">{artifact.kind}</Text>
+          <Box flexDirection="row" gap={2}>
+            <Text bold>{artifact.title}</Text>
+            <Text color={statusColor(artifact.status)}>
+              {artifactMeta(artifact)}
+            </Text>
+          </Box>
           <Box marginTop={1}>
-            <Text>{previewArtifactContent(artifact.content)}</Text>
+            {artifact.content.trim() ? (
+              <MarkdownText text={artifact.content} />
+            ) : (
+              <Text color="gray">(loading…)</Text>
+            )}
           </Box>
         </Box>
       ))}
     </Box>
   );
 };
-
-function previewArtifactContent(content: string): string {
-  const normalized = content.trim();
-  if (!normalized) {
-    return "Artifact content is not available yet.";
-  }
-
-  const lines = normalized.split("\n");
-  const previewLines = lines.slice(0, 18);
-  const preview = previewLines.join("\n");
-  if (previewLines.length === lines.length && preview.length <= 2500) {
-    return preview;
-  }
-
-  return `${preview.slice(0, 2500)}\n\n[Artifact preview truncated]`;
-}
 
 export default ArtifactView;

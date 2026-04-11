@@ -48,6 +48,7 @@ type ArtifactMutation struct {
 	Artifact artifactspkg.Artifact
 	Content  string
 	Created  bool
+	Focused  bool // true if this artifact should become the primary focus in the UI
 }
 
 // Tool is the interface every tool must implement.

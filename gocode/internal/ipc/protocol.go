@@ -35,8 +35,10 @@ const (
 	EventCompactEnd      EventType = "compact_end"
 
 	// Artifacts
-	EventArtifactCreated EventType = "artifact_created"
-	EventArtifactUpdated EventType = "artifact_updated"
+	EventArtifactCreated       EventType = "artifact_created"
+	EventArtifactUpdated       EventType = "artifact_updated"
+	EventArtifactFocused       EventType = "artifact_focused"
+	EventArtifactStatusChanged EventType = "artifact_status_changed"
 
 	// Engine status
 	EventReady           EventType = "ready"
@@ -163,14 +165,20 @@ type CompactEndPayload struct {
 }
 
 type ArtifactCreatedPayload struct {
-	ID    string `json:"id"`
-	Kind  string `json:"kind"`
-	Title string `json:"title"`
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
+	Scope   string `json:"scope,omitempty"`
+	Title   string `json:"title"`
+	Version int    `json:"version,omitempty"`
+	Source  string `json:"source,omitempty"`
+	Status  string `json:"status,omitempty"`
 }
 
 type ArtifactUpdatedPayload struct {
 	ID      string `json:"id"`
 	Content string `json:"content"`
+	Version int    `json:"version,omitempty"`
+	Status  string `json:"status,omitempty"`
 }
 
 type ReadyPayload struct {
@@ -216,4 +224,19 @@ type PermissionResponsePayload struct {
 	RequestID string `json:"request_id"`
 	Decision  string `json:"decision"` // "allow", "deny", "always_allow", "allow_all_session"
 	Feedback  string `json:"feedback,omitempty"`
+}
+
+// ArtifactFocusedPayload is emitted when the primary artifact for the active turn changes.
+type ArtifactFocusedPayload struct {
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
+	Title   string `json:"title"`
+	Version int    `json:"version,omitempty"`
+	Status  string `json:"status,omitempty"`
+}
+
+// ArtifactStatusChangedPayload is emitted when an artifact transitions between lifecycle states.
+type ArtifactStatusChangedPayload struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
 }

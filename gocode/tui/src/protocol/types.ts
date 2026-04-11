@@ -17,6 +17,8 @@ export type EventType =
   | "compact_end"
   | "artifact_created"
   | "artifact_updated"
+  | "artifact_focused"
+  | "artifact_status_changed"
   | "ready"
   | "error"
   | "session_updated"
@@ -159,12 +161,18 @@ export interface CompactEndPayload {
 export interface ArtifactCreatedPayload {
   id: string;
   kind: string;
+  scope?: string;
   title: string;
+  version?: number;
+  source?: string;
+  status?: string;
 }
 
 export interface ArtifactUpdatedPayload {
   id: string;
   content: string;
+  version?: number;
+  status?: string;
 }
 
 export interface SessionRestoredPayload {
@@ -184,4 +192,17 @@ export interface ReadyPayload {
 export interface ErrorPayload {
   message: string;
   recoverable: boolean;
+}
+
+export interface ArtifactFocusedPayload {
+  id: string;
+  kind: string;
+  title: string;
+  version?: number;
+  status?: string;
+}
+
+export interface ArtifactStatusChangedPayload {
+  id: string;
+  status: string;
 }

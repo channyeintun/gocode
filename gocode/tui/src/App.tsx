@@ -61,14 +61,25 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     beginAssistantTurn,
   } = useEvents(model, mode);
   const engine = useEngine(enginePath, { model, mode, onEvent: handleEvent });
+  // Prefer the focused artifact for the plan panel; fall back to any impl-plan.
   const planArtifact =
+    (uiState.focusedArtifactId
+      ? uiState.artifacts.find(
+          (a) =>
+            a.id === uiState.focusedArtifactId &&
+            a.kind === "implementation-plan",
+        )
+      : undefined) ??
     uiState.artifacts.find(
       (artifact) => artifact.kind === "implementation-plan",
-    ) ?? null;
+    ) ??
+    null;
+  // Secondary artifact list: non-plan, non-log artifacts excluding the focused impl-plan.
   const recentArtifacts = uiState.artifacts
     .filter(
       (artifact) =>
-        artifact.kind !== "implementation-plan" && artifact.kind !== "tool-log",
+        artifact.kind !== "implementation-plan" &&
+        artifact.kind !== "tool-log",
     )
     .slice(0, 2);
   const isEngineReady = uiState.ready || engine.ready;
@@ -258,6 +269,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           <PlanPanel
             title={planArtifact.title}
             content={planArtifact.content}
+            version={planArtifact.version}
+            source={planArtifact.source}
+            status={planArtifact.status}
           />
         )}
 

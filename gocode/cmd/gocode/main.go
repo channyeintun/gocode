@@ -419,6 +419,11 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						if err := emitArtifactUpdated(bridge, update.Artifact, update.Content); err != nil {
 							return err
 						}
+						if update.Artifact.Kind == artifactspkg.KindImplementationPlan && strings.TrimSpace(update.Content) != "" {
+							if err := emitArtifactFocused(bridge, update.Artifact); err != nil {
+								return err
+							}
+						}
 					}
 				}
 
@@ -792,6 +797,11 @@ func executeToolCalls(
 				}
 				if err := emitArtifactUpdated(bridge, artifactUpdate.Artifact, artifactUpdate.Content); err != nil {
 					return nil, err
+				}
+				if artifactUpdate.Focused {
+					if err := emitArtifactFocused(bridge, artifactUpdate.Artifact); err != nil {
+						return nil, err
+					}
 				}
 			}
 
@@ -1521,9 +1531,13 @@ func emitTextResponse(bridge *ipc.Bridge, text string) error {
 
 func emitArtifactCreated(bridge *ipc.Bridge, artifact artifactspkg.Artifact) error {
 	return bridge.Emit(ipc.EventArtifactCreated, ipc.ArtifactCreatedPayload{
-		ID:    artifact.ID,
-		Kind:  string(artifact.Kind),
-		Title: artifact.Title,
+		ID:      artifact.ID,
+		Kind:    string(artifact.Kind),
+		Scope:   string(artifact.Scope),
+		Title:   artifact.Title,
+		Version: artifact.Version,
+		Source:  artifact.Source,
+		Status:  artifactMetadataString(artifact, "status"),
 	})
 }
 
@@ -1531,6 +1545,32 @@ func emitArtifactUpdated(bridge *ipc.Bridge, artifact artifactspkg.Artifact, con
 	return bridge.Emit(ipc.EventArtifactUpdated, ipc.ArtifactUpdatedPayload{
 		ID:      artifact.ID,
 		Content: content,
+		Version: artifact.Version,
+		Status:  artifactMetadataString(artifact, "status"),
+	})
+}
+
+func artifactMetadataString(artifact artifactspkg.Artifact, key string) string {
+	if v, ok := artifact.Metadata[key].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return ""
+}
+
+func emitArtifactFocused(bridge *ipc.Bridge, artifact artifactspkg.Artifact) error {
+	return bridge.Emit(ipc.EventArtifactFocused, ipc.ArtifactFocusedPayload{
+		ID:      artifact.ID,
+		Kind:    string(artifact.Kind),
+		Title:   artifact.Title,
+		Version: artifact.Version,
+		Status:  artifactMetadataString(artifact, "status"),
+	})
+}
+
+func emitArtifactStatusChanged(bridge *ipc.Bridge, artifact artifactspkg.Artifact) error {
+	return bridge.Emit(ipc.EventArtifactStatusChanged, ipc.ArtifactStatusChangedPayload{
+		ID:     artifact.ID,
+		Status: artifactMetadataString(artifact, "status"),
 	})
 }
 

@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import type {
   ArtifactCreatedPayload,
+  ArtifactFocusedPayload,
+  ArtifactStatusChangedPayload,
   ArtifactUpdatedPayload,
   CompactEndPayload,
   CompactStartPayload,
@@ -26,7 +28,11 @@ import type {
 export interface UIArtifact {
   id: string;
   kind: string;
+  scope: string;
   title: string;
+  version: number;
+  source: string;
+  status: string;
   content: string;
 }
 
@@ -116,6 +122,7 @@ export interface EngineUIState {
   cost: { totalUsd: number; inputTokens: number; outputTokens: number };
   rateLimits: UIRateLimits;
   artifacts: UIArtifact[];
+  focusedArtifactId: string | null;
   toolCalls: UIToolCall[];
   compact: {
     active: boolean;
@@ -146,6 +153,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   cost: { totalUsd: 0, inputTokens: 0, outputTokens: 0 },
   rateLimits: { fiveHour: null, sevenDay: null },
   artifacts: [],
+  focusedArtifactId: null,
   toolCalls: [],
   compact: null,
   statusLine: null,
@@ -510,7 +518,11 @@ export function useEvents(initialModel: string, initialMode: string) {
           artifacts: upsertArtifact(s.artifacts, {
             id: p.id,
             kind: p.kind,
+            scope: p.scope ?? "session",
             title: p.title,
+            version: p.version ?? 1,
+            source: p.source ?? "",
+            status: p.status ?? "",
             content: "",
           }),
         }));
@@ -533,11 +545,39 @@ export function useEvents(initialModel: string, initialMode: string) {
             artifacts: upsertArtifact(s.artifacts, {
               id: p.id,
               kind: existing.kind,
+              scope: existing.scope,
               title: existing.title,
+              version: p.version ?? existing.version,
+              source: existing.source,
+              status: p.status ?? existing.status,
               content: p.content,
             }),
           };
         });
+        break;
+      }
+      case "artifact_focused": {
+        const p = event.payload as ArtifactFocusedPayload;
+        setUIState((s) => ({
+          ...s,
+          focusedArtifactId: p.id,
+          // Update status on the artifact entry if it changed
+          artifacts: s.artifacts.map((a) =>
+            a.id === p.id
+              ? { ...a, version: p.version ?? a.version, status: p.status ?? a.status }
+              : a,
+          ),
+        }));
+        break;
+      }
+      case "artifact_status_changed": {
+        const p = event.payload as ArtifactStatusChangedPayload;
+        setUIState((s) => ({
+          ...s,
+          artifacts: s.artifacts.map((a) =>
+            a.id === p.id ? { ...a, status: p.status } : a,
+          ),
+        }));
         break;
       }
       case "session_restored": {
