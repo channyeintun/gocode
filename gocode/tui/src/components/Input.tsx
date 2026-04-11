@@ -219,6 +219,9 @@ const Input: FC<InputProps> = ({
         case "n":
           prompt.navigateDown();
           return;
+        case "o":
+          prompt.insertNewline();
+          return;
         case "p":
           prompt.navigateUp();
           return;

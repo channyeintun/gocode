@@ -20,7 +20,7 @@ interface PromptFooterProps {
 }
 
 const INPUT_HINT =
-  "Enter send | Shift+Enter newline | Arrows move | PgUp/PgDn transcript | Home/End jump | Tab mode | Esc cancel";
+  "Enter send | Ctrl+O newline | Arrows move | PgUp/PgDn transcript | Home/End jump | Tab mode | Esc cancel";
 const DISABLED_HINT =
   "Engine busy | PgUp/PgDn transcript | Home/End jump | Esc cancel";
 

@@ -502,6 +502,9 @@ func buildAnthropicTools(tools []ToolDefinition) []anthropicToolDefinition {
 }
 
 func readSSE(ctx context.Context, body io.Reader, handle func(eventName, data string) error) error {
+	stopCancelCloser := closeReadCloserOnCancel(ctx, body)
+	defer stopCancelCloser()
+
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
 
@@ -543,6 +546,9 @@ func readSSE(ctx context.Context, body io.Reader, handle func(eventName, data st
 		case strings.HasPrefix(line, "data:"):
 			dataLines = append(dataLines, strings.TrimSpace(strings.TrimPrefix(line, "data:")))
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := scanner.Err(); err != nil {
 		return &APIError{Type: ErrNetwork, Message: "read anthropic stream", Err: err}

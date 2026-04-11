@@ -70,6 +70,8 @@ func (c *OllamaClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[
 
 	return func(yield func(ModelEvent, error) bool) {
 		defer resp.Body.Close()
+		stopCancelCloser := closeReadCloserOnCancel(ctx, resp.Body)
+		defer stopCancelCloser()
 
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024)
@@ -94,6 +96,10 @@ func (c *OllamaClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[
 				yield(ModelEvent{}, err)
 				return
 			}
+		}
+		if err := ctx.Err(); err != nil {
+			yield(ModelEvent{}, err)
+			return
 		}
 		if err := scanner.Err(); err != nil {
 			yield(ModelEvent{}, &APIError{Type: ErrNetwork, Message: "read Ollama stream", Err: err})

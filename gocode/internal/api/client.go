@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"io"
 	"iter"
 
 	"github.com/channyeintun/gocode/internal/ipc"
@@ -147,5 +148,25 @@ func StreamEventAdapter(event ModelEvent) *ipc.StreamEvent {
 		return nil // caller handles thinking deltas directly
 	default:
 		return nil
+	}
+}
+
+func closeReadCloserOnCancel(ctx context.Context, body io.Reader) func() {
+	closer, ok := body.(io.Closer)
+	if !ok {
+		return func() {}
+	}
+
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = closer.Close()
+		case <-done:
+		}
+	}()
+
+	return func() {
+		close(done)
 	}
 }
