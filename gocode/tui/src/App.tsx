@@ -471,6 +471,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             outputTokens={uiState.cost.outputTokens}
             memoryRecall={uiState.memoryRecall}
             turnTiming={uiState.turnTiming}
+            cursorOffset={prompt.cursorOffset}
           />
         </Box>
       )}

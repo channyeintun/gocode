@@ -28,6 +28,7 @@ interface PromptFooterProps {
     firstArtifactFocusMs: number | null;
     totalMs: number | null;
   };
+  cursorOffset?: number;
 }
 
 const INPUT_HINT =
@@ -49,6 +50,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
   outputTokens,
   memoryRecall,
   turnTiming,
+  cursorOffset = 0,
 }) => {
   const [terminalColumns, setTerminalColumns] = useState(
     process.stdout.columns ?? 80,
@@ -88,6 +90,10 @@ const PromptFooter: FC<PromptFooterProps> = ({
     [maxContextWindow, maxOutputTokens, model, tokenUsage],
   );
   const showWrappedIndicator = promptValue.length > 0 && wrappedLineCount > 1;
+  const promptMetrics = useMemo(
+    () => buildPromptMetrics(promptValue, cursorOffset),
+    [cursorOffset, promptValue],
+  );
   const activityLabel = isLoading ? "running" : disabled ? "blocked" : "ready";
   const hint = disabled ? DISABLED_HINT : INPUT_HINT;
   const costWarningText = useMemo(
@@ -118,10 +124,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
         </Box>
       ) : null}
       {memoryRecallText ? (
-        <Box
-          paddingX={2}
-          paddingTop={warningText || costWarningText ? 0 : 1}
-        >
+        <Box paddingX={2} paddingTop={warningText || costWarningText ? 0 : 1}>
           <Text dimColor>{memoryRecallText}</Text>
         </Box>
       ) : null}
@@ -139,6 +142,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
           <Text>{activityLabel}</Text>
           {latencyText ? `  ${latencyText}` : ""}
           {showWrappedIndicator ? `  wrapped:${wrappedLineCount}` : ""}
+          {promptMetrics ? `  ${promptMetrics}` : ""}
         </Text>
         <Text dimColor>{hint}</Text>
       </Box>
@@ -196,7 +200,9 @@ function buildCostWarningText(totalCostUsd: number): string | null {
   return `Session cost passed $${threshold.toFixed(2)} · current spend $${totalCostUsd.toFixed(4)} · Review API usage before the next long turn`;
 }
 
-function buildLatencyText(turnTiming: PromptFooterProps["turnTiming"]): string | null {
+function buildLatencyText(
+  turnTiming: PromptFooterProps["turnTiming"],
+): string | null {
   const parts: string[] = [];
   if (turnTiming.firstTokenMs !== null) {
     parts.push(`token:${formatLatencyMs(turnTiming.firstTokenMs)}`);
@@ -213,14 +219,40 @@ function buildLatencyText(turnTiming: PromptFooterProps["turnTiming"]): string |
   return parts.length > 0 ? parts.join("  ") : null;
 }
 
-function buildMemoryRecallText(memoryRecall: PromptFooterProps["memoryRecall"]): string | null {
-  if (!Array.isArray(memoryRecall.entries) || memoryRecall.entries.length === 0) {
+function buildPromptMetrics(
+  promptValue: string,
+  cursorOffset: number,
+): string | null {
+  if (promptValue.length === 0) {
+    return null;
+  }
+
+  const clampedCursor = Math.max(0, Math.min(cursorOffset, promptValue.length));
+  const beforeCursor = promptValue.slice(0, clampedCursor);
+  const lines = beforeCursor.split("\n");
+  const line = lines.length;
+  const column = (lines[lines.length - 1] ?? "").length + 1;
+  const lineCount = promptValue.split("\n").length;
+
+  return `${promptValue.length}ch ${lineCount}ln L${line}:C${column}`;
+}
+
+function buildMemoryRecallText(
+  memoryRecall: PromptFooterProps["memoryRecall"],
+): string | null {
+  if (
+    !Array.isArray(memoryRecall.entries) ||
+    memoryRecall.entries.length === 0
+  ) {
     return null;
   }
 
   const labels = memoryRecall.entries
     .map((entry) => entry.title.trim())
-    .filter((title, index, items) => title.length > 0 && items.indexOf(title) === index);
+    .filter(
+      (title, index, items) =>
+        title.length > 0 && items.indexOf(title) === index,
+    );
   if (labels.length === 0) {
     return null;
   }

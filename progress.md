@@ -132,7 +132,6 @@ This section is the canonical phase tracker. A phase is only complete when its `
 
 **Remaining to Finish**
 
-- Reassess prompt editing and keystroke responsiveness against the measured bottlenecks called out in `plan.md`.
 - Decide whether the current UI coverage is sufficient to say the slowest visible interactions have been intentionally improved.
 
 **Exit Criteria Check**
@@ -227,6 +226,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Completed: taught the TUI to treat `forget_command` as immediate retained-command removal so forgotten background commands disappear from the panel and status summary as soon as the cleanup tool succeeds.
 - Completed: surfaced artifact counts, focused artifact summaries, and pending review context in the main status bar, and added explicit artifact-focus status-line updates so long sessions make artifact navigation progress visible without scanning the full transcript.
 - Completed: prioritized the currently focused non-plan artifact in the preview area and added a visible focus marker so artifact navigation remains obvious without scanning multiple artifact cards.
+- Completed: improved prompt editing ergonomics by keeping the cursor at the end of recalled history entries and surfacing live prompt metrics (chars, lines, line/column) in the footer during multiline editing.
 - Completed: emitted structured `memory_recalled` telemetry from the query loop using existing MEMORY.md recall metadata so each turn can report which durable notes were selected without polluting the transcript.
 - Completed: surfaced low-noise per-turn memory recall summaries in the TUI footer, showing recalled note titles and recall source while keeping full recall content out of the main conversation flow.
 - Completed: switched MEMORY.md index injection from whole-file dumping to bounded heuristic recall so only a small set of lines relevant to the current request enters the prompt by default.

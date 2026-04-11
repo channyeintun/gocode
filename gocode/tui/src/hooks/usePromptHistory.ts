@@ -304,12 +304,13 @@ export function usePromptHistory(): PromptController {
       }
 
       const nextIndex = current.index + 1;
+      const nextValue = current.entries[nextIndex - 1] ?? current.value;
       return {
         ...current,
         index: nextIndex,
         draft: current.index === 0 ? current.value : current.draft,
-        value: current.entries[nextIndex - 1] ?? current.value,
-        cursorOffset: 0,
+        value: nextValue,
+        cursorOffset: nextValue.length,
       };
     });
   }, []);
