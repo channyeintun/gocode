@@ -11,15 +11,15 @@
 
 ## Current Status
 
-| Workstream                          | Status      | Scope | Notes                                                                                                                                                                                                                                                                |
-| ----------------------------------- | ----------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Planning refresh                    | completed   | S     | 2026-04-12 explanation-driven roadmap replaced stale parity-era planning docs.                                                                                                                                                                                       |
-| Phase 1 runtime measurement         | completed   | S     | Checkpoint logging, artifact ownership, aggregate tool-result budgeting, and continuation stop telemetry are in place.                                                                                                                                               |
-| Phase 2 tool depth                  | in progress | L     | File-history tools, semantic validation, input-aware bash concurrency, Think, stronger Go-aware navigation, repository overview tooling, and fuller background command lifecycle tools landed; follow-up tooling remains.                                            |
-| Phase 3 subagents                   | in progress | XL    | Fresh-context explore, permission-isolated general-purpose child agents, and full background child launch/status/stop lifecycle are landed.                                                                                                                          |
-| Phase 4 memory                      | in progress | L     | Project and user MEMORY.md index loading, staleness cues, write-path scaffolding, model-backed side-query recall, structured MEMORY.md entry parsing, explicit MEMORY.md validation, on-demand note loading, and separate memory-recall cost surfacing are wired in. |
-| Phase 5 compaction and cache        | in progress | M     | Session-local prompt memoization, adaptive output slot reservation, shared context-pressure policy, provider-gated cache-stable prompt ordering, and continuation-aware compaction/output-escalation coordination are landed.                                        |
-| Phase 6 UI and developer experience | completed   | M     | Async preconnect warmup, timing visibility, transcript navigation, artifact/background visibility, and queue-aware prompt chrome are landed; the current measured UI bottlenecks are improved enough to close the phase.                                             |
+| Workstream                          | Status      | Scope | Notes                                                                                                                                                                                                                                                                                                 |
+| ----------------------------------- | ----------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Planning refresh                    | completed   | S     | 2026-04-12 explanation-driven roadmap replaced stale parity-era planning docs.                                                                                                                                                                                                                        |
+| Phase 1 runtime measurement         | completed   | S     | Checkpoint logging, artifact ownership, aggregate tool-result budgeting, and continuation stop telemetry are in place.                                                                                                                                                                                |
+| Phase 2 tool depth                  | completed   | L     | File history, semantic validation, input-aware bash concurrency, Think, Go-aware navigation, repository and dependency overview, and full background-command lifecycle tooling are landed; existing skill selection and prompt injection make the current tool surface sufficient to close the phase. |
+| Phase 3 subagents                   | in progress | XL    | Fresh-context explore, permission-isolated general-purpose child agents, and full background child launch/status/stop lifecycle are landed.                                                                                                                                                           |
+| Phase 4 memory                      | in progress | L     | Project and user MEMORY.md index loading, staleness cues, write-path scaffolding, model-backed side-query recall, structured MEMORY.md entry parsing, explicit MEMORY.md validation, on-demand note loading, and separate memory-recall cost surfacing are wired in.                                  |
+| Phase 5 compaction and cache        | in progress | M     | Session-local prompt memoization, adaptive output slot reservation, shared context-pressure policy, provider-gated cache-stable prompt ordering, and continuation-aware compaction/output-escalation coordination are landed.                                                                         |
+| Phase 6 UI and developer experience | completed   | M     | Async preconnect warmup, timing visibility, transcript navigation, artifact/background visibility, and queue-aware prompt chrome are landed; the current measured UI bottlenecks are improved enough to close the phase.                                                                              |
 
 ## Completion Dashboard
 
@@ -38,15 +38,13 @@ This section is the canonical phase tracker. A phase is only complete when its `
 
 **Remaining to Finish**
 
-- Evaluate whether `internal/skills/` needs explicit integration work with the expanded tool surface.
-- Decide whether any additional high-value local inspection tool is still missing enough to block Phase 2 exit.
-- Confirm the current tool surface is broad enough to satisfy the phase goal without more parity chasing.
+- None.
 
 **Exit Criteria Check**
 
 - [x] Tool surface is materially broader than the original local-only set.
 - [x] Tool validation and concurrency decisions are input-aware where it matters.
-- [ ] Larger tool batches and the expanded tool surface are considered complete enough that no additional Phase 2 follow-up is required.
+- [x] Larger tool batches and the expanded tool surface are considered complete enough that no additional Phase 2 follow-up is required.
 
 ### Phase 3: Subagents
 
@@ -229,6 +227,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Completed: prioritized the currently focused non-plan artifact in the preview area and added a visible focus marker so artifact navigation remains obvious without scanning multiple artifact cards.
 - Completed: improved prompt editing ergonomics by keeping the cursor at the end of recalled history entries and surfacing live prompt metrics (chars, lines, line/column) in the footer during multiline editing.
 - Completed: surfaced queued follow-up prompt counts in the status/footer chrome and added explicit footer block reasons (`booting`, `search open`, `turn active`, `engine error`) so deferred work and blocked input states stay visible without scanning the lower prompt area.
+- Completed: closed Phase 2 after confirming the existing `internal/skills/` pipeline already loads global and project skills, auto-selects relevant entries, and injects them into prompt assembly, so no additional skills integration or parity-chasing tooling is needed for the phase goal.
 - Completed: emitted structured `memory_recalled` telemetry from the query loop using existing MEMORY.md recall metadata so each turn can report which durable notes were selected without polluting the transcript.
 - Completed: surfaced low-noise per-turn memory recall summaries in the TUI footer, showing recalled note titles and recall source while keeping full recall content out of the main conversation flow.
 - Completed: switched MEMORY.md index injection from whole-file dumping to bounded heuristic recall so only a small set of lines relevant to the current request enters the prompt by default.
