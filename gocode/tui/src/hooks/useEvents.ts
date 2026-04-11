@@ -487,7 +487,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             s.backgroundCommands,
             p,
           );
-          const nextBackgroundCommands = applyBackgroundCommandResult(
+          const nextBackgroundCommands = reduceBackgroundCommands(
             s.backgroundCommands,
             p,
           );
@@ -1210,6 +1210,20 @@ function buildBackgroundCommandNotice(
   commands: UIBackgroundCommand[],
   payload: ToolResultPayload,
 ): BackgroundCommandNotice | null {
+  if (payload.name === "forget_command") {
+    const forgottenCommand = parseForgottenBackgroundCommand(payload);
+    if (!forgottenCommand) {
+      return null;
+    }
+    return {
+      text: summarizeNoticeWithDetail(
+        `${backgroundCommandSubject(forgottenCommand)} removed from retention.`,
+        forgottenCommand.preview || "",
+      ),
+      tone: "info",
+    };
+  }
+
   if (payload.name === "list_commands") {
     return null;
   }
@@ -1239,6 +1253,21 @@ function buildBackgroundCommandNotice(
   }
 
   return nextNotice;
+}
+
+function reduceBackgroundCommands(
+  commands: UIBackgroundCommand[],
+  payload: ToolResultPayload,
+): UIBackgroundCommand[] {
+  if (payload.name === "forget_command") {
+    const forgottenCommand = parseForgottenBackgroundCommand(payload);
+    if (!forgottenCommand) {
+      return commands;
+    }
+    return removeBackgroundCommand(commands, forgottenCommand.commandId);
+  }
+
+  return applyBackgroundCommandResult(commands, payload);
 }
 
 function parseBackgroundAgentResult(
@@ -1304,6 +1333,27 @@ function parseBackgroundCommandResult(
     default:
       return [];
   }
+}
+
+function parseForgottenBackgroundCommand(
+  payload: ToolResultPayload,
+): UIBackgroundCommand | null {
+  if (payload.name !== "forget_command") {
+    return null;
+  }
+
+  const input = parseJSONObject<BackgroundCommandToolInput>(payload.input);
+  const result = parseJSONObject<BackgroundCommandToolResult>(payload.output);
+  if (!result) {
+    return null;
+  }
+
+  return buildBackgroundCommandEntry(result, {
+    sourceToolName: payload.name,
+    fallbackCommandId: input?.CommandId || input?.command_id,
+    fallbackCommand: input?.command,
+    fallbackCwd: input?.cwd,
+  });
 }
 
 function parseBackgroundBashLaunch(
@@ -1507,6 +1557,13 @@ function upsertBackgroundCommand(
   return [merged, ...remaining]
     .sort(compareBackgroundCommands)
     .slice(0, MAX_RETAINED_BACKGROUND_AGENTS);
+}
+
+function removeBackgroundCommand(
+  commands: UIBackgroundCommand[],
+  commandId: string,
+): UIBackgroundCommand[] {
+  return commands.filter((command) => command.commandId !== commandId);
 }
 
 function mergeBackgroundCommand(
