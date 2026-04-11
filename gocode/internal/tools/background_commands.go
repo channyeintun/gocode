@@ -13,6 +13,8 @@ import (
 
 const backgroundCommandMaxOutputBytes = 256 * 1024
 
+const backgroundCommandRetention = 5 * time.Minute
+
 type backgroundCommand struct {
 	mu       sync.Mutex
 	id       string
@@ -98,6 +100,11 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 	bg.mu.Lock()
 	defer bg.mu.Unlock()
 	defer close(bg.done)
+	defer scheduleBackgroundCommandCleanup(bg)
+	if bg.stdin != nil {
+		_ = bg.stdin.Close()
+		bg.stdin = nil
+	}
 
 	bg.running = false
 	if err == nil {
@@ -118,6 +125,24 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 
 func streamBackgroundOutput(buffer *boundedOutput, reader io.Reader) {
 	_, _ = io.Copy(buffer, reader)
+}
+
+func scheduleBackgroundCommandCleanup(bg *backgroundCommand) {
+	time.AfterFunc(backgroundCommandRetention, func() {
+		backgroundCommandsMu.Lock()
+		defer backgroundCommandsMu.Unlock()
+
+		current, ok := backgroundCommands[bg.id]
+		if !ok || current != bg {
+			return
+		}
+		current.mu.Lock()
+		defer current.mu.Unlock()
+		if current.running {
+			return
+		}
+		delete(backgroundCommands, bg.id)
+	})
 }
 
 func getBackgroundCommand(commandID string) (*backgroundCommand, error) {
