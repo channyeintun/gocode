@@ -18,6 +18,7 @@ import (
 )
 
 const backgroundCommandMaxOutputBytes = 256 * 1024
+const backgroundCommandSummaryPreviewBytes = 160
 
 const backgroundCommandRetention = 5 * time.Minute
 
@@ -36,6 +37,8 @@ type backgroundCommand struct {
 	exitCode  *int
 	errText   string
 	done      chan struct{}
+	startedAt time.Time
+	updatedAt time.Time
 }
 
 type boundedOutput struct {
@@ -91,23 +94,25 @@ func startBackgroundShellCommand(command, cwd string) (*backgroundCommand, error
 	}
 
 	bg := &backgroundCommand{
-		id:       id,
-		command:  command,
-		cwd:      cwd,
-		cmd:      cmd,
-		stdin:    terminal,
-		terminal: terminal,
-		cancel:   cancel,
-		output:   &boundedOutput{},
-		running:  true,
-		done:     make(chan struct{}),
+		id:        id,
+		command:   command,
+		cwd:       cwd,
+		cmd:       cmd,
+		stdin:     terminal,
+		terminal:  terminal,
+		cancel:    cancel,
+		output:    &boundedOutput{},
+		running:   true,
+		done:      make(chan struct{}),
+		startedAt: time.Now(),
+		updatedAt: time.Now(),
 	}
 
 	backgroundCommandsMu.Lock()
 	backgroundCommands[id] = bg
 	backgroundCommandsMu.Unlock()
 
-	go streamBackgroundOutput(streamCtx, bg.output, terminal)
+	go streamBackgroundOutput(streamCtx, bg, bg.output, terminal)
 	go waitForBackgroundCommand(bg)
 
 	return bg, nil
@@ -131,6 +136,7 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 	}
 
 	bg.running = false
+	bg.updatedAt = time.Now()
 	if err == nil {
 		exitCode := 0
 		bg.exitCode = &exitCode
@@ -147,7 +153,7 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 	bg.errText = err.Error()
 }
 
-func streamBackgroundOutput(ctx context.Context, buffer *boundedOutput, terminal *os.File) {
+func streamBackgroundOutput(ctx context.Context, bg *backgroundCommand, buffer *boundedOutput, terminal *os.File) {
 	chunk := make([]byte, 4096)
 	for {
 		select {
@@ -160,6 +166,7 @@ func streamBackgroundOutput(ctx context.Context, buffer *boundedOutput, terminal
 		readLen, err := terminal.Read(chunk)
 		if readLen > 0 {
 			_, _ = buffer.Write(chunk[:readLen])
+			bg.markUpdated(time.Now())
 		}
 		if err == nil {
 			continue
@@ -254,6 +261,9 @@ func (bg *backgroundCommand) sendInput(input string, wait time.Duration) (backgr
 		return backgroundCommandResult{}, fmt.Errorf("command %q is not running", bg.id)
 	}
 	_, err := io.WriteString(bg.stdin, input)
+	if err == nil {
+		bg.updatedAt = time.Now()
+	}
 	bg.mu.Unlock()
 	if err != nil {
 		return backgroundCommandResult{}, fmt.Errorf("write command input: %w", err)
@@ -324,6 +334,8 @@ func (bg *backgroundCommand) snapshotDelta() backgroundCommandResult {
 
 func (bg *backgroundCommand) summary() backgroundCommandSummary {
 	bg.mu.Lock()
+	startedAt := bg.startedAt
+	updatedAt := bg.updatedAt
 	defer bg.mu.Unlock()
 
 	var exitCode *int
@@ -331,15 +343,27 @@ func (bg *backgroundCommand) summary() backgroundCommandSummary {
 		copied := *bg.exitCode
 		exitCode = &copied
 	}
+	unread := bg.output.unreadSummary(backgroundCommandSummaryPreviewBytes)
 
 	return backgroundCommandSummary{
-		CommandID: bg.id,
-		Command:   bg.command,
-		Cwd:       bg.cwd,
-		Running:   bg.running,
-		Error:     bg.errText,
-		ExitCode:  exitCode,
+		CommandID:       bg.id,
+		Command:         bg.command,
+		Cwd:             bg.cwd,
+		Running:         bg.running,
+		Error:           bg.errText,
+		ExitCode:        exitCode,
+		StartedAt:       startedAt,
+		UpdatedAt:       updatedAt,
+		HasUnreadOutput: unread.HasUnread,
+		UnreadBytes:     unread.UnreadBytes,
+		UnreadPreview:   unread.Preview,
 	}
+}
+
+func (bg *backgroundCommand) markUpdated(at time.Time) {
+	bg.mu.Lock()
+	defer bg.mu.Unlock()
+	bg.updatedAt = at
 }
 
 func renderBackgroundCommandResult(result backgroundCommandResult) (string, error) {
@@ -393,4 +417,44 @@ func (b *boundedOutput) ReadDelta() string {
 		return fmt.Sprintf("[Older buffered output was dropped before it could be read (%d bytes)]\n%s", droppedUnreadLen, delta)
 	}
 	return string(delta)
+}
+
+type unreadOutputSummary struct {
+	HasUnread   bool
+	UnreadBytes int
+	Preview     string
+}
+
+func (b *boundedOutput) unreadSummary(limit int) unreadOutputSummary {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.readOffset >= len(b.data) {
+		return unreadOutputSummary{}
+	}
+
+	unread := bytes.TrimSpace(b.data[b.readOffset:])
+	if len(unread) == 0 {
+		return unreadOutputSummary{}
+	}
+
+	previewBytes := unread
+	truncated := false
+	if limit > 0 && len(previewBytes) > limit {
+		previewBytes = previewBytes[len(previewBytes)-limit:]
+		truncated = true
+	}
+	preview := string(previewBytes)
+	if truncated {
+		preview = "[...]" + preview
+	}
+	if b.droppedUnreadLen > 0 {
+		preview = fmt.Sprintf("[older unread output dropped: %d bytes]\n%s", b.droppedUnreadLen, preview)
+	}
+
+	return unreadOutputSummary{
+		HasUnread:   true,
+		UnreadBytes: len(unread),
+		Preview:     preview,
+	}
 }

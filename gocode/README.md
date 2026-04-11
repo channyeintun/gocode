@@ -182,7 +182,7 @@ The agent has access to:
 | **symbol_search**              | Find likely symbol definitions across source files            |
 | **web_search**                 | Search the web                                                |
 | **web_fetch**                  | Fetch and read a URL                                          |
-| **list_commands**              | List active or retained background commands                   |
+| **list_commands**              | List background commands with recent activity and unread output previews |
 | **command_status**             | Check unread output and state for a background command        |
 | **send_command_input**         | Send stdin to a background command                            |
 | **stop_command**               | Stop a running background command and return its status       |

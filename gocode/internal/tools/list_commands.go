@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 )
 
 const defaultListCommandsMaxResults = 20
@@ -12,12 +13,17 @@ const defaultListCommandsMaxResults = 20
 type ListCommandsTool struct{}
 
 type backgroundCommandSummary struct {
-	CommandID string `json:"CommandId"`
-	Command   string `json:"Command"`
-	Cwd       string `json:"Cwd"`
-	Running   bool   `json:"Running"`
-	Error     string `json:"Error,omitempty"`
-	ExitCode  *int   `json:"ExitCode,omitempty"`
+	CommandID       string    `json:"CommandId"`
+	Command         string    `json:"Command"`
+	Cwd             string    `json:"Cwd"`
+	Running         bool      `json:"Running"`
+	Error           string    `json:"Error,omitempty"`
+	ExitCode        *int      `json:"ExitCode,omitempty"`
+	StartedAt       time.Time `json:"StartedAt,omitempty"`
+	UpdatedAt       time.Time `json:"UpdatedAt,omitempty"`
+	HasUnreadOutput bool      `json:"HasUnreadOutput,omitempty"`
+	UnreadBytes     int       `json:"UnreadBytes,omitempty"`
+	UnreadPreview   string    `json:"UnreadPreview,omitempty"`
 }
 
 func NewListCommandsTool() *ListCommandsTool {
@@ -29,7 +35,7 @@ func (t *ListCommandsTool) Name() string {
 }
 
 func (t *ListCommandsTool) Description() string {
-	return "List active or recently completed background commands, including ids, command text, cwd, and run state."
+	return "List active or recently completed background commands, including ids, command text, cwd, run state, recent activity, and unread output previews."
 }
 
 func (t *ListCommandsTool) InputSchema() any {
@@ -78,6 +84,9 @@ func (t *ListCommandsTool) Execute(ctx context.Context, input ToolInput) (ToolOu
 	sort.Slice(commands, func(i, j int) bool {
 		if commands[i].Running != commands[j].Running {
 			return commands[i].Running
+		}
+		if !commands[i].UpdatedAt.Equal(commands[j].UpdatedAt) {
+			return commands[i].UpdatedAt.After(commands[j].UpdatedAt)
 		}
 		return commands[i].CommandID < commands[j].CommandID
 	})

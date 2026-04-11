@@ -57,6 +57,7 @@
 - Completed: extended the background command manager with a dedicated stop path and registered `stop_command` in the runtime prompt and README to close the background-command lifecycle loop.
 - Completed: added a read-only `list_commands` tool so the agent can enumerate active or recently retained background commands without guessing command ids.
 - Completed: extended the background command manager with stable command summaries and registered `list_commands` in the runtime prompt and README to complete inspection of the background command lifecycle.
+- Completed: enriched `list_commands` with activity timestamps and unread output previews so follow-up command inspection can start from the most relevant retained process instead of probing each command id blindly.
 - Completed: added a read-only `go_definition` tool that parses Go source files directly and returns precise file, line, column, package, kind, and signature information for matching declarations.
 - Completed: registered `go_definition` in the runtime prompt and README so the agent now has a parser-backed Go navigation primitive beyond regex search.
 - Completed: added a read-only `go_references` tool that walks parsed Go ASTs and returns identifier reference locations, usage kinds, and source-line context, with optional inclusion of declaration sites.
