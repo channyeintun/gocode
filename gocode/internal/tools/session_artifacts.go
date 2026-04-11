@@ -304,3 +304,89 @@ func (t *SaveWalkthroughTool) Execute(ctx context.Context, input ToolInput) (Too
 		}},
 	}, nil
 }
+
+// saveSearchReportArtifact persists a web_fetch result as a search-report artifact.
+// Returns the mutation and true if saved; returns false on any error (caller continues without artifact).
+func saveSearchReportArtifact(ctx context.Context, url string, query string, content string) (ArtifactMutation, bool) {
+	sessionID, manager, err := getSessionArtifactRuntime()
+	if err != nil {
+		return ArtifactMutation{}, false
+	}
+
+	title := "Fetch: " + url
+	if len(title) > 80 {
+		title = title[:80] + "…"
+	}
+	description := url
+	if query != "" {
+		description = url + "\n\nQuery: " + query
+	}
+	mdContent := artifactspkg.RenderSearchReportMarkdown(description, content)
+
+	slot := "web-fetch-" + sanitizeArtifactSlot(url)
+	artifact, _, created, saveErr := manager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
+		Kind:    artifactspkg.KindSearchReport,
+		Scope:   artifactspkg.ScopeSession,
+		Title:   title,
+		Source:  "web_fetch",
+		Content: mdContent,
+		Metadata: map[string]any{
+			"url":   url,
+			"query": query,
+		},
+	}, sessionID, slot)
+	if saveErr != nil {
+		return ArtifactMutation{}, false
+	}
+
+	return ArtifactMutation{Artifact: artifact, Content: mdContent, Created: created}, true
+}
+
+// saveDiffPreviewArtifact persists a git diff result as a diff-preview artifact.
+// Returns the mutation and true if saved; returns false on any error.
+func saveDiffPreviewArtifact(ctx context.Context, description string, diff string) (ArtifactMutation, bool) {
+	sessionID, manager, err := getSessionArtifactRuntime()
+	if err != nil {
+		return ArtifactMutation{}, false
+	}
+
+	title := "Diff: " + description
+	if len(title) > 80 {
+		title = title[:80] + "…"
+	}
+	mdContent := artifactspkg.RenderDiffPreviewMarkdown(description, diff)
+
+	artifact, _, created, saveErr := manager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
+		Kind:    artifactspkg.KindDiffPreview,
+		Scope:   artifactspkg.ScopeSession,
+		Title:   title,
+		Source:  "git",
+		Content: mdContent,
+	}, sessionID, "git-diff-latest")
+	if saveErr != nil {
+		return ArtifactMutation{}, false
+	}
+
+	return ArtifactMutation{Artifact: artifact, Content: mdContent, Created: created}, true
+}
+
+// sanitizeArtifactSlot returns a short normalized slot key from an arbitrary string.
+func sanitizeArtifactSlot(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 40 {
+		s = s[:40]
+	}
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('-')
+		}
+	}
+	result := strings.Trim(b.String(), "-.")
+	if result == "" {
+		return "item"
+	}
+	return result
+}

@@ -161,6 +161,22 @@ func (t *GitTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, err
 	if strings.TrimSpace(output) == "" {
 		output = "No output"
 	}
+
+	// Route large diff outputs to a diff-preview artifact.
+	const diffPreviewThreshold = 3000
+	if strings.TrimSpace(operation) == "diff" && len(output) >= diffPreviewThreshold {
+		revision, _ := stringParam(input.Params, "revision")
+		description := "git diff"
+		if strings.TrimSpace(revision) != "" {
+			description = "git diff " + strings.TrimSpace(revision)
+		} else if boolParam(input.Params, "cached") {
+			description = "git diff --cached"
+		}
+		if mutation, ok := saveDiffPreviewArtifact(ctx, description, output); ok {
+			return ToolOutput{Output: output, Artifacts: []ArtifactMutation{mutation}}, nil
+		}
+	}
+
 	return ToolOutput{Output: output}, nil
 }
 

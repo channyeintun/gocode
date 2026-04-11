@@ -105,6 +105,15 @@ func (t *WebFetchTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	}
 
 	result := buildWebFetchResult(normalizedURL, prompt, content)
+
+	// Route substantial fetch results to a search-report artifact.
+	const searchReportThreshold = 4000
+	if len(result) >= searchReportThreshold {
+		if mutation, ok := saveSearchReportArtifact(ctx, normalizedURL, strings.TrimSpace(prompt), result); ok {
+			return ToolOutput{Output: result, Artifacts: []ArtifactMutation{mutation}}, nil
+		}
+	}
+
 	return ToolOutput{Output: result}, nil
 }
 

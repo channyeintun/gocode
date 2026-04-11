@@ -216,6 +216,24 @@ func RenderWalkthroughMarkdown(userRequest string, summary string) string {
 `, blockquote(request), summary)) + "\n"
 }
 
+// RenderSearchReportMarkdown formats web search results as a markdown artifact.
+func RenderSearchReportMarkdown(query string, results string) string {
+	q := strings.TrimSpace(query)
+	if q == "" {
+		q = "web search"
+	}
+	return strings.TrimSpace(fmt.Sprintf("# Search Report\n\n**Query:** %s\n\n---\n\n%s\n", q, strings.TrimSpace(results))) + "\n"
+}
+
+// RenderDiffPreviewMarkdown formats a git diff output as a markdown artifact.
+func RenderDiffPreviewMarkdown(description string, diff string) string {
+	desc := strings.TrimSpace(description)
+	if desc == "" {
+		desc = "git diff"
+	}
+	return strings.TrimSpace(fmt.Sprintf("# Diff Preview\n\n**%s**\n\n~~~diff\n%s\n~~~\n", desc, strings.TrimSpace(diff))) + "\n"
+}
+
 // RenderToolLogMarkdown formats an oversized tool result as a markdown artifact.
 func RenderToolLogMarkdown(sessionID string, toolName string, toolCallID string, rawInput string, output string) string {
 	var builder strings.Builder
