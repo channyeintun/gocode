@@ -1,9 +1,13 @@
 package tools
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"unicode"
 )
 
 const (
@@ -61,7 +65,7 @@ func ApplyBudget(budget ResultBudget, toolID string, output string) (string, str
 		return output[:budget.MaxChars], "", fmt.Errorf("create spill dir: %w", err)
 	}
 
-	spillPath := filepath.Join(budget.SpillDir, toolID+".log")
+	spillPath := filepath.Join(budget.SpillDir, sanitizeToolLogID(toolID)+".log")
 	if err := os.WriteFile(spillPath, []byte(output), 0o644); err != nil {
 		return output[:budget.MaxChars], "", fmt.Errorf("write spill file: %w", err)
 	}
@@ -72,4 +76,33 @@ func ApplyBudget(budget ResultBudget, toolID string, output string) (string, str
 		preview, spillPath, len(output),
 	)
 	return truncated, spillPath, nil
+}
+
+func sanitizeToolLogID(toolID string) string {
+	trimmed := strings.TrimSpace(toolID)
+	if trimmed == "" {
+		return "tool"
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(trimmed))
+	for _, r := range trimmed {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r), r == '-', r == '_', r == '.':
+			builder.WriteRune(r)
+		default:
+			builder.WriteByte('_')
+		}
+	}
+
+	sanitized := strings.Trim(builder.String(), "._")
+	if sanitized == "" {
+		sanitized = "tool"
+	}
+	if sanitized == trimmed {
+		return sanitized
+	}
+
+	sum := sha256.Sum256([]byte(trimmed))
+	return fmt.Sprintf("%s_%s", sanitized, hex.EncodeToString(sum[:4]))
 }
