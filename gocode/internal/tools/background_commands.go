@@ -267,6 +267,22 @@ func (bg *backgroundCommand) status(wait time.Duration) backgroundCommandResult 
 	return bg.snapshotDelta()
 }
 
+func (bg *backgroundCommand) stop(wait time.Duration) backgroundCommandResult {
+	bg.consumeMu.Lock()
+	defer bg.consumeMu.Unlock()
+
+	bg.shutdown()
+	if wait > 0 {
+		timer := time.NewTimer(wait)
+		defer timer.Stop()
+		select {
+		case <-bg.done:
+		case <-timer.C:
+		}
+	}
+	return bg.snapshotDelta()
+}
+
 func (bg *backgroundCommand) snapshotDelta() backgroundCommandResult {
 	bg.mu.Lock()
 	running := bg.running
