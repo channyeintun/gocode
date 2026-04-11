@@ -1,84 +1,85 @@
-# TUI Parity Plan
+# First-Class Output Artifacts Plan
 
 ## Goal
 
-Bring `gocode/tui` as close as possible to the interaction model and visual behavior used in `sourcecode`, with priority on:
+Make artifacts a primary output channel in `gocode`, closer to Antigravity's model where structured work products live as durable, reviewable documents instead of transient transcript text.
 
-- main prompt input
-- permission prompt input
-- markdown rendering
-- syntax highlighting
-- transcript/message layout
-- status/footer behavior
+## Cleanup Note
 
-## Remaining Work
+This file replaces the completed TUI parity / Phase 8 document.
 
-### Phase 8: Agent Tool Enhancement (Antigravity Parity)
-Expand the agent's core tool registry to match the advanced capabilities of comprehensive coding agents (like Antigravity) by adding:
+Completed parity and stabilization work remains recorded in `progress.md`. `plan.md` now tracks only the next artifact-focused workstream.
 
-1. **multi_replace_file_content**
-   - **Purpose:** Safe, atomic edits for multiple non-contiguous block changes in a single file update without clunky sed scripts.
-   - **Implementation Details:** 
-     - **Input Schema:** Expects a `TargetFile` string, and a `ReplacementChunks` array. Each chunk contains: `StartLine`, `EndLine`, `TargetContent` (exact string matcher), and `ReplacementContent`.
-     - **Engine Behavior:** The Go engine reads the file into memory and validates *all* chunks to guarantee `TargetContent` strictly matches the exact string between `StartLine` and `EndLine`. This prevents destructive edits. It then executes the replacements from bottom-to-top (highest line number to lowest) to preserve coordinate indices before writing atomically to disk.
+## Current Baseline
 
-2. **command_status** & **send_command_input** (Background Tasks)
-   - **Purpose:** Background job orchestration for persistent REPLs, sending stdin interactively, and monitoring dev servers asynchronously without blocking the LLM agent's loop.
-   - **Implementation Details:** 
-     - **Input Schema (`send_command_input`):** `CommandId`, `Input` string (usually with an explicit `\n`), and `WaitMs` for buffering STDOUT output.
-     - **Input Schema (`command_status`):** `CommandId` and `WaitDurationSeconds` to monitor completion.
-     - **Engine Behavior:** The Go engine tracks long-running processes via a thread-safe map `map[string]*exec.Cmd` initialized with pseudo-terminals (PTYs). Asynchronous stdout/stderr streams are captured into ring buffers. `send_command_input` writes to the PTY's `stdin` descriptor, waits the specified MS, and returns the accumulated buffer delta back to the tool transcript.
+- the runtime already persists session markdown artifacts for implementation plans, task lists, walkthroughs, and oversized tool logs
+- the TUI exposes a plan panel and artifact list, but those surfaces still render artifact bodies as plain text or truncated previews
+- IPC only emits `artifact_created` and `artifact_updated`, which is not enough for focus, review, feedback, or version-aware presentation
+- plan mode can save implementation plans, but artifact approval and revision are not first-class interactions
+- long structured outputs are still transcript-first unless a specific tool persists them intentionally
 
-3. **list_dir**
-   - **Purpose:** Native, fast, structured deep directory listing support to avoid messy, truncated CLI wrapper parsing.
-   - **Implementation Details:** 
-     - **Input Schema:** `DirectoryPath` (absolute string path).
-     - **Engine Behavior:** The Go engine traverses the file system using `os.ReadDir()`, gathering the node name, type flag (`isDir`), and `sizeBytes`. It returns a compact JSON or JSON-Lines array to the model. This avoids piping through generic `/bin/ls` formatting which is prone to LLM parsing errors and space-character bugs in bash context.
+## Phase 9: First-Class Output Artifacts (Antigravity Alignment)
 
-4. **Remove Claude-Specific Memory Artifacts**
-   - **Purpose:** Remove legacy Claude-oriented repo and user memory file conventions so the engine no longer depends on `.claude` directories or `CLAUDE.md` files.
+1. **Artifact-First Presentation**
+   - **Purpose:** Make structured outputs feel like first-class work products, not transcript spillover.
    - **Implementation Details:**
-     - **Scope:** Remove discovery, loading, comments, docs, and ignore rules tied to `~/.claude/CLAUDE.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, and `.claude/rules/*.md`.
-     - **Engine Behavior:** Project/context loading should stop scanning Claude-specific paths and rely only on the repo's supported instruction and memory mechanisms.
+     - **TUI Rendering:** Replace plain-text rendering in the plan panel and artifact list with the shared markdown renderer so alerts, tables, fenced code, and diff blocks display consistently.
+     - **Primary Surface:** Promote the most relevant artifact for the active turn into a dedicated primary panel instead of treating all artifacts as compact previews.
+     - **Metadata:** Show artifact kind, scope, version, source, and draft/final status directly in the UI.
 
+2. **Artifact Lifecycle & IPC**
+   - **Purpose:** Give artifacts a real state machine rather than only create/update broadcasts.
+   - **Implementation Details:**
+     - **Protocol Expansion:** Extend IPC beyond `artifact_created` / `artifact_updated` with events for focus, review requested, feedback submitted, status changes, and version changes.
+     - **Payload Shape:** Include artifact metadata and status in event payloads so the TUI does not infer lifecycle state from content.
+     - **Versioning:** Expose version transitions intentionally so revised artifacts remain reviewable instead of being silently replaced.
 
-## Post-Parity Stabilization
+3. **Reviewable Plans and Feedback Loops**
+   - **Purpose:** Match Antigravity's workflow where plans and other key artifacts can be explicitly reviewed, revised, and approved.
+   - **Implementation Details:**
+     - **Plan Review Gate:** Allow implementation-plan artifacts to enter a review-required state before write execution proceeds.
+     - **User Feedback:** Persist artifact-scoped review notes separately from permission feedback so "revise this artifact" becomes a first-class action.
+     - **Revision Flow:** Support revise / approve semantics for plans and walkthroughs without forcing the user to manage everything through freeform chat.
 
-Current follow-up fixes focus on:
+4. **Artifact Output Routing**
+   - **Purpose:** Route the right work products into artifacts automatically and consistently.
+   - **Implementation Details:**
+     - **Primary Artifact Types:** Keep implementation plans, task lists, walkthroughs, and tool logs as the first shipped set.
+     - **Next Additions:** Start intentionally using existing artifact kinds such as `search-report`, `diff-preview`, `diagram`, and `compact-summary` where they improve readability.
+     - **Oversized Results:** Prefer artifact spillover for long structured outputs instead of dumping large transcript blocks.
 
-1. Queue prompt submissions that arrive during an active turn instead of clearing the live response.
-2. Keep the live assistant status visible across tool execution and permission waits.
-3. Make Esc interruption reliable while a turn is active.
+5. **Prompt & Runtime Contract**
+   - **Purpose:** Make the model reliably treat artifacts as a deliberate output mechanism.
+   - **Implementation Details:**
+     - **System Prompt:** Tell the model when to answer inline, when to save or update an artifact, and how to structure artifact markdown for the TUI.
+     - **Plan Mode Behavior:** Keep read-first planning, but shift from "save a plan and tell the user to switch to /fast" toward "save, review, revise, then execute when the user is ready."
+     - **Tool Integration:** Ensure artifact-producing tools follow the same conventions for titles, metadata, status, and updates.
 
-### Deferred Follow-up
+6. **Follow-on Task View Integration**
+   - **Purpose:** Leave a clean path for Antigravity-style task-mode UI built on the artifact system.
+   - **Implementation Details:**
+     - **Task Status Surface:** Reuse artifact lifecycle primitives for task boundaries, execution summaries, and verification checkpoints.
+     - **Non-Goal for First Slice:** Do not block initial artifact improvements on a full `task_boundary` / `notify_user` implementation.
 
-1. Full scroll/fullscreen primitives and a true virtualized transcript list remain deferred because the upstream implementation depends on custom renderer internals that stock Ink does not expose. The anchored render cap plus transcript paging/jump controls are the accepted local substitute for now.
+## Out of Scope for This Slice
 
-## Out of Scope
-
-The following sourcecode features are explicitly excluded from this parity effort:
-
-- **Voice input** — waveform animation, voice recording integration
-- **Vim mode** — `useTextInput` supports vim keybindings but this requires a keybinding subsystem we don't have
-- **Feature flag system** — compile-time `feature()` gates
-- **Plugin system** — third-party plugin initialization and lifecycle
-- **Multi-screen architecture** — separate screens (Doctor, ResumeConversation, AssistantSessionChooser, etc.)
-- **Modal/dialog overlays** — dialog launcher system for multiple overlay types
-- **Coordinator mode** — separate app flowpath for coordinator sessions
-- **Analytics/telemetry** — event tracking in permission prompts and other interactions
-- **MDM/keychain** — enterprise prefetch and credential management
-- **Suggestion dropdown** — inline suggestion/autocomplete dropdown in prompt input
-
-These can be revisited individually if needed later.
+- general workflow-file execution
+- knowledge-item retrieval and indexing
+- subagent orchestration
+- browser or media embedding beyond text-first markdown artifact support
+- non-artifact TUI redesign unrelated to artifact review
 
 ## Risks
 
-- permission amendment/feedback parity requires engine protocol expansion
-- block-oriented messages would be a significant refactor of both engine emitters and TUI reducers
-- virtual transcript list depends on scroll/fullscreen primitives that Ink does not natively provide
+- richer artifact IPC touches both engine and TUI reducers
+- review gating must avoid deadlocking plan mode or duplicating the existing permission flow
+- fuller markdown support for artifacts may reveal renderer gaps that need staged rollout
+- versioned artifact history can bloat session state if retention is not bounded
 
 ## Definition of Done
 
-- remaining protocol evaluation items are resolved (implemented or explicitly deferred)
-- virtual transcript list is either implemented or the anchored render cap is confirmed as sufficient
-- parity roadmap is complete for this pass, with any renderer-level fullscreen work explicitly deferred
+- artifact panels render full markdown content instead of plain-text previews for the supported first slice
+- artifact events carry enough metadata for status, focus, and version-aware UI updates
+- implementation plans can be explicitly reviewed and revised as artifacts before execution
+- task lists, walkthroughs, and long structured outputs follow the same first-class artifact contract
+- completed parity-era plan items are no longer the active execution baseline in this file
