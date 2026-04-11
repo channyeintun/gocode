@@ -163,6 +163,7 @@ The agent has access to:
 | Tool                           | Description                                                   |
 | ------------------------------ | ------------------------------------------------------------- |
 | **bash**                       | Execute shell commands                                        |
+| **think**                      | Record scratchpad reasoning with no side effects              |
 | **list_dir**                   | List directory contents as structured JSON                    |
 | **file_read**                  | Read file contents                                            |
 | **file_write**                 | Create or overwrite files                                     |

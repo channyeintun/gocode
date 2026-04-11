@@ -15,7 +15,7 @@
 | ----------------------------------- | --------- | ----- | ------------------------------------------------------------------------------------------ |
 | Planning refresh                    | completed | S     | 2026-04-12 explanation-driven roadmap replaced stale parity-era planning docs.             |
 | Phase 1 runtime measurement         | completed | S     | Checkpoint logging, artifact ownership, aggregate tool-result budgeting, and continuation stop telemetry are in place. |
-| Phase 2 tool depth                  | in progress | L   | File-history tools, semantic validation, and input-aware bash concurrency landed; Think tool remains. |
+| Phase 2 tool depth                  | in progress | L   | File-history tools, semantic validation, input-aware bash concurrency, and Think landed; deeper navigation and follow-up tooling remain. |
 | Phase 3 subagents                   | planned   | XL    | Parent-child delegation, fresh context model, permission isolation, sidechain transcripts. |
 | Phase 4 memory                      | planned   | L     | Four-type taxonomy, MEMORY.md index, async recall, staleness warnings.                    |
 | Phase 5 compaction and cache        | planned   | M     | Output slot reservation, prompt memoization, provider-gated cache stability.               |
@@ -45,6 +45,8 @@
 - Completed: added tool-specific semantic validators for `bash` and `git` on top of the shared validator hook so obviously low-value or incomplete calls fail early with clear errors.
 - Completed: replaced the old regex-based `bash` concurrency check with top-level command-chain parsing so `&&`, `||`, `;`, pipelines, and env-prefixed read-only commands are classified more accurately.
 - Completed: kept concurrency classification conservative by forcing serial execution for shell-heavy constructs such as redirection, subshells, command substitution, backgrounding, unmatched quotes, or other ambiguous syntax.
+- Completed: added a zero-side-effect `think` tool so the model can use an explicit scratchpad without shelling out or touching the filesystem.
+- Completed: registered `think` in the runtime tool list and updated the system prompt plus README so the exposed tool names stay synchronized.
 
 ## Next Planning Baseline
 
