@@ -8,6 +8,7 @@ import (
 )
 
 const subagentTypeExplore = "explore"
+const subagentTypeGeneralPurpose = "general-purpose"
 
 type AgentRunRequest struct {
 	Description  string
@@ -39,7 +40,7 @@ func (t *AgentTool) Name() string {
 }
 
 func (t *AgentTool) Description() string {
-	return "Spawn a bounded child agent in a fresh context for read-only exploration work and return its final report."
+	return "Spawn a bounded child agent in a fresh context and return its final report."
 }
 
 func (t *AgentTool) InputSchema() any {
@@ -56,8 +57,8 @@ func (t *AgentTool) InputSchema() any {
 			},
 			"subagent_type": map[string]any{
 				"type":        "string",
-				"description": "The child agent type. Currently only explore is supported.",
-				"enum":        []string{subagentTypeExplore},
+				"description": "The child agent type. Supported values are explore and general-purpose.",
+				"enum":        []string{subagentTypeExplore, subagentTypeGeneralPurpose},
 			},
 		},
 		"required": []string{"description", "prompt"},
@@ -81,7 +82,7 @@ func (t *AgentTool) Validate(input ToolInput) error {
 	if !ok || strings.TrimSpace(prompt) == "" {
 		return fmt.Errorf("agent requires prompt")
 	}
-	if subagentType, ok := stringParam(input.Params, "subagent_type"); ok && strings.TrimSpace(subagentType) != "" && strings.TrimSpace(subagentType) != subagentTypeExplore {
+	if subagentType, ok := stringParam(input.Params, "subagent_type"); ok && strings.TrimSpace(subagentType) != "" && strings.TrimSpace(subagentType) != subagentTypeExplore && strings.TrimSpace(subagentType) != subagentTypeGeneralPurpose {
 		return fmt.Errorf("agent subagent_type %q is not supported", subagentType)
 	}
 	return nil

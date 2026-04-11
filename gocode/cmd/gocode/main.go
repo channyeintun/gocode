@@ -205,7 +205,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, tracker, sessionStore, artifactManager, client, activeModelID, cwd)))
+	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, client, activeModelID, cwd)))
 	if err := persistSessionState(sessionStore, sessionStateParams{
 		SessionID: sessionID,
 		CreatedAt: startedAt,

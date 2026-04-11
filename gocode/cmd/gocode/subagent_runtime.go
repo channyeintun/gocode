@@ -14,6 +14,7 @@ import (
 	artifactspkg "github.com/channyeintun/gocode/internal/artifacts"
 	costpkg "github.com/channyeintun/gocode/internal/cost"
 	"github.com/channyeintun/gocode/internal/ipc"
+	"github.com/channyeintun/gocode/internal/permissions"
 	"github.com/channyeintun/gocode/internal/session"
 	skillspkg "github.com/channyeintun/gocode/internal/skills"
 	"github.com/channyeintun/gocode/internal/timing"
@@ -21,6 +22,7 @@ import (
 )
 
 const exploreSubagentType = "explore"
+const generalPurposeSubagentType = "general-purpose"
 
 var exploreSubagentTools = []string{
 	"think",
@@ -37,9 +39,30 @@ var exploreSubagentTools = []string{
 	"git",
 }
 
+var generalPurposeSubagentTools = []string{
+	"bash",
+	"think",
+	"list_dir",
+	"file_read",
+	"file_write",
+	"file_edit",
+	"multi_replace_file_content",
+	"glob",
+	"grep",
+	"go_definition",
+	"go_references",
+	"project_overview",
+	"symbol_search",
+	"web_search",
+	"web_fetch",
+	"git",
+	"file_history",
+}
+
 func makeSubagentRunner(
 	bridge *ipc.Bridge,
 	registry *toolpkg.Registry,
+	permissionCtx *permissions.Context,
 	parentTracker *costpkg.Tracker,
 	sessionStore *session.Store,
 	artifactManager *artifactspkg.Manager,
@@ -56,7 +79,7 @@ func makeSubagentRunner(
 		if subagentType == "" {
 			subagentType = exploreSubagentType
 		}
-		if subagentType != exploreSubagentType {
+		if subagentType != exploreSubagentType && subagentType != generalPurposeSubagentType {
 			return toolpkg.AgentRunResult{}, fmt.Errorf("agent subagent_type %q is not supported yet", subagentType)
 		}
 
@@ -67,7 +90,8 @@ func makeSubagentRunner(
 		childStartedAt := time.Now()
 		childTracker := costpkg.NewTracker()
 		childMessages := []api.Message{{Role: api.RoleUser, Content: req.Prompt}}
-		childRegistry := registry.CloneFiltered(exploreSubagentTools)
+		childRegistry := registry.CloneFiltered(subagentToolNames(subagentType))
+		childPermissionCtx := permissions.CloneContext(permissionCtx)
 		childBridge := ipc.NewBridge(strings.NewReader(""), io.Discard)
 		childTimingLogger := timing.NewSessionLogger(sessionStore.SessionDir(childSessionID))
 		childSkills, _ := skillspkg.LoadAll(cwd)
@@ -103,7 +127,7 @@ func makeSubagentRunner(
 				return trackModelStream(callCtx, childBridge, childTracker, client, modelReq)
 			},
 			ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-				return executeToolCallsSilently(callCtx, childRegistry, artifactManager, childSessionID, sessionStore.SessionDir(childSessionID), childTracker, client.Capabilities().MaxOutputTokens, calls)
+				return executeToolCallsForSubagent(callCtx, subagentType, childRegistry, childPermissionCtx, artifactManager, childSessionID, sessionStore.SessionDir(childSessionID), childTracker, client.Capabilities().MaxOutputTokens, calls)
 			},
 			CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
 				result, err := compactWithMetrics(callCtx, childBridge, childTracker, client, childTimingLogger, childSessionID, 0, string(reason), current)
@@ -179,12 +203,23 @@ func makeSubagentRunner(
 func subagentSystemPrompt(subagentType string, defs []api.ToolDefinition) string {
 	names := toolDefinitionNames(defs)
 	toolList := strings.Join(names, ", ")
+	behavior := "This subagent is read-only and artifact-safe: do not modify files, do not create or update session artifacts, and do not attempt background process control."
+	if subagentType == generalPurposeSubagentType {
+		behavior = "This subagent is artifact-safe: do not create or update session artifacts. You may use broader tools, but there is no interactive approval path inside the child session. Any write or execute action that the cloned permission policy would not auto-approve will be denied. Avoid background process control tools."
+	}
 	return strings.TrimSpace(fmt.Sprintf(`You are Go CLI %s, a bounded subagent running in a fresh context.
 
 IMPORTANT: Always use absolute paths with file tools. The working directory is provided in the environment context below.
 Use only the tools exposed to you in this session. The exact runtime tool names available are: %s.
-This subagent is read-only and artifact-safe: do not modify files, do not create or update session artifacts, and do not attempt background process control.
-Work only on the delegated task. Keep the final response concise and report concrete findings with file paths and next steps when useful.`, strings.Title(subagentType), toolList))
+%s
+Work only on the delegated task. Keep the final response concise and report concrete findings with file paths and next steps when useful.`, strings.Title(subagentType), toolList, behavior))
+}
+
+func subagentToolNames(subagentType string) []string {
+	if subagentType == generalPurposeSubagentType {
+		return generalPurposeSubagentTools
+	}
+	return exploreSubagentTools
 }
 
 func toolDefinitionNames(defs []api.ToolDefinition) []string {
@@ -209,9 +244,11 @@ func latestAssistantContent(messages []api.Message) string {
 	return "Subagent completed without a final text response. See the child transcript for details."
 }
 
-func executeToolCallsSilently(
+func executeToolCallsForSubagent(
 	ctx context.Context,
+	subagentType string,
 	registry *toolpkg.Registry,
+	permissionCtx *permissions.Context,
 	artifactManager *artifactspkg.Manager,
 	sessionID string,
 	sessionDir string,
@@ -220,9 +257,10 @@ func executeToolCallsSilently(
 	calls []api.ToolCall,
 ) ([]api.ToolResult, error) {
 	results := make([]api.ToolResult, len(calls))
-	approved := make([]toolpkg.PendingCall, 0, len(calls))
+	pending := make([]toolpkg.PendingCall, 0, len(calls))
 	budget := toolpkg.DefaultResultBudgetForModel(sessionDir, maxOutputTokens)
 	aggregateBudget := toolpkg.NewAggregateResultBudget(budget)
+	permissionGate := permissions.ExecutorGate{Context: permissionCtx}
 
 	for index, call := range calls {
 		normalized, err := normalizeToolCall(call)
@@ -244,16 +282,18 @@ func executeToolCallsSilently(
 			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: err.Error(), IsError: true}
 			continue
 		}
-		if tool.Permission() != toolpkg.PermissionReadOnly {
+		if subagentType == exploreSubagentType && tool.Permission() != toolpkg.PermissionReadOnly {
 			results[index] = api.ToolResult{ToolCallID: normalized.ID, Output: fmt.Sprintf("tool %q is not allowed in the explore subagent", tool.Name()), IsError: true}
 			continue
 		}
-		approved = append(approved, toolpkg.PendingCall{Index: index, Tool: tool, Input: input})
+		pending = append(pending, toolpkg.PendingCall{Index: index, Tool: tool, Input: input})
 	}
 
-	for _, batch := range toolpkg.PartitionBatches(approved) {
+	for _, batch := range toolpkg.PartitionBatches(pending) {
 		batchStart := time.Now()
-		batchResults := toolpkg.ExecuteBatch(ctx, batch)
+		batchResults := toolpkg.ExecuteBatchWithOptions(ctx, batch, toolpkg.ExecuteOptions{
+			PermissionGate: permissionGate.Check,
+		})
 		if tracker != nil {
 			tracker.RecordToolDuration(time.Since(batchStart))
 		}
