@@ -38,6 +38,13 @@ type AgentStatusRequest struct {
 
 type AgentStatusLookup func(context.Context, AgentStatusRequest) (AgentRunResult, error)
 
+type AgentStopRequest struct {
+	AgentID string
+	WaitMs  int
+}
+
+type AgentStopLookup func(context.Context, AgentStopRequest) (AgentRunResult, error)
+
 type AgentTool struct {
 	runner AgentRunner
 }
@@ -200,6 +207,78 @@ func (t *AgentStatusTool) Execute(ctx context.Context, input ToolInput) (ToolOut
 	encoded, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return ToolOutput{}, fmt.Errorf("marshal agent status: %w", err)
+	}
+	return ToolOutput{Output: string(encoded)}, nil
+}
+
+type AgentStopTool struct {
+	lookup AgentStopLookup
+}
+
+func NewAgentStopTool(lookup AgentStopLookup) *AgentStopTool {
+	return &AgentStopTool{lookup: lookup}
+}
+
+func (t *AgentStopTool) Name() string {
+	return "agent_stop"
+}
+
+func (t *AgentStopTool) Description() string {
+	return "Cancel a background child agent and return its latest status or final cancellation result."
+}
+
+func (t *AgentStopTool) InputSchema() any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"agent_id": map[string]any{
+				"type":        "string",
+				"description": "The background child agent identifier returned by the agent tool.",
+			},
+			"wait_ms": map[string]any{
+				"type":        "integer",
+				"description": "Optional number of milliseconds to wait for cancellation to settle before returning status.",
+				"minimum":     0,
+			},
+		},
+		"required": []string{"agent_id"},
+	}
+}
+
+func (t *AgentStopTool) Permission() PermissionLevel {
+	return PermissionExecute
+}
+
+func (t *AgentStopTool) Concurrency(input ToolInput) ConcurrencyDecision {
+	return ConcurrencySerial
+}
+
+func (t *AgentStopTool) Validate(input ToolInput) error {
+	agentID, ok := stringParam(input.Params, "agent_id")
+	if !ok || strings.TrimSpace(agentID) == "" {
+		return fmt.Errorf("agent_stop requires agent_id")
+	}
+	if value, ok := intParam(input.Params, "wait_ms"); ok && value < 0 {
+		return fmt.Errorf("wait_ms must be >= 0")
+	}
+	return nil
+}
+
+func (t *AgentStopTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
+	if t == nil || t.lookup == nil {
+		return ToolOutput{}, fmt.Errorf("agent stop lookup is not configured")
+	}
+	agentID, _ := stringParam(input.Params, "agent_id")
+	result, err := t.lookup(ctx, AgentStopRequest{
+		AgentID: strings.TrimSpace(agentID),
+		WaitMs:  intOrDefault(input.Params, "wait_ms", 0),
+	})
+	if err != nil {
+		return ToolOutput{}, err
+	}
+	encoded, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		return ToolOutput{}, fmt.Errorf("marshal agent stop result: %w", err)
 	}
 	return ToolOutput{Output: string(encoded)}, nil
 }

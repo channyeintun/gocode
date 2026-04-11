@@ -207,6 +207,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	}
 	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, client, activeModelID, cwd)))
 	registry.Register(toolpkg.NewAgentStatusTool(lookupBackgroundAgentStatus))
+	registry.Register(toolpkg.NewAgentStopTool(stopBackgroundAgent))
 	if err := persistSessionState(sessionStore, sessionStateParams{
 		SessionID: sessionID,
 		CreatedAt: startedAt,
@@ -737,7 +738,7 @@ func defaultSystemPrompt() string {
 
 IMPORTANT: Always use absolute paths with file tools. The working directory is provided in the environment context below — use it to construct absolute paths. For example, if the working directory is /home/user/project, use /home/user/project/file.txt instead of file.txt.
 Always use tools to answer questions — do NOT just make a plan without acting. Call tools immediately when you need information.
-Use the exact runtime tool names when calling tools, including agent, agent_status, bash, think, list_dir, file_read, file_write, file_edit, multi_replace_file_content, glob, grep, go_definition, go_references, project_overview, symbol_search, web_search, web_fetch, git, list_commands, command_status, send_command_input, stop_command, file_history, file_history_rewind, save_implementation_plan, upsert_task_list, and save_walkthrough. Do not invent alternate names like file_search or read_file.
+Use the exact runtime tool names when calling tools, including agent, agent_status, agent_stop, bash, think, list_dir, file_read, file_write, file_edit, multi_replace_file_content, glob, grep, go_definition, go_references, project_overview, symbol_search, web_search, web_fetch, git, list_commands, command_status, send_command_input, stop_command, file_history, file_history_rewind, save_implementation_plan, upsert_task_list, and save_walkthrough. Do not invent alternate names like file_search or read_file.
 
 Artifacts are first-class outputs in this runtime — durable, reviewable work products, not just overflow containers for long text. Use them intentionally:
 - save_implementation_plan: real implementation plans that the user will review before execution begins.

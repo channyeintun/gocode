@@ -103,6 +103,12 @@ func launchBackgroundAgent(parentCtx context.Context, execute func(context.Conte
 		defer scheduleBackgroundAgentCleanup(bg)
 		bg.running = false
 		if err != nil {
+			if err == context.Canceled {
+				bg.result.Status = "cancelled"
+				bg.result.Error = "background child agent cancelled"
+				writeBackgroundAgentResultFile(bg.result)
+				return
+			}
 			bg.result.Status = "failed"
 			bg.result.Error = err.Error()
 			writeBackgroundAgentResultFile(bg.result)
@@ -148,6 +154,38 @@ func lookupBackgroundAgentStatus(ctx context.Context, req toolpkg.AgentStatusReq
 	result := bg.result
 	if bg.running {
 		result.Status = "running"
+	}
+	return result, nil
+}
+
+func stopBackgroundAgent(ctx context.Context, req toolpkg.AgentStopRequest) (toolpkg.AgentRunResult, error) {
+	bg, err := getBackgroundAgent(req.AgentID)
+	if err != nil {
+		return toolpkg.AgentRunResult{}, err
+	}
+
+	bg.mu.Lock()
+	if bg.running && bg.cancel != nil {
+		bg.cancel()
+	}
+	bg.mu.Unlock()
+
+	if req.WaitMs > 0 {
+		timer := time.NewTimer(time.Duration(req.WaitMs) * time.Millisecond)
+		defer timer.Stop()
+		select {
+		case <-bg.done:
+		case <-timer.C:
+		case <-ctx.Done():
+			return toolpkg.AgentRunResult{}, ctx.Err()
+		}
+	}
+
+	bg.mu.Lock()
+	defer bg.mu.Unlock()
+	result := bg.result
+	if bg.running {
+		result.Status = "cancelling"
 	}
 	return result, nil
 }
