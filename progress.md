@@ -17,7 +17,7 @@
 | Phase 1 runtime measurement         | completed   | S     | Checkpoint logging, artifact ownership, aggregate tool-result budgeting, and continuation stop telemetry are in place.                                                                                                                                                                                |
 | Phase 2 tool depth                  | completed   | L     | File history, semantic validation, input-aware bash concurrency, Think, Go-aware navigation, repository and dependency overview, and full background-command lifecycle tooling are landed; existing skill selection and prompt injection make the current tool surface sufficient to close the phase. |
 | Phase 3 subagents                   | completed   | XL    | Fresh-context explore, permission-isolated general-purpose child agents, explicit tool allowlists, and full background child launch/status/stop lifecycle are landed; artifact-safe result delivery and non-interactive child permissions are sufficient to close the phase.                          |
-| Phase 4 memory                      | in progress | L     | Project and user MEMORY.md index loading, staleness cues, write-path scaffolding, model-backed side-query recall, structured MEMORY.md entry parsing, explicit MEMORY.md validation, on-demand note loading, and separate memory-recall cost surfacing are wired in.                                  |
+| Phase 4 memory                      | completed   | L     | Project and user MEMORY.md loading, staleness cues, durable write guidance, bounded side-query recall with fallback, structured entry parsing, validation, note loading, and separate memory-recall cost surfacing are wired in; the memory workflow is sufficient to close the phase.                |
 | Phase 5 compaction and cache        | in progress | M     | Session-local prompt memoization, adaptive output slot reservation, shared context-pressure policy, provider-gated cache-stable prompt ordering, and continuation-aware compaction/output-escalation coordination are landed.                                                                         |
 | Phase 6 UI and developer experience | completed   | M     | Async preconnect warmup, timing visibility, transcript navigation, artifact/background visibility, and queue-aware prompt chrome are landed; the current measured UI bottlenecks are improved enough to close the phase.                                                                              |
 
@@ -69,7 +69,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 
 ### Phase 4: Memory
 
-**Status:** in progress
+**Status:** completed
 
 **Landed**
 
@@ -80,16 +80,14 @@ This section is the canonical phase tracker. A phase is only complete when its `
 
 **Remaining to Finish**
 
-- Decide whether the current memory write flow is sufficient or needs a small usability pass to make durable memory maintenance less manual.
-- Confirm the current side-query routing and fallback behavior are good enough to treat recall as production-stable.
-- Verify that the separation between durable memory and artifacts is complete enough to close the phase.
+- None.
 
 **Exit Criteria Check**
 
 - [x] `gocode` can remember durable project guidance across sessions.
 - [x] Memory recall is selective and bounded.
 - [x] Old memories surface with age-aware caveats instead of false authority.
-- [ ] Memory workflow is considered complete enough that no additional Phase 4 follow-up is required.
+- [x] Memory workflow is considered complete enough that no additional Phase 4 follow-up is required.
 
 ### Phase 5: Compaction and Cache
 
@@ -227,6 +225,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Completed: surfaced queued follow-up prompt counts in the status/footer chrome and added explicit footer block reasons (`booting`, `search open`, `turn active`, `engine error`) so deferred work and blocked input states stay visible without scanning the lower prompt area.
 - Completed: closed Phase 2 after confirming the existing `internal/skills/` pipeline already loads global and project skills, auto-selects relevant entries, and injects them into prompt assembly, so no additional skills integration or parity-chasing tooling is needed for the phase goal.
 - Completed: closed Phase 3 after confirming child sessions stay bounded by explicit tool allowlists, artifact mutation remains excluded from child execution, and non-auto-approved child write/execute requests degrade to denial instead of interactive permission deadlocks.
+- Completed: closed Phase 4 after confirming durable memory writes already have explicit on-disk guidance, memory recall stays bounded through side-query selection plus safe fallback behavior, and recalled memory remains separate from artifact ownership and review flows.
 - Completed: emitted structured `memory_recalled` telemetry from the query loop using existing MEMORY.md recall metadata so each turn can report which durable notes were selected without polluting the transcript.
 - Completed: surfaced low-noise per-turn memory recall summaries in the TUI footer, showing recalled note titles and recall source while keeping full recall content out of the main conversation flow.
 - Completed: switched MEMORY.md index injection from whole-file dumping to bounded heuristic recall so only a small set of lines relevant to the current request enters the prompt by default.
