@@ -1,213 +1,298 @@
-# Explanation-Driven Enhancement Opportunities
+# Enhancement Research: VS Code Copilot Chat Patterns
 
-This file replaces the old mixed backlog. It is now a focused gap analysis for the next `gocode` workstream.
+Date: 2026-04-12
 
-The primary reference is `sourcecode-explanation/`. Targeted reads from `sourcecode/` are used only to confirm the underlying architecture patterns without turning this file into a source audit.
+This document replaces the old mixed backlog. It is a research-only note and implementation plan seed.
 
-## Hard Exclusions
+## Scope
 
-Do not reopen these categories in the current roadmap:
+- Source repo: `microsoft/vscode-copilot-chat`
+- Primary research target: `src/extension/tools`
+- Primary research target: `src/extension/agents`
+- For subagent orchestration, the actual control flow also extends into:
+  - `src/extension/tools/node/searchSubagentTool.ts`
+  - `src/extension/tools/node/executionSubagentTool.ts`
+  - `src/extension/prompt/node/searchSubagentToolCallingLoop.ts`
+  - `src/extension/prompt/node/executionSubagentToolCallingLoop.ts`
+  - `src/extension/intents/node/toolCallingLoop.ts`
 
-- MCP
-- swarm or team orchestration
-- remote execution
-- browser-first features
-- unrelated product lines that do not strengthen the existing local coding loop
+## Boundaries
 
-## Artifact Safety Requirement
+- This is not a parity project.
+- This is not a team/swarm/remote-agent roadmap.
+- This is not an implementation task list yet.
+- Only two areas are in scope:
+  - file-related tools
+  - subagent orchestration
 
-Every opportunity below must preserve the existing artifact model.
+## Current `gocode` baseline
 
-- Parent sessions remain the authority for implementation-plan, task-list, walkthrough, diff-preview, search-report, and tool-log artifacts.
-- Memory storage must stay separate from session artifacts.
-- Tool expansion must preserve result budgeting, artifact spillover, and focused artifact events.
-- Compaction improvements must not demote durable outputs into transcript-only summaries.
+`gocode` already has a stronger local baseline than the old enhancement note assumed.
 
-## Highest-Leverage Opportunities
+- File tools already present: `file_read`, `file_write`, `file_edit`, `multi_replace_file_content`, `file_diff_preview`, `file_history`, `file_history_rewind`
+- File-adjacent navigation already present: `glob`, `grep`, `go_definition`, `go_references`, `symbol_search`, `project_overview`
+- Execution and batching already present: permission levels, schema validation, path resolution, ordered concurrent execution, streaming result delivery
+- Child-agent surface already present: `agent`, `agent_status`, `agent_stop`
 
-### 1. Artifact-Safe Subagent Foundation
+Conclusion: the best ideas to borrow are reliability and orchestration patterns, not raw tool-count parity.
 
-**Reference signal**
+## Best file-tool takeaways to adopt
 
-- `sourcecode-explanation/book/ch08-sub-agents.md`
-- `sourcecode/Tool.ts`
-- `sourcecode/tools.ts`
-- `sourcecode/tasks.ts`
+### 1. Add a dedicated patch-grade edit tool
 
-**Current baseline**
+Reference files:
 
-- `gocode/internal/agent/loop.go` already has proactive compaction, 3-attempt model recovery (`invokeModelWithRecovery`), batch tool execution via `deps.ExecuteToolBatch()`, continuation tracking with budget-aware stop conditions, and dynamic capability downgrade. This is a strong foundation for hosting child agents.
+- `src/extension/tools/node/applyPatchTool.tsx`
+- `src/extension/tools/node/applyPatch/parser.ts`
+- `src/extension/prompts/node/panel/editCodePrompt2.tsx`
 
-**Current gap**
+What is worth copying:
 
-- Despite the loop's sophistication, it has no delegation path — no `Agent` tool in the registry, no child context model, no child permission isolation, and no child cancellation or result-lifecycle model.
+- A distinct tool for multi-hunk and multi-file edits
+- A clear contract for when to use patch edits versus exact string replacement
+- A patch format that is structured enough to validate before write time
 
-**Best opportunity**
+Why it fits `gocode`:
 
-- Add a bounded `Agent` tool with only `general-purpose` and `explore` in the first iteration.
-- Support both blocking and background execution.
-- Give child agents scoped tool pools and scoped permission modes.
-- Return a child report or background handle to the parent and keep parent artifacts parent-owned.
+- `file_edit` is good for exact replacements but brittle for larger dispersed edits
+- `multi_replace_file_content` is still exact-match driven
+- A patch tool would complement, not replace, the current edit family
 
-**Why this beats the old roadmap**
+Recommended direction:
 
-- It is the single largest capability jump still missing from the current local architecture.
-- It improves research, search, and setup turns without importing swarm, team, or remote complexity.
+- Add `apply_patch` as the large-edit path
+- Keep `file_edit` for small exact replacements
+- Keep `multi_replace_file_content` for repeated exact replacements
 
-**What to defer**
+### 2. Add edit failure taxonomy and guided recovery
 
-- team agents
-- swarm messaging
-- remote execution
-- worktree isolation in the first release
+Reference files:
 
-### 2. Deeper Local Tooling and Smarter Concurrency
+- `src/extension/tools/node/editFileToolUtils.tsx`
+- `src/extension/tools/node/abstractReplaceStringTool.tsx`
 
-**Reference signal**
+What is worth copying:
 
-- `sourcecode-explanation/book/ch06-tools.md`
-- `sourcecode-explanation/book/ch07-concurrency.md`
-- `sourcecode/Tool.ts`
-- `sourcecode/tools.ts`
-- `sourcecode/query.ts`
+- Distinct error classes for no match, multiple matches, and no-op edits
+- Tool responses that tell the model what to do next instead of only failing
+- A repair path that encourages reread or narrower edits rather than blind retries
 
-**Current baseline**
+Why it fits `gocode`:
 
-- `gocode/internal/tools/interface.go` already supports per-call `Concurrency(input)` returning `ConcurrencySerial` or `ConcurrencyParallel`.
-- `gocode/internal/tools/orchestration.go` and `gocode/internal/tools/streaming_executor.go` already batch and stream ordered results with configurable semaphore (default 10 max concurrent).
-- `gocode/internal/tools/registry.go` exposes 16 registered tools plus aliases (`bash`, `list_dir`, `file_read`, `file_write`, `file_edit`, `multi_replace_file_content`, `glob`, `grep`, `web_search`, `web_fetch`, `git`, `command_status`, `send_command_input`, `save_implementation_plan`, `upsert_task_list`, `save_walkthrough`).
-- `gocode/internal/tools/budgeting.go` already exists for result budgeting.
+- Current edit errors are accurate but mostly flat strings
+- Richer failure classes would reduce retry churn and make automated recovery more reliable
 
-**Current gap**
+Recommended direction:
 
-- limited semantic validation before execution
-- shallow concurrency classification for complex shell inputs
-- unregistered tools already implemented but not exposed: `file_diff_preview.go` and `file_history.go` exist in the tools directory but are not wired into the registry — these are free improvements
-- no `Think` scratchpad tool (zero-cost, high-value reasoning aid from the reference system)
-- no code navigation tools beyond grep (symbol search, go-to-definition)
-- a smaller active tool family than the architecture it is modeled against
+- Standardize edit failure kinds across `file_edit`, `multi_replace_file_content`, and future `apply_patch`
+- Return actionable recovery hints in tool output
 
-**Best opportunity**
+### 3. Make file reads more chunk-aware and binary-aware
 
-- Add semantic validation to the tool contract.
-- Make `bash` scheduling more input-aware.
-- Expand the local tool families that fit the current product: code navigation, repository inspection, safer batch edits, and terminal follow-up.
-- Grow the tool surface deliberately rather than chasing a raw count target.
+Reference files:
 
-**Why this beats the old roadmap**
+- `src/extension/tools/node/readFileTool.tsx`
 
-- It increases useful work per turn immediately.
-- It also makes future subagents more valuable because delegated agents inherit a stronger local toolset.
+What is worth copying:
 
-### 3. Project Memory With Selective Recall
+- Explicit continuation hints when a read is partial or truncated
+- A first-class chunking model for large files
+- Binary handling instead of treating every file like text
 
-**Reference signal**
+Why it fits `gocode`:
 
-- `sourcecode-explanation/book/ch11-memory.md`
-- `sourcecode/query.ts` memory-prefetch and attachment patterns
+- `file_read` already supports line ranges, which is good
+- It still under-communicates what the model should do after a partial read
+- Binary-awareness would reduce confusing output on non-text inputs
 
-**Current gap**
+Recommended direction:
 
-- `gocode/internal/agent/memory_files.go` only loads `AGENTS.md` and `AGENTS.local.md` instruction files.
-- `gocode/internal/session/store.go` persists transcripts but does not promote durable learnings across sessions.
+- Keep line-based reads
+- Add continuation hints for large/partial reads
+- Add binary detection and a safer fallback output mode
 
-**Best opportunity**
+### 4. Add path-sensitive edit safety heuristics
 
-- Add a project-scoped memory directory with a lightweight `MEMORY.md` index.
-- Follow the four-type taxonomy: `user`, `feedback`, `project`, `reference`.
-- Add async recall so only the most relevant memories enter the next turn.
-- Add staleness warnings so old memories are treated as observations to verify.
-- Reuse existing file tools for the memory write path.
+Reference files:
 
-**Why this beats the old roadmap**
+- `src/extension/tools/node/editFileToolUtils.tsx`
+- `src/extension/tools/node/createFileTool.tsx`
 
-- It fixes repeated user re-explanation across sessions.
-- It raises agent quality without inventing new user-facing surface area.
+What is worth copying:
 
-### 4. Cache-Aware Compaction and Prompt Budgeting
+- Treating some paths as higher-risk than normal workspace files
+- Consistent diff generation before confirmation
+- Stronger guardrails around config, dotfiles, and user-home edits
 
-**Reference signal**
+Why it fits `gocode`:
 
-- `sourcecode-explanation/book/ch05-agent-loop.md`
-- `sourcecode-explanation/book/ch17-performance.md`
-- `sourcecode/query.ts`
+- Current path resolution blocks cwd escape, which is necessary but not sufficient
+- Risky local files should trigger stronger approval behavior than ordinary source files
 
-**Current baseline**
+Recommended direction:
 
-- `gocode/internal/compact/pipeline.go` already has tool truncation, summarization, and partial compaction.
-- `gocode/internal/compact/tool_truncate.go` already preserves the newest result per compactable tool type.
+- Add a risk tier for dotfiles, editor config, shell rc files, and user-home paths
+- Ensure write approvals always include a stable diff preview
 
-**Current gap**
+## Best subagent orchestration takeaways to adopt
 
-- output slot reservation is not tuned for context efficiency
-- prompt sections are not organized for cache stability
-- there is no section-level memoization for prompt assembly
-- tool budgeting, compaction, and future memory recall are not yet coordinated as one context strategy
+### 1. Use named specialist subagents with fixed tool envelopes
 
-**Best opportunity**
+Reference files:
 
-- tighten output reservation and escalate only on truncation (universally useful across all providers)
-- memoize stable system-prompt sections to avoid rebuilding identical content each turn (universally useful)
-- make prompt construction cache-aware by placing stable sections before volatile sections — applicable to Anthropic API and compatible OpenRouter routes; no-op for providers without prompt caching (Ollama, etc.)
-- build on the existing `ContinuationTracker` in `token_budget.go` which already monitors budget usage and diminishing-returns stop conditions
-- unify result budgeting, compaction, continuation tracking, and future memory recall into a shared context-pressure policy
+- `src/extension/agents/vscode-node/agentTypes.ts`
+- `src/extension/agents/vscode-node/exploreAgentProvider.ts`
+- `src/extension/agents/vscode-node/planAgentProvider.ts`
 
-**Provider caveat**
+What is worth copying:
 
-- Prompt cache stability patterns from the reference system (`__DYNAMIC_BOUNDARY__`, sticky latches, session date memoization) are Anthropic-specific. These should be implemented behind a provider abstraction so they activate only when the current model supports prompt caching.
+- Agents declare role, tool set, and model policy separately from runtime loop code
+- Explore-style agents stay read-heavy and cheap by design
+- Tool access is part of the agent contract, not an afterthought
 
-**Why this beats the old roadmap**
+Why it fits `gocode`:
 
-- It reclaims context and cost headroom without adding new product scope.
-- It protects future subagent and memory work from avoidable prompt bloat.
-- Building on `ContinuationTracker` avoids reinventing budget-awareness.
+- `gocode` already has `explore` and `general-purpose`
+- The next step should be stricter specialization, not more agent types
 
-### 5. Measured UI and Milliseconds-Level Developer Experience
+Recommended direction:
 
-**Reference signal**
+- Keep the agent set small
+- Pin each subagent type to an explicit tool allowlist and model preference
+- Do not add teams, swarm behavior, or remote orchestration
 
-- `sourcecode-explanation/book/ch13-terminal-ui.md` (informs *what to measure*, not *how to build* — the reference uses a custom DOM + React reconciler with `Int32Array` packed cells and double-buffered frames, which is incompatible with Ink)
-- `sourcecode-explanation/book/ch17-performance.md` (startup checkpoints, API preconnect, module-level I/O parallelism, 26-bit bitmap pre-filter for fuzzy search)
-- `sourcecode/main.tsx`
+### 2. Propagate one stable invocation id across the whole child trajectory
 
-**Current baseline**
+Reference files:
 
-- `gocode/tui/src/components/ArtifactView.tsx` already renders full markdown artifacts.
-- `gocode/tui/src/components/Input.tsx`, `StreamOutput.tsx`, `PromptFooter.tsx`, and `useEvents.ts` already provide a strong Ink-based interaction model.
+- `src/extension/tools/node/searchSubagentTool.ts`
+- `src/extension/tools/node/executionSubagentTool.ts`
+- `src/extension/chatSessions/vscode-node/test/chatHistoryBuilder.spec.ts`
 
-**Current gap**
+What is worth copying:
 
-- no startup, query, or render profiler — currently no hard data on where time is spent
-- no API preconnect or other deliberate warmup path (ch17 shows ~100-200ms savings from HEAD-request warmup)
-- long-session transcript and search performance are still mostly heuristic
-- no dedicated subagent or memory status surfaces yet
+- One child invocation id links the parent tool call, child session, and child tool calls
+- Nested tool activity stays attributable in logs and UI
 
-**Best opportunity**
+Why it fits `gocode`:
 
-- instrument first, then optimize: boot-to-ready, prompt-submit-to-first-token, prompt-submit-to-first-tool-result, manual compaction duration
-- add API preconnect during init (warmup HEAD request pattern from ch17)
-- targeted Ink performance work based on measured bottlenecks — do not import custom renderer patterns from ch13 unless Ink proves to be the bottleneck
-- add UI surfaces for subagents and memory only after the engine contracts are stable
+- Current `agent` results are usable, but lineage should be first-class across background status, transcripts, and tool events
 
-**Why this beats the old roadmap**
+Recommended direction:
 
-- It aligns the UI with the user's stated priority: specific milliseconds-level developer experience.
-- It keeps performance work tied to data instead of parity imitation.
-- It avoids the trap of chasing the reference system's custom renderer when Ink may be sufficient.
+- Assign one invocation id at child launch
+- Propagate it through transcript events, tool events, and status polling
 
-## Unaddressed but Worth Noting
+### 3. Reuse the same loop abstraction for parent and child agents
 
-- **Skills system**: `gocode/internal/skills/` exists but is not covered by any opportunity above. Evaluate during Phase 2 (tools) whether skills need expansion or better integration with subagents.
-- **Cost tracking**: Subagents, memory side-queries, and background extraction all increase API costs. The existing cost tracker should be extended in the relevant phases.
+Reference files:
 
-## Already Strong and Not the Next Bottleneck
+- `src/extension/prompt/node/searchSubagentToolCallingLoop.ts`
+- `src/extension/prompt/node/executionSubagentToolCallingLoop.ts`
+- `src/extension/intents/node/toolCallingLoop.ts`
 
-Do not reopen these as the primary roadmap unless regressions appear:
+What is worth copying:
 
-- first-class artifacts and plan review flow
-- ordered concurrent tool batching
-- streaming tool execution with order-preserving yield
-- current three-stage compaction pipeline (tool truncate → summarize → partial)
-- Bun-based TUI workflow
-- artifact-aware transcript and panel rendering
-- continuation tracking with budget-aware stop conditions (`ContinuationTracker`)
+- Parent and child agents share one orchestration model
+- Limits, hooks, telemetry, and prompt-building behavior stay aligned
+- Child context remains isolated from parent budget accounting
+
+Why it fits `gocode`:
+
+- This reduces feature drift between the main agent loop and child-agent execution
+- It keeps compaction, budgeting, and recovery behavior consistent
+
+Recommended direction:
+
+- Make child execution explicitly reuse the `internal/agent` loop contracts
+- Keep child message history and token budgets isolated from the parent session
+
+### 4. Add subagent start/stop hooks, including block-stop reasons
+
+Reference files:
+
+- `src/extension/intents/node/toolCallingLoop.ts`
+- `src/platform/chat/common/chatHookService.ts`
+
+What is worth copying:
+
+- A start hook can inject additional context into the child run
+- A stop hook can block completion if exit criteria are not met
+- Block reasons are surfaced back into the next loop turn instead of disappearing
+
+Why it fits `gocode`:
+
+- This adds a policy surface without hardcoding workflow rules into the loop itself
+- It gives child agents a cleaner definition of done
+
+Recommended direction:
+
+- Add optional subagent start and stop hooks
+- Surface block reasons in transcript state and child status output
+- Keep hooks local and synchronous in the first pass
+
+### 5. Return structured child metadata, not only final text
+
+Reference files:
+
+- `src/extension/tools/node/searchSubagentTool.ts`
+- `src/extension/tools/node/executionSubagentTool.ts`
+
+What is worth copying:
+
+- Child tools emit readable invocation and completion messages
+- Tool metadata carries role, description, and invocation linkage
+- The final textual summary is only one layer of the result
+
+Why it fits `gocode`:
+
+- `agent_status` and the TUI can present more useful state than running/done
+- Background child work becomes debuggable without dumping full transcripts by default
+
+Recommended direction:
+
+- Extend child result payloads with phase, active tool, and last meaningful event
+- Keep the final report concise but preserve structured metadata for the UI
+
+## What not to copy
+
+- agent management UI and wizard flows
+- handoff buttons between agents
+- teams, swarm, remote agents, or remote execution
+- notebook-specific editing work
+- broad tool parity for its own sake
+
+## Recommended implementation order
+
+1. Patch-grade file edits
+   - add `apply_patch`
+   - unify edit failure taxonomy
+   - teach the model when to choose patch versus exact replace
+2. Read and approval hardening
+   - improve `file_read` continuation and binary handling
+   - add risk-tiered edit approval with consistent diff previews
+3. Subagent lineage
+   - add invocation ids across child session, tool calls, and status APIs
+   - surface structured child metadata to the TUI
+4. Shared child lifecycle
+   - align child execution with the main loop contracts
+   - add start/stop hooks and block-stop reasons
+
+## Likely `gocode` touch points
+
+- `gocode/internal/tools/file_edit.go`
+- `gocode/internal/tools/multi_replace_file_content.go`
+- `gocode/internal/tools/file_read.go`
+- `gocode/internal/tools/path_resolution.go`
+- `gocode/internal/tools/validation.go`
+- `gocode/internal/tools/agent.go`
+- `gocode/internal/agent/loop.go`
+- `gocode/internal/agent/query_stream.go`
+- `gocode/internal/ipc/`
+- `gocode/tui/src/`
+
+## Decision
+
+- Treat VS Code Copilot Chat as a source of patterns, not a parity target.
+- The best imports for `gocode` are safer file-edit semantics and tighter subagent lifecycle plumbing.
+- Do not start implementation from this document without picking one narrower slice first.
