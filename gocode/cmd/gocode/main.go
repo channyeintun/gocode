@@ -32,6 +32,7 @@ import (
 	"github.com/channyeintun/gocode/internal/permissions"
 	"github.com/channyeintun/gocode/internal/session"
 	skillspkg "github.com/channyeintun/gocode/internal/skills"
+	"github.com/channyeintun/gocode/internal/timing"
 	toolpkg "github.com/channyeintun/gocode/internal/tools"
 )
 
@@ -164,6 +165,7 @@ func resolveTUIEntry() (string, error) {
 }
 
 func runStdioEngine(ctx context.Context, cfg config.Config) error {
+	engineStartedAt := time.Now()
 	bridge := ipc.NewBridge(os.Stdin, os.Stdout)
 	registry := toolpkg.NewRegistry()
 	provider, model := config.ParseModel(cfg.Model)
@@ -193,6 +195,8 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
+	timingLogger := timing.NewSessionLogger(sessionStore.SessionDir(sessionID))
+	startupMetrics := timing.NewCheckpointRecorder(engineStartedAt)
 	fileHistory := toolpkg.NewFileHistory(toolpkg.DefaultFileHistoryDir(sessionStore.SessionDir(sessionID)))
 	toolpkg.SetGlobalFileHistory(fileHistory)
 	toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
@@ -213,11 +217,18 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	}); err != nil {
 		return err
 	}
+	startupMetrics.Mark("session_persisted")
 
 	// Emit ready event
 	if err := bridge.EmitReady(); err != nil {
 		return fmt.Errorf("emit ready: %w", err)
 	}
+	startupMetrics.Mark("ready_emitted")
+	_ = timingLogger.AppendSnapshot("session", "boot_to_ready", sessionID, 0, startupMetrics, map[string]any{
+		"cwd":   cwd,
+		"mode":  string(mode),
+		"model": activeModelID,
+	})
 	if err := emitSessionUpdated(bridge, sessionID, ""); err != nil {
 		return err
 	}
@@ -244,6 +255,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 		Type:      hooks.HookSessionStart,
 		SessionID: sessionID,
 	})
+	queryIndex := 0
 
 	// Main event loop: read client messages and dispatch
 	for {
@@ -266,9 +278,32 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			if strings.TrimSpace(payload.Text) == "" && len(payload.Images) == 0 {
 				continue
 			}
+			messageCountBefore := len(messages)
+			queryIndex++
+			turnID := queryIndex
+			turnMetrics := timing.NewCheckpointRecorder(time.Now())
+			turnStopReason := ""
+			flushTurnMetrics := func(outcome string) {
+				if turnMetrics == nil {
+					return
+				}
+				_ = timingLogger.AppendSnapshot("turn", "query_latency", sessionID, turnID, turnMetrics, map[string]any{
+					"image_count":           len(payload.Images),
+					"message_count_after":   len(messages),
+					"message_count_before":  messageCountBefore,
+					"mode":                  string(mode),
+					"model":                 activeModelID,
+					"outcome":               outcome,
+					"stop_reason":           turnStopReason,
+					"user_input_characters": len(payload.Text),
+				})
+				turnMetrics = nil
+			}
 
 			resolvedClient, nextModelID, err := ensureClientForSelection(activeModelID, cfg, client)
 			if err != nil {
+				turnMetrics.Mark("client_initialization_failed")
+				flushTurnMetrics("client_initialization_failed")
 				if emitErr := bridge.EmitError(fmt.Sprintf("initialize model %q: %v", activeModelID, err), true); emitErr != nil {
 					return emitErr
 				}
@@ -281,6 +316,8 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			}
 
 			if len(payload.Images) > 0 && !client.Capabilities().SupportsVision {
+				turnMetrics.Mark("vision_unsupported")
+				flushTurnMetrics("vision_unsupported")
 				if err := bridge.EmitError(fmt.Sprintf("model %q does not support image input", activeModelID), true); err != nil {
 					return err
 				}
@@ -346,11 +383,10 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						return trackModelStream(callCtx, bridge, tracker, client, req)
 					},
 					ExecuteToolBatch: func(callCtx context.Context, calls []api.ToolCall) ([]api.ToolResult, error) {
-						return executeToolCalls(callCtx, bridge, router, registry, permissionCtx, tracker, planner, artifactManager, hookRunner, sessionID, client.Capabilities().MaxOutputTokens, calls)
+						return executeToolCalls(callCtx, bridge, router, registry, permissionCtx, tracker, planner, artifactManager, hookRunner, sessionID, client.Capabilities().MaxOutputTokens, turnMetrics, calls)
 					},
 					CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) ([]api.Message, error) {
-						pipeline := newCompactionPipeline(bridge, tracker, client)
-						result, err := pipeline.Compact(callCtx, current, string(reason))
+						result, err := compactWithMetrics(callCtx, bridge, tracker, client, timingLogger, sessionID, turnID, string(reason), current)
 						if err != nil {
 							return nil, err
 						}
@@ -396,6 +432,16 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						}
 						break
 					}
+					switch event.Type {
+					case ipc.EventTokenDelta:
+						turnMetrics.Mark("first_token")
+					case ipc.EventTurnComplete:
+						turnMetrics.Mark("turn_complete")
+						var payload ipc.TurnCompletePayload
+						if err := json.Unmarshal(event.Payload, &payload); err == nil {
+							turnStopReason = payload.StopReason
+						}
+					}
 					if err := bridge.EmitEvent(event); err != nil {
 						return err
 					}
@@ -405,13 +451,18 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				router.SetCancelFunc(nil)
 
 				if queryCancelled {
+					turnMetrics.Mark("cancelled")
+					turnStopReason = "cancelled"
 					if err := bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "cancelled"}); err != nil {
 						return err
 					}
+					flushTurnMetrics("cancelled")
 					break
 				}
 
 				if queryFailed {
+					turnMetrics.Mark("failed")
+					flushTurnMetrics("failed")
 					break
 				}
 
@@ -430,7 +481,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 							return err
 						}
 						if update.Artifact.Kind == artifactspkg.KindImplementationPlan && strings.TrimSpace(update.Content) != "" {
-							if err := emitArtifactFocused(bridge, update.Artifact); err != nil {
+							if err := emitArtifactFocusedForTurn(bridge, update.Artifact, turnMetrics); err != nil {
 								return err
 							}
 						}
@@ -451,6 +502,9 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						persistCurrentMessages()
 					}
 					if reviewResult.Decision == "revised" {
+						turnMetrics.Mark("plan_review_revised")
+						turnStopReason = "plan_revised"
+						flushTurnMetrics("plan_review_revised")
 						messages = append(messages, api.Message{
 							Role:    api.RoleUser,
 							Content: planRevisionFeedbackMessage(reviewResult.Feedback),
@@ -460,6 +514,12 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 							return err
 						}
 						continue
+					}
+					if reviewResult.Decision == "cancelled" {
+						turnMetrics.Mark("plan_review_cancelled")
+						turnStopReason = "plan_cancelled"
+						flushTurnMetrics("plan_review_cancelled")
+						break
 					}
 				}
 
@@ -494,6 +554,12 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 					}()
 				}
 
+				turnMetrics.Mark("completed")
+				if turnStopReason == "" {
+					turnStopReason = "completed"
+				}
+				flushTurnMetrics("completed")
+
 				break
 			}
 		case ipc.MsgSlashCommand:
@@ -507,6 +573,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				ctx,
 				bridge,
 				sessionStore,
+				timingLogger,
 				cfg,
 				artifactManager,
 				tracker,
@@ -687,6 +754,7 @@ func executeToolCalls(
 	hookRunner *hooks.Runner,
 	sessionID string,
 	maxOutputTokens int,
+	turnMetrics *timing.CheckpointRecorder,
 	calls []api.ToolCall,
 ) ([]api.ToolResult, error) {
 	results := make([]api.ToolResult, len(calls))
@@ -844,12 +912,15 @@ func executeToolCalls(
 					return nil, err
 				}
 				if artifactUpdate.Focused {
-					if err := emitArtifactFocused(bridge, artifactUpdate.Artifact); err != nil {
+					if err := emitArtifactFocusedForTurn(bridge, artifactUpdate.Artifact, turnMetrics); err != nil {
 						return nil, err
 					}
 				}
 			}
 
+			if turnMetrics != nil {
+				turnMetrics.Mark("first_tool_result")
+			}
 			if err := bridge.Emit(ipc.EventToolResult, ipc.ToolResultPayload{
 				ToolID:     call.ID,
 				Output:     output,
@@ -1239,6 +1310,7 @@ func handleSlashCommand(
 	ctx context.Context,
 	bridge *ipc.Bridge,
 	store *session.Store,
+	timingLogger *timing.Logger,
 	cfg config.Config,
 	artifactManager *artifactspkg.Manager,
 	tracker *costpkg.Tracker,
@@ -1372,8 +1444,7 @@ func handleSlashCommand(
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 
-		pipeline := newCompactionPipeline(bridge, tracker, *client)
-		result, err := pipeline.Compact(ctx, messages, string(agent.CompactManual))
+		result, err := compactWithMetrics(ctx, bridge, tracker, *client, timingLogger, sessionID, 0, string(agent.CompactManual), messages)
 		if err != nil {
 			if emitErr := bridge.EmitError(fmt.Sprintf("compact conversation: %v", err), true); emitErr != nil {
 				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
@@ -1773,6 +1844,13 @@ func emitArtifactFocused(bridge *ipc.Bridge, artifact artifactspkg.Artifact) err
 	})
 }
 
+func emitArtifactFocusedForTurn(bridge *ipc.Bridge, artifact artifactspkg.Artifact, turnMetrics *timing.CheckpointRecorder) error {
+	if turnMetrics != nil {
+		turnMetrics.Mark("first_artifact_focus")
+	}
+	return emitArtifactFocused(bridge, artifact)
+}
+
 func emitArtifactStatusChanged(bridge *ipc.Bridge, artifact artifactspkg.Artifact) error {
 	return bridge.Emit(ipc.EventArtifactStatusChanged, ipc.ArtifactStatusChangedPayload{
 		ID:     artifact.ID,
@@ -1955,6 +2033,41 @@ func newCompactionPipeline(bridge *ipc.Bridge, tracker *costpkg.Tracker, client 
 		client:  client,
 		router:  localmodel.NewRouter(client),
 	})
+}
+
+func compactWithMetrics(
+	ctx context.Context,
+	bridge *ipc.Bridge,
+	tracker *costpkg.Tracker,
+	client api.LLMClient,
+	timingLogger *timing.Logger,
+	sessionID string,
+	turnID int,
+	reason string,
+	messages []api.Message,
+) (compact.CompactResult, error) {
+	metrics := timing.NewCheckpointRecorder(time.Now())
+	pipeline := newCompactionPipeline(bridge, tracker, client)
+	result, err := pipeline.Compact(ctx, messages, reason)
+	if err != nil {
+		metrics.Mark("compact_failed")
+		_ = timingLogger.AppendSnapshot("compaction", "compaction_duration", sessionID, turnID, metrics, map[string]any{
+			"reason":        reason,
+			"status":        "failed",
+			"tokens_before": compact.EstimateConversationTokens(messages),
+		})
+		return compact.CompactResult{}, err
+	}
+
+	metrics.Mark("compact_completed")
+	_ = timingLogger.AppendSnapshot("compaction", "compaction_duration", sessionID, turnID, metrics, map[string]any{
+		"reason":        reason,
+		"status":        "completed",
+		"strategy":      string(result.Strategy),
+		"tokens_after":  result.TokensAfter,
+		"tokens_before": result.TokensBefore,
+	})
+	return result, nil
 }
 
 func (s compactionSummarizer) Summarize(ctx context.Context, messages []api.Message) (string, error) {

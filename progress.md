@@ -14,7 +14,7 @@
 | Workstream                          | Status    | Scope | Notes                                                                                      |
 | ----------------------------------- | --------- | ----- | ------------------------------------------------------------------------------------------ |
 | Planning refresh                    | completed | S     | 2026-04-12 explanation-driven roadmap replaced stale parity-era planning docs.             |
-| Phase 1 runtime measurement         | planned   | S     | Checkpoint system, timing instrumentation, artifact ownership contract.                    |
+| Phase 1 runtime measurement         | in progress | S   | Checkpoint logging landed; artifact ownership contract and threshold validation remain.    |
 | Phase 2 tool depth                  | planned   | L     | Register existing tools, add Think tool, semantic validation, input-aware concurrency.     |
 | Phase 3 subagents                   | planned   | XL    | Parent-child delegation, fresh context model, permission isolation, sidechain transcripts. |
 | Phase 4 memory                      | planned   | L     | Four-type taxonomy, MEMORY.md index, async recall, staleness warnings.                    |
@@ -30,6 +30,9 @@
 - Completed: audited the current `gocode` seams in the agent loop, tool system, compaction pipeline, session storage, and TUI so the new roadmap reflects the actual codebase rather than the previous backlog.
 - Updated: replaced the stale artifact-only and parity-era planning docs with a new roadmap centered on subagents, tools and concurrency, memory, compaction and cache behavior, UI, and milliseconds-level developer experience.
 - Note: this was a planning-only task. No implementation work was performed.
+- Completed: added a session-local checkpoint logger that writes structured JSONL timing records to `timings.ndjson` under each session directory.
+- Completed: instrumented engine startup, per-query first-token latency, first tool-result latency, first artifact-focus latency, and compaction duration without changing runtime behavior.
+- Note: Phase 1 is now in progress rather than planned; the remaining work is artifact ownership documentation and threshold validation against real timing data.
 
 ## Next Planning Baseline
 
