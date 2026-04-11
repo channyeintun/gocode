@@ -24,6 +24,7 @@
 
 ### 2026-04-11
 
+- Completed: Fixed `file_edit` line-ending preservation for existing files. Exact string replacements now normalize CRLF/LF content only for matching, then restore the original newline style and trailing-newline state before writing so CRLF files are not silently rewritten as LF during targeted edits.
 - Completed: Fixed the remaining tool-result micro-compaction name mismatch. The compactor now canonicalizes both legacy PascalCase names and current snake_case/compat alias names before checking compactable tool types, so older results from `bash`, `file_read`, `grep`, `glob`, `web_search`, `web_fetch`, `file_edit`, and `file_write` can be truncated as intended during compaction instead of silently bypassing the allowlist.
 - Completed: Reworked implementation-plan artifacts to be explicit instead of heuristic-driven. The planner no longer auto-seeds plan/task artifacts from prompt text, the runtime now exposes a dedicated `save_implementation_plan` tool alongside the existing task-list and walkthrough tools, and the system prompt now tells plan mode to save a plan artifact only when the model intentionally produces a real implementation plan.
 - Completed: Phase 6 permission amendment/feedback text parity slice. The permission prompt now accepts an optional note, the IPC payload carries it, denials include it in the rejection reason, and approved tool executions append it to the emitted tool result so the model can see the user's note on the next turn.

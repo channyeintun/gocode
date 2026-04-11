@@ -110,7 +110,10 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 		return ToolOutput{Output: fmt.Sprintf("File created successfully: %s", filePath)}, nil
 	}
 
-	content := strings.ReplaceAll(string(contentBytes), "\r\n", "\n")
+	originalContent := string(contentBytes)
+	content, originalLineEnding, hadTrailingNewline := normalizeFileForLineEditing(originalContent)
+	normalizedOldString := strings.ReplaceAll(oldString, "\r\n", "\n")
+	normalizedNewString := strings.ReplaceAll(newString, "\r\n", "\n")
 	if oldString == "" {
 		if strings.TrimSpace(content) != "" {
 			return ToolOutput{}, fmt.Errorf("cannot create new file: file already exists and is not empty")
@@ -128,7 +131,7 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 		}, nil
 	}
 
-	matchCount := strings.Count(content, oldString)
+	matchCount := strings.Count(content, normalizedOldString)
 	if matchCount == 0 {
 		return ToolOutput{}, fmt.Errorf("string to replace not found in file")
 	}
@@ -136,11 +139,17 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 		return ToolOutput{}, fmt.Errorf("found %d matches of old_string; set replace_all=true or provide more context", matchCount)
 	}
 
-	updatedContent := strings.Replace(content, oldString, newString, 1)
+	updatedContent := strings.Replace(content, normalizedOldString, normalizedNewString, 1)
 	replacements := 1
 	if replaceAll {
-		updatedContent = strings.ReplaceAll(content, oldString, newString)
+		updatedContent = strings.ReplaceAll(content, normalizedOldString, normalizedNewString)
 		replacements = matchCount
+	}
+	if hadTrailingNewline && !strings.HasSuffix(updatedContent, "\n") {
+		updatedContent += "\n"
+	}
+	if originalLineEnding == "\r\n" {
+		updatedContent = strings.ReplaceAll(updatedContent, "\n", "\r\n")
 	}
 
 	select {
@@ -153,7 +162,7 @@ func (t *FileEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 		return ToolOutput{}, fmt.Errorf("write file %q: %w", filePath, err)
 	}
 
-	preview, insertions, deletions := buildFileDiffPreview(content, updatedContent)
+	preview, insertions, deletions := buildFileDiffPreview(content, strings.ReplaceAll(updatedContent, "\r\n", "\n"))
 
 	return ToolOutput{
 		Output:     fmt.Sprintf("Edited file successfully: %s (%d replacement%s)", filePath, replacements, pluralSuffix(replacements)),
