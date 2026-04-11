@@ -140,6 +140,12 @@ type LLMClient interface {
 	Capabilities() ModelCapabilities
 }
 
+// WarmupCapable is implemented by clients that can preconnect their transport
+// during startup without affecting normal request behavior.
+type WarmupCapable interface {
+	Warmup(ctx context.Context) error
+}
+
 // StreamEventAdapter converts ModelEvents to IPC StreamEvents.
 func StreamEventAdapter(event ModelEvent) *ipc.StreamEvent {
 	switch event.Type {

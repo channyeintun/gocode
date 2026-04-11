@@ -56,6 +56,15 @@ func (c *OllamaClient) Capabilities() ModelCapabilities {
 	return c.capabilities
 }
 
+// Warmup preconnects the Ollama transport and checks that the local API accepts requests.
+func (c *OllamaClient) Warmup(ctx context.Context) error {
+	headers := map[string]string{"accept": "application/json"}
+	if c.apiKey != "" {
+		headers["authorization"] = "Bearer " + c.apiKey
+	}
+	return issueWarmupRequest(ctx, c.httpClient, http.MethodGet, c.baseURL+"/api/tags", headers)
+}
+
 // Stream opens a streaming Ollama chat request and yields model events.
 func (c *OllamaClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
 	payload, err := c.buildRequest(req)

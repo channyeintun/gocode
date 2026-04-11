@@ -65,6 +65,16 @@ func (c *AnthropicClient) Capabilities() ModelCapabilities {
 	return c.capabilities
 }
 
+// Warmup preconnects the Anthropic transport so the first real request avoids
+// paying the initial connection handshake cost on the critical path.
+func (c *AnthropicClient) Warmup(ctx context.Context) error {
+	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/v1/messages", map[string]string{
+		"accept":            "application/json",
+		"anthropic-version": anthropicVersion,
+		"x-api-key":         c.apiKey,
+	})
+}
+
 // Stream opens a streaming Messages API request and yields model events.
 func (c *AnthropicClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
 	payload, err := c.buildRequest(req)

@@ -200,6 +200,9 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	fileHistory := toolpkg.NewFileHistory(toolpkg.DefaultFileHistoryDir(sessionStore.SessionDir(sessionID)))
 	toolpkg.SetGlobalFileHistory(fileHistory)
 	toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
+	if client != nil {
+		startClientWarmup(ctx, timingLogger, startupMetrics, sessionID, activeModelID, client)
+	}
 	startedAt := time.Now()
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -663,6 +666,47 @@ func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, err
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", provider)
 	}
+}
+
+const clientWarmupTimeout = 3 * time.Second
+
+func startClientWarmup(ctx context.Context, logger *timing.Logger, startupMetrics *timing.CheckpointRecorder, sessionID, activeModelID string, client api.LLMClient) {
+	warmable, ok := client.(api.WarmupCapable)
+	if !ok || warmable == nil {
+		return
+	}
+	startupMetrics.Mark("api_preconnect_started")
+
+	go func() {
+		startedAt := time.Now()
+		warmupCtx, cancel := context.WithTimeout(ctx, clientWarmupTimeout)
+		defer cancel()
+
+		err := warmable.Warmup(warmupCtx)
+		endedAt := time.Now()
+		if err == nil {
+			startupMetrics.MarkAt("api_preconnect_completed", endedAt)
+		}
+
+		metadata := map[string]any{
+			"model":   activeModelID,
+			"outcome": "ok",
+		}
+		if err != nil {
+			metadata["outcome"] = "error"
+			metadata["error"] = err.Error()
+		}
+
+		_ = logger.Append(timing.Record{
+			Kind:       "session",
+			Metric:     "api_preconnect",
+			SessionID:  sessionID,
+			StartedAt:  startedAt.UTC(),
+			EndedAt:    endedAt.UTC(),
+			DurationMS: endedAt.Sub(startedAt).Milliseconds(),
+			Metadata:   metadata,
+		})
+	}()
 }
 
 func ensureClientForSelection(modelSelection string, cfg config.Config, current api.LLMClient) (api.LLMClient, string, error) {

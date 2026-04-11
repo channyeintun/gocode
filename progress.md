@@ -19,7 +19,7 @@
 | Phase 3 subagents                   | in progress | XL    | Fresh-context explore, permission-isolated general-purpose child agents, and full background child launch/status/stop lifecycle are landed.                                                                                                                          |
 | Phase 4 memory                      | in progress | L     | Project and user MEMORY.md index loading, staleness cues, write-path scaffolding, model-backed side-query recall, structured MEMORY.md entry parsing, explicit MEMORY.md validation, on-demand note loading, and separate memory-recall cost surfacing are wired in. |
 | Phase 5 compaction and cache        | in progress | M     | Session-local prompt memoization, adaptive output slot reservation, shared context-pressure policy, provider-gated cache-stable prompt ordering, and continuation-aware compaction/output-escalation coordination are landed.                                         |
-| Phase 6 UI and developer experience | planned     | M     | Data-driven: API preconnect, measured Ink optimizations, subagent/memory UI surfaces.                                                                                                                                                                                |
+| Phase 6 UI and developer experience | in progress | M     | Data-driven work has started with async API preconnect warmup plus session timing records for warmup outcomes; measured Ink optimizations and subagent/memory UI surfaces remain.                                                                                   |
 
 ## Task Log
 
@@ -83,6 +83,7 @@
 - Completed: added a shared context-pressure policy so proactive compaction and memory recall now consult the same pressure decision instead of independently guessing when to compact or skip extra memory context.
 - Completed: added a `SupportsCaching` provider capability seam and switched prompt assembly to use a cache-stable section order only for cache-capable providers, keeping volatile sections later in the prompt when the provider can benefit from stable prefixes.
 - Completed: tightened the shared context-pressure policy so continuation-heavy turns compact earlier and delay output-budget escalation when the prompt is already under pressure, keeping continuations, compaction, and memory recall aligned instead of competing for headroom.
+- Completed: started Phase 6 by adding async API preconnect warmup during engine startup, reusing each provider client's existing HTTP transport and writing session timing records for warmup outcomes without blocking ready-to-query startup.
 - Completed: switched MEMORY.md index injection from whole-file dumping to bounded heuristic recall so only a small set of lines relevant to the current request enters the prompt by default.
 - Completed: added a bounded model-backed memory side-query that selects relevant MEMORY.md index entries before each turn and falls back to the existing heuristic recall path when the side-query fails or returns nothing.
 - Completed: parsed canonical MEMORY.md entries into structured filename/title/type records, switched recall candidates to use that structured metadata, and loaded referenced memory note excerpts on demand for the entries that were actually recalled.

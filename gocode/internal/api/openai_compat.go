@@ -70,6 +70,14 @@ func (c *OpenAICompatClient) Capabilities() ModelCapabilities {
 	return c.capabilities
 }
 
+// Warmup preconnects the OpenAI-compatible transport before the first streamed turn.
+func (c *OpenAICompatClient) Warmup(ctx context.Context) error {
+	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/models", map[string]string{
+		"accept":        "application/json",
+		"authorization": "Bearer " + c.apiKey,
+	})
+}
+
 // Stream opens a streaming chat completions request and yields model events.
 func (c *OpenAICompatClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
 	payload, err := c.buildRequest(req)

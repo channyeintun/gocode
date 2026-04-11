@@ -59,6 +59,14 @@ func (c *GeminiClient) Capabilities() ModelCapabilities {
 	return c.capabilities
 }
 
+// Warmup preconnects the Gemini transport before the first streaming request.
+func (c *GeminiClient) Warmup(ctx context.Context) error {
+	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/models", map[string]string{
+		"accept":         "application/json",
+		"x-goog-api-key": c.apiKey,
+	})
+}
+
 // Stream opens a Gemini streamGenerateContent request and yields model events.
 func (c *GeminiClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
 	payload, err := c.buildRequest(req)
