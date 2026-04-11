@@ -302,6 +302,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
         memoryRecallUsd={uiState.cost.memoryRecallUsd}
         memoryRecallInputTokens={uiState.cost.memoryRecallInputTokens}
         memoryRecallOutputTokens={uiState.cost.memoryRecallOutputTokens}
+        childAgentUsd={uiState.cost.childAgentUsd}
+        childAgentInputTokens={uiState.cost.childAgentInputTokens}
+        childAgentOutputTokens={uiState.cost.childAgentOutputTokens}
         rateLimits={uiState.rateLimits}
       />
 

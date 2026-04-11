@@ -79,6 +79,8 @@
 - Completed: capped retained background-agent entries in TUI state so long sessions do not accumulate an unbounded child-agent list after repeated background runs.
 - Completed: added child-agent cost and token totals to the shared `agent` result model and `background_agent_updated` payload so delegated runs now preserve their own spend data instead of only mutating the parent aggregate tracker.
 - Completed: surfaced background child-agent cost summaries in the TUI panel so completed and failed delegated runs show their token and dollar footprint alongside transcript and result-file hints.
+- Completed: added dedicated child-agent subtotal counters to the session cost tracker and `cost_update` payload so delegated work can be surfaced separately from the aggregate session total.
+- Completed: surfaced child-agent spend in the main TUI status bar alongside the existing memory-recall breakdown, making background delegation costs visible even when the Background Agents panel is collapsed out of view.
 - Completed: extended the prompt memory loader to discover user-global and project-scoped `MEMORY.md` indexes from the config tree alongside existing `AGENTS.md` instruction files.
 - Completed: applied tighter `MEMORY.md` index caps (200 lines / 25KB) and separated durable memory indexes from hard instructions in the formatted system-prompt section.
 - Completed: added age-aware staleness warnings for older loaded memory indexes so memories older than yesterday are presented as context to verify rather than unconditional facts.

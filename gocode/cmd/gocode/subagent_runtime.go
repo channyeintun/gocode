@@ -225,7 +225,7 @@ func executeSubagent(
 	}
 
 	childSnapshot := childTracker.Snapshot()
-	parentTracker.MergeSnapshot(childSnapshot)
+	parentTracker.RecordChildAgentSnapshot(childSnapshot)
 	_ = emitCostUpdate(bridge, parentTracker)
 
 	return toolpkg.AgentRunResult{

@@ -22,6 +22,9 @@ interface StatusBarProps {
   memoryRecallUsd: number;
   memoryRecallInputTokens: number;
   memoryRecallOutputTokens: number;
+  childAgentUsd: number;
+  childAgentInputTokens: number;
+  childAgentOutputTokens: number;
   rateLimits: UIRateLimits;
 }
 
@@ -40,6 +43,9 @@ const StatusBar: FC<StatusBarProps> = ({
   memoryRecallUsd,
   memoryRecallInputTokens,
   memoryRecallOutputTokens,
+  childAgentUsd,
+  childAgentInputTokens,
+  childAgentOutputTokens,
   rateLimits,
 }) => {
   const modeColor = mode === "plan" ? "blue" : "green";
@@ -69,6 +75,10 @@ const StatusBar: FC<StatusBarProps> = ({
     memoryRecallUsd > 0 ||
     memoryRecallInputTokens > 0 ||
     memoryRecallOutputTokens > 0;
+  const hasChildAgentCost =
+    childAgentUsd > 0 ||
+    childAgentInputTokens > 0 ||
+    childAgentOutputTokens > 0;
 
   return (
     <Box paddingX={1} paddingY={0}>
@@ -123,6 +133,13 @@ const StatusBar: FC<StatusBarProps> = ({
             <Text color="gray"> · </Text>
             <Text color="cyan">mem</Text>
             <Text color="gray"> {`${formatTokenCount(memoryRecallInputTokens)}↑ ${formatTokenCount(memoryRecallOutputTokens)}↓ $${memoryRecallUsd.toFixed(4)}`}</Text>
+          </>
+        ) : null}
+        {hasChildAgentCost ? (
+          <>
+            <Text color="gray"> · </Text>
+            <Text color="cyan">agent</Text>
+            <Text color="gray"> {`${formatTokenCount(childAgentInputTokens)}↑ ${formatTokenCount(childAgentOutputTokens)}↓ $${childAgentUsd.toFixed(4)}`}</Text>
           </>
         ) : null}
         <Text color="gray"> · </Text>

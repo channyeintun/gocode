@@ -151,6 +151,9 @@ export interface CostUpdatePayload {
   memory_recall_usd?: number;
   memory_recall_input_tokens?: number;
   memory_recall_output_tokens?: number;
+  child_agent_usd?: number;
+  child_agent_input_tokens?: number;
+  child_agent_output_tokens?: number;
 }
 
 export interface MemoryRecallEntryPayload {

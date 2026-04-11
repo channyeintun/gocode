@@ -170,6 +170,9 @@ export interface EngineUIState {
     memoryRecallUsd: number;
     memoryRecallInputTokens: number;
     memoryRecallOutputTokens: number;
+    childAgentUsd: number;
+    childAgentInputTokens: number;
+    childAgentOutputTokens: number;
   };
   memoryRecall: {
     source: string | null;
@@ -222,6 +225,9 @@ const initialState = (model: string, mode: string): EngineUIState => ({
     memoryRecallUsd: 0,
     memoryRecallInputTokens: 0,
     memoryRecallOutputTokens: 0,
+    childAgentUsd: 0,
+    childAgentInputTokens: 0,
+    childAgentOutputTokens: 0,
   },
   memoryRecall: {
     source: null,
@@ -610,6 +616,16 @@ export function useEvents(initialModel: string, initialMode: string) {
             memoryRecallOutputTokens:
               typeof p.memory_recall_output_tokens === "number"
                 ? p.memory_recall_output_tokens
+                : 0,
+            childAgentUsd:
+              typeof p.child_agent_usd === "number" ? p.child_agent_usd : 0,
+            childAgentInputTokens:
+              typeof p.child_agent_input_tokens === "number"
+                ? p.child_agent_input_tokens
+                : 0,
+            childAgentOutputTokens:
+              typeof p.child_agent_output_tokens === "number"
+                ? p.child_agent_output_tokens
                 : 0,
           },
         }));

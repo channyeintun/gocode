@@ -1342,6 +1342,9 @@ func emitCostUpdate(bridge *ipc.Bridge, tracker *costpkg.Tracker) error {
 		MemoryRecallUSD:          snapshot.MemoryRecallCostUSD,
 		MemoryRecallInputTokens:  snapshot.MemoryRecallInputTokens,
 		MemoryRecallOutputTokens: snapshot.MemoryRecallOutputTokens,
+		ChildAgentUSD:            snapshot.ChildAgentCostUSD,
+		ChildAgentInputTokens:    snapshot.ChildAgentInputTokens,
+		ChildAgentOutputTokens:   snapshot.ChildAgentOutputTokens,
 	})
 }
 

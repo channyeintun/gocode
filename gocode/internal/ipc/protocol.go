@@ -157,6 +157,9 @@ type CostUpdatePayload struct {
 	MemoryRecallUSD          float64 `json:"memory_recall_usd,omitempty"`
 	MemoryRecallInputTokens  int     `json:"memory_recall_input_tokens,omitempty"`
 	MemoryRecallOutputTokens int     `json:"memory_recall_output_tokens,omitempty"`
+	ChildAgentUSD            float64 `json:"child_agent_usd,omitempty"`
+	ChildAgentInputTokens    int     `json:"child_agent_input_tokens,omitempty"`
+	ChildAgentOutputTokens   int     `json:"child_agent_output_tokens,omitempty"`
 }
 
 type MemoryRecallEntryPayload struct {

@@ -27,6 +27,9 @@ type Tracker struct {
 	MemoryRecallCostUSD      float64
 	MemoryRecallInputTokens  int
 	MemoryRecallOutputTokens int
+	ChildAgentCostUSD        float64
+	ChildAgentInputTokens    int
+	ChildAgentOutputTokens   int
 	TotalAPIDuration         time.Duration
 	TotalToolDuration        time.Duration
 	TotalLinesAdded          int
@@ -101,6 +104,9 @@ type TrackerSnapshot struct {
 	MemoryRecallCostUSD      float64
 	MemoryRecallInputTokens  int
 	MemoryRecallOutputTokens int
+	ChildAgentCostUSD        float64
+	ChildAgentInputTokens    int
+	ChildAgentOutputTokens   int
 	TotalAPIDuration         time.Duration
 	TotalToolDuration        time.Duration
 	TotalLinesAdded          int
@@ -121,6 +127,9 @@ func (t *Tracker) Snapshot() TrackerSnapshot {
 		MemoryRecallCostUSD:      t.MemoryRecallCostUSD,
 		MemoryRecallInputTokens:  t.MemoryRecallInputTokens,
 		MemoryRecallOutputTokens: t.MemoryRecallOutputTokens,
+		ChildAgentCostUSD:        t.ChildAgentCostUSD,
+		ChildAgentInputTokens:    t.ChildAgentInputTokens,
+		ChildAgentOutputTokens:   t.ChildAgentOutputTokens,
 		TotalAPIDuration:         t.TotalAPIDuration,
 		TotalToolDuration:        t.TotalToolDuration,
 		TotalLinesAdded:          t.TotalLinesAdded,
@@ -138,6 +147,20 @@ func (t *Tracker) Snapshot() TrackerSnapshot {
 func (t *Tracker) MergeSnapshot(snapshot TrackerSnapshot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.mergeSnapshotLocked(snapshot)
+}
+
+// RecordChildAgentSnapshot merges child-agent usage into aggregate totals and preserves a separate child-agent subtotal.
+func (t *Tracker) RecordChildAgentSnapshot(snapshot TrackerSnapshot) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.mergeSnapshotLocked(snapshot)
+	t.ChildAgentCostUSD += snapshot.TotalCostUSD
+	t.ChildAgentInputTokens += snapshot.TotalInputTokens
+	t.ChildAgentOutputTokens += snapshot.TotalOutputTokens
+}
+
+func (t *Tracker) mergeSnapshotLocked(snapshot TrackerSnapshot) {
 
 	t.TotalCostUSD += snapshot.TotalCostUSD
 	t.TotalInputTokens += snapshot.TotalInputTokens
@@ -147,6 +170,9 @@ func (t *Tracker) MergeSnapshot(snapshot TrackerSnapshot) {
 	t.MemoryRecallCostUSD += snapshot.MemoryRecallCostUSD
 	t.MemoryRecallInputTokens += snapshot.MemoryRecallInputTokens
 	t.MemoryRecallOutputTokens += snapshot.MemoryRecallOutputTokens
+	t.ChildAgentCostUSD += snapshot.ChildAgentCostUSD
+	t.ChildAgentInputTokens += snapshot.ChildAgentInputTokens
+	t.ChildAgentOutputTokens += snapshot.ChildAgentOutputTokens
 	t.TotalAPIDuration += snapshot.TotalAPIDuration
 	t.TotalToolDuration += snapshot.TotalToolDuration
 	t.TotalLinesAdded += snapshot.TotalLinesAdded
