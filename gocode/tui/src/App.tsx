@@ -5,6 +5,7 @@ import { useEvents } from "./hooks/useEvents.js";
 import ArtifactView from "./components/ArtifactView.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
 import BackgroundAgentsPanel from "./components/BackgroundAgentsPanel.js";
+import BackgroundCommandsPanel from "./components/BackgroundCommandsPanel.js";
 import Input from "./components/Input.js";
 import PlanPanel from "./components/PlanPanel.js";
 import PromptFooter from "./components/PromptFooter.js";
@@ -273,14 +274,18 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       if (transcriptSearchMatchCount <= 0) {
         return 0;
       }
-      return (current - 1 + transcriptSearchMatchCount) % transcriptSearchMatchCount;
+      return (
+        (current - 1 + transcriptSearchMatchCount) % transcriptSearchMatchCount
+      );
     });
   }, [transcriptSearchMatchCount]);
 
   const handleTranscriptSearchStatsChange = useCallback(
     (totalMatches: number, selectedIndex: number) => {
       setTranscriptSearchMatchCount(totalMatches);
-      setTranscriptSearchSelectedIndex(totalMatches > 0 ? Math.max(0, selectedIndex) : 0);
+      setTranscriptSearchSelectedIndex(
+        totalMatches > 0 ? Math.max(0, selectedIndex) : 0,
+      );
     },
     [],
   );
@@ -354,6 +359,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
         {uiState.backgroundAgents.length > 0 && (
           <BackgroundAgentsPanel agents={uiState.backgroundAgents} />
+        )}
+
+        {uiState.backgroundCommands.length > 0 && (
+          <BackgroundCommandsPanel commands={uiState.backgroundCommands} />
         )}
 
         {uiState.error && (

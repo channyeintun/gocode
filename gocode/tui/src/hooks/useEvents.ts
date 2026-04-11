@@ -121,6 +121,22 @@ export interface UIBackgroundAgent {
   updatedAt: string;
 }
 
+export interface UIBackgroundCommand {
+  commandId: string;
+  command: string;
+  cwd?: string;
+  status: string;
+  running: boolean;
+  startedAt?: string;
+  updatedAt?: string;
+  preview?: string;
+  previewKind?: "latest" | "unread";
+  unreadBytes: number;
+  exitCode?: number;
+  error?: string;
+  retainedAt: string;
+}
+
 export interface UIMemoryRecallEntry {
   title: string;
   noteType?: string;
@@ -184,6 +200,7 @@ export interface EngineUIState {
   pendingArtifactReview: UIArtifactReview | null;
   toolCalls: UIToolCall[];
   backgroundAgents: UIBackgroundAgent[];
+  backgroundCommands: UIBackgroundCommand[];
   compact: {
     active: boolean;
     strategy: string;
@@ -239,6 +256,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   pendingArtifactReview: null,
   toolCalls: [],
   backgroundAgents: [],
+  backgroundCommands: [],
   compact: null,
   turnTiming: {
     firstTokenMs: null,
@@ -393,7 +411,10 @@ export function useEvents(initialModel: string, initialMode: string) {
             activeTurnStatus: "idle",
             isStreaming: false,
             compact: null,
-            statusLine: buildTurnCompleteStatusLine(p.stop_reason, s.turnTiming),
+            statusLine: buildTurnCompleteStatusLine(
+              p.stop_reason,
+              s.turnTiming,
+            ),
           };
         });
         break;
@@ -484,6 +505,10 @@ export function useEvents(initialModel: string, initialMode: string) {
             deletions: p.deletions,
           }),
           backgroundAgents: applyBackgroundAgentResult(s.backgroundAgents, p),
+          backgroundCommands: applyBackgroundCommandResult(
+            s.backgroundCommands,
+            p,
+          ),
         }));
         break;
       }
@@ -632,27 +657,31 @@ export function useEvents(initialModel: string, initialMode: string) {
         break;
       }
       case "memory_recalled": {
-    const p = event.payload as MemoryRecalledPayload;
-    setUIState((s) => ({
-      ...s,
-      memoryRecall: {
-        source: typeof p.source === "string" && p.source.trim() ? p.source : null,
-        entries: Array.isArray(p.entries)
-          ? p.entries
-              .filter((entry) => typeof entry?.title === "string" && entry.title.trim())
-              .map((entry) => ({
-                title: entry.title.trim(),
-                noteType: stringOrUndefined(entry.note_type),
-                source: stringOrUndefined(entry.source),
-                indexPath: stringOrUndefined(entry.index_path),
-                notePath: stringOrUndefined(entry.note_path),
-                line: stringOrUndefined(entry.line),
-              }))
-          : [],
-      },
-    }));
-    break;
-    }
+        const p = event.payload as MemoryRecalledPayload;
+        setUIState((s) => ({
+          ...s,
+          memoryRecall: {
+            source:
+              typeof p.source === "string" && p.source.trim() ? p.source : null,
+            entries: Array.isArray(p.entries)
+              ? p.entries
+                  .filter(
+                    (entry) =>
+                      typeof entry?.title === "string" && entry.title.trim(),
+                  )
+                  .map((entry) => ({
+                    title: entry.title.trim(),
+                    noteType: stringOrUndefined(entry.note_type),
+                    source: stringOrUndefined(entry.source),
+                    indexPath: stringOrUndefined(entry.index_path),
+                    notePath: stringOrUndefined(entry.note_path),
+                    line: stringOrUndefined(entry.line),
+                  }))
+              : [],
+          },
+        }));
+        break;
+      }
       case "rate_limit_update": {
         const p = event.payload as RateLimitUpdatePayload;
         setUIState((s) => ({
@@ -1079,6 +1108,40 @@ interface AgentToolResult {
   output_tokens?: number;
 }
 
+interface BackgroundCommandToolInput {
+  command?: string;
+  background?: boolean;
+  cwd?: string;
+  CommandId?: string;
+  command_id?: string;
+}
+
+interface BackgroundCommandToolResult {
+  CommandId?: string;
+  Command?: string;
+  Cwd?: string;
+  Running?: boolean;
+  StartedAt?: string;
+  UpdatedAt?: string;
+  Output?: string;
+  Error?: string;
+  ExitCode?: number;
+}
+
+interface BackgroundCommandSummaryResult {
+  CommandId?: string;
+  Command?: string;
+  Cwd?: string;
+  Running?: boolean;
+  Error?: string;
+  ExitCode?: number;
+  StartedAt?: string;
+  UpdatedAt?: string;
+  HasUnreadOutput?: boolean;
+  UnreadBytes?: number;
+  UnreadPreview?: string;
+}
+
 interface BackgroundAgentNotice {
   text: string;
   tone: UISystemMessage["tone"];
@@ -1093,6 +1156,21 @@ function applyBackgroundAgentResult(
     return agents;
   }
   return upsertBackgroundAgent(agents, update);
+}
+
+function applyBackgroundCommandResult(
+  commands: UIBackgroundCommand[],
+  payload: ToolResultPayload,
+): UIBackgroundCommand[] {
+  const updates = parseBackgroundCommandResult(payload);
+  if (updates.length === 0) {
+    return commands;
+  }
+
+  return updates.reduce(
+    (nextCommands, update) => upsertBackgroundCommand(nextCommands, update),
+    commands,
+  );
 }
 
 function parseBackgroundAgentResult(
@@ -1143,6 +1221,158 @@ function parseBackgroundAgentResult(
   };
 }
 
+function parseBackgroundCommandResult(
+  payload: ToolResultPayload,
+): UIBackgroundCommand[] {
+  switch (payload.name) {
+    case "bash":
+      return parseBackgroundBashLaunch(payload);
+    case "command_status":
+    case "send_command_input":
+    case "stop_command":
+      return parseSingleBackgroundCommandResult(payload);
+    case "list_commands":
+      return parseBackgroundCommandListResult(payload);
+    default:
+      return [];
+  }
+}
+
+function parseBackgroundBashLaunch(
+  payload: ToolResultPayload,
+): UIBackgroundCommand[] {
+  const input = parseJSONObject<BackgroundCommandToolInput>(payload.input);
+  if (!input?.background) {
+    return [];
+  }
+
+  const result = parseJSONObject<BackgroundCommandToolResult>(payload.output);
+  if (!result) {
+    return [];
+  }
+
+  const command = buildBackgroundCommandEntry(result, {
+    fallbackCommand: input.command,
+    fallbackCwd: input.cwd,
+  });
+  return command ? [command] : [];
+}
+
+function parseSingleBackgroundCommandResult(
+  payload: ToolResultPayload,
+): UIBackgroundCommand[] {
+  const input = parseJSONObject<BackgroundCommandToolInput>(payload.input);
+  const result = parseJSONObject<BackgroundCommandToolResult>(payload.output);
+  if (!result) {
+    return [];
+  }
+
+  const command = buildBackgroundCommandEntry(result, {
+    fallbackCommandId: input?.CommandId || input?.command_id,
+    fallbackCommand: input?.command,
+    fallbackCwd: input?.cwd,
+  });
+  return command ? [command] : [];
+}
+
+function parseBackgroundCommandListResult(
+  payload: ToolResultPayload,
+): UIBackgroundCommand[] {
+  const result = parseJSONArray<BackgroundCommandSummaryResult>(payload.output);
+  if (!result) {
+    return [];
+  }
+
+  return result
+    .map((entry) => buildBackgroundCommandEntry(entry))
+    .filter((entry): entry is UIBackgroundCommand => entry !== null);
+}
+
+function buildBackgroundCommandEntry(
+  result: BackgroundCommandToolResult | BackgroundCommandSummaryResult,
+  fallback?: {
+    fallbackCommandId?: string;
+    fallbackCommand?: string;
+    fallbackCwd?: string;
+  },
+): UIBackgroundCommand | null {
+  const commandId = stringOrEmpty(
+    result.CommandId || fallback?.fallbackCommandId,
+  );
+  if (commandId.length === 0) {
+    return null;
+  }
+
+  const command = stringOrEmpty(result.Command || fallback?.fallbackCommand);
+  const cwd = stringOrUndefined(result.Cwd || fallback?.fallbackCwd);
+  const running = result.Running === true;
+  const exitCode = numberOrUndefined(result.ExitCode);
+  const error = stringOrUndefined(result.Error);
+  const preview = buildBackgroundCommandPreview(result);
+  const unreadBytes = numberOrZero(
+    "UnreadBytes" in result ? result.UnreadBytes : undefined,
+  );
+  const previewKind = determineBackgroundCommandPreviewKind(result, preview);
+
+  return {
+    commandId,
+    command,
+    cwd,
+    status: summarizeBackgroundCommandStatus(running, exitCode, error),
+    running,
+    startedAt: stringOrUndefined(result.StartedAt),
+    updatedAt: stringOrUndefined(result.UpdatedAt),
+    preview: preview || undefined,
+    previewKind,
+    unreadBytes,
+    exitCode,
+    error,
+    retainedAt: new Date().toISOString(),
+  };
+}
+
+function buildBackgroundCommandPreview(
+  result: BackgroundCommandToolResult | BackgroundCommandSummaryResult,
+): string {
+  if ("UnreadPreview" in result) {
+    return stringOrEmpty(result.UnreadPreview);
+  }
+  if ("Output" in result) {
+    return stringOrEmpty(result.Output);
+  }
+  return "";
+}
+
+function determineBackgroundCommandPreviewKind(
+  result: BackgroundCommandToolResult | BackgroundCommandSummaryResult,
+  preview: string,
+): UIBackgroundCommand["previewKind"] | undefined {
+  if (preview.length === 0) {
+    return undefined;
+  }
+  if ("HasUnreadOutput" in result && result.HasUnreadOutput) {
+    return "unread";
+  }
+  return "latest";
+}
+
+function summarizeBackgroundCommandStatus(
+  running: boolean,
+  exitCode?: number,
+  error?: string,
+): string {
+  if (running) {
+    return "running";
+  }
+  if (typeof exitCode === "number" && exitCode !== 0) {
+    return "failed";
+  }
+  if (error && error.length > 0) {
+    return "failed";
+  }
+  return "completed";
+}
+
 function upsertBackgroundAgent(
   agents: UIBackgroundAgent[],
   nextAgent: UIBackgroundAgent,
@@ -1164,7 +1394,9 @@ function upsertBackgroundAgent(
             ? nextAgent.totalCostUsd
             : existing.totalCostUsd,
         inputTokens:
-          nextAgent.inputTokens > 0 ? nextAgent.inputTokens : existing.inputTokens,
+          nextAgent.inputTokens > 0
+            ? nextAgent.inputTokens
+            : existing.inputTokens,
         outputTokens:
           nextAgent.outputTokens > 0
             ? nextAgent.outputTokens
@@ -1175,6 +1407,43 @@ function upsertBackgroundAgent(
   const remaining = agents.filter((agent) => agent.agentId !== merged.agentId);
   return [merged, ...remaining]
     .sort(compareBackgroundAgents)
+    .slice(0, MAX_RETAINED_BACKGROUND_AGENTS);
+}
+
+function upsertBackgroundCommand(
+  commands: UIBackgroundCommand[],
+  nextCommand: UIBackgroundCommand,
+): UIBackgroundCommand[] {
+  const existing = commands.find(
+    (command) => command.commandId === nextCommand.commandId,
+  );
+  const merged: UIBackgroundCommand = existing
+    ? {
+        ...existing,
+        ...nextCommand,
+        command: nextCommand.command || existing.command,
+        cwd: nextCommand.cwd ?? existing.cwd,
+        startedAt: nextCommand.startedAt ?? existing.startedAt,
+        updatedAt: nextCommand.updatedAt ?? existing.updatedAt,
+        preview: nextCommand.preview ?? existing.preview,
+        previewKind: nextCommand.previewKind ?? existing.previewKind,
+        unreadBytes:
+          nextCommand.previewKind === "unread" || nextCommand.unreadBytes > 0
+            ? nextCommand.unreadBytes
+            : existing.unreadBytes,
+        exitCode:
+          nextCommand.exitCode !== undefined
+            ? nextCommand.exitCode
+            : existing.exitCode,
+        error: nextCommand.error ?? existing.error,
+      }
+    : nextCommand;
+
+  const remaining = commands.filter(
+    (command) => command.commandId !== merged.commandId,
+  );
+  return [merged, ...remaining]
+    .sort(compareBackgroundCommands)
     .slice(0, MAX_RETAINED_BACKGROUND_AGENTS);
 }
 
@@ -1203,6 +1472,34 @@ function backgroundAgentStatusRank(status: string): number {
       return 3;
     default:
       return 4;
+  }
+}
+
+function compareBackgroundCommands(
+  left: UIBackgroundCommand,
+  right: UIBackgroundCommand,
+): number {
+  const leftRank = backgroundCommandStatusRank(left.status);
+  const rightRank = backgroundCommandStatusRank(right.status);
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+
+  const leftUpdated = left.updatedAt ?? left.retainedAt;
+  const rightUpdated = right.updatedAt ?? right.retainedAt;
+  return rightUpdated.localeCompare(leftUpdated);
+}
+
+function backgroundCommandStatusRank(status: string): number {
+  switch (status) {
+    case "running":
+      return 0;
+    case "failed":
+      return 1;
+    case "completed":
+      return 2;
+    default:
+      return 3;
   }
 }
 
@@ -1324,6 +1621,18 @@ function parseJSONObject<T>(value: string | undefined): T | null {
   }
 }
 
+function parseJSONArray<T>(value: string | undefined): T[] | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? (parsed as T[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 function stringOrEmpty(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -1334,7 +1643,13 @@ function stringOrUndefined(value: unknown): string | undefined {
 }
 
 function numberOrZero(value: unknown): number {
-	return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function upsertArtifact(
