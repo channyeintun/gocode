@@ -41,6 +41,8 @@
 - Note: there were still no local `timings.ndjson` samples to analyze, but Phase 1 now has the required runtime instrumentation and guardrails to validate thresholds from subsequent real sessions.
 - Completed: added `file_history` and `file_history_rewind` tool wrappers on top of the existing session file-history runtime so snapshots, diff stats, and rewind are now available through the agent tool surface.
 - Completed: registered the new file-history tools in the runtime registry and updated the model prompt plus README tool list so the exposed tool names stay in sync.
+- Completed: promoted the existing diff-preview helper into a read-only `file_diff_preview` tool so the agent can preview compact file diffs against another file or inline proposed content without performing a write.
+- Completed: registered `file_diff_preview` in the runtime registry, system prompt, README, and subagent allowlists so the previously unexposed immediate-win tool is now available across the runtime surface.
 - Completed: added a schema-backed semantic validation layer that rejects malformed tool calls before tool-start events, plan-mode checks, permission prompts, and execution.
 - Completed: added tool-specific semantic validators for `bash` and `git` on top of the shared validator hook so obviously low-value or incomplete calls fail early with clear errors.
 - Completed: replaced the old regex-based `bash` concurrency check with top-level command-chain parsing so `&&`, `||`, `;`, pipelines, and env-prefixed read-only commands are classified more accurately.

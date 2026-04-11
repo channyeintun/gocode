@@ -172,6 +172,7 @@ The agent has access to:
 | **file_write**                 | Create or overwrite files                                     |
 | **file_edit**                  | Find-and-replace edits in files                               |
 | **multi_replace_file_content** | Apply multiple validated block replacements in one file write |
+| **file_diff_preview**           | Preview a compact diff against another file or inline content |
 | **glob**                       | Find files by pattern                                         |
 | **grep**                       | Search file contents (ripgrep)                                |
 | **go_definition**              | Resolve Go symbol definitions with parser-backed locations    |
