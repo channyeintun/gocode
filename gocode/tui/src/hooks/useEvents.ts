@@ -277,7 +277,7 @@ export function useEvents(initialModel: string, initialMode: string) {
         setUIState((s) => ({
           ...s,
           ready: p.protocol_version > 0,
-          statusLine: `Engine ready (protocol v${p.protocol_version})`,
+          statusLine: null,
         }));
         break;
       }
