@@ -19,8 +19,11 @@ func escalatedOutputBudget(providerMax int) int {
 	return minInt(providerMax, escalatedOutputTokens)
 }
 
-func nextOutputBudget(current, providerMax int) int {
+func nextOutputBudget(current, providerMax int, pressure ContextPressureDecision) int {
 	if providerMax <= 0 {
+		return current
+	}
+	if pressure.DelayOutputEscalation {
 		return current
 	}
 	next := escalatedOutputBudget(providerMax)
