@@ -10,7 +10,7 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 curl -fsSL https://raw.githubusercontent.com/channyeintun/gocode/main/gocode/install.sh | sh
 ```
 
-This requires published GitHub release assets for your platform. The installer prefers direct platform binaries and falls back to the older `.tar.gz` archive format for older releases.
+Use this installer only when prebuilt `gocode` and `gocode-engine` binaries are available for your platform. If you are working from a local clone or do not publish release binaries, use the manual install flow below instead.
 
 The installer chooses a writable install directory automatically:
 
