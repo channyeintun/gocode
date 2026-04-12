@@ -11,13 +11,13 @@
 
 ## Current Status
 
-| Workstream                               | Status      | Scope | Notes                                                                                                                                                   |
-| ---------------------------------------- | ----------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Enhancement planning baseline            | completed   | S     | 2026-04-12 created a new execution baseline from `enhancement.md` focused on file-tool robustness and subagent orchestration.                           |
-| Phase 1 file semantics and safety        | completed   | L     | Create, overwrite, and edit intent are now split; read hardening, high-risk file approvals, stable diff previews, and file-history coverage are landed. |
-| Phase 2 edit engine hardening            | completed   | L     | The edit ladder, structured failures, patch-grade edits, and post-edit diagnostics are now surfaced across file-mutating tools.                        |
-| Phase 3 subagent lineage and metadata    | completed   | M     | Stable invocation ids, structured child metadata, and stronger TUI attribution are now landed for child runs.                                            |
-| Phase 4 child lifecycle and policy hooks | completed   | M     | Child runs now share the loop stop-control contract, honor start/stop hooks, and surface block-stop reasons in status and transcript state.            |
+| Workstream                               | Status    | Scope | Notes                                                                                                                                                   |
+| ---------------------------------------- | --------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enhancement planning baseline            | completed | S     | 2026-04-12 created a new execution baseline from `enhancement.md` focused on file-tool robustness and subagent orchestration.                           |
+| Phase 1 file semantics and safety        | completed | L     | Create, overwrite, and edit intent are now split; read hardening, high-risk file approvals, stable diff previews, and file-history coverage are landed. |
+| Phase 2 edit engine hardening            | completed | L     | The edit ladder, structured failures, patch-grade edits, and post-edit diagnostics are now surfaced across file-mutating tools.                         |
+| Phase 3 subagent lineage and metadata    | completed | M     | Stable invocation ids, structured child metadata, and stronger TUI attribution are now landed for child runs.                                           |
+| Phase 4 child lifecycle and policy hooks | completed | M     | Child runs now share the loop stop-control contract, honor start/stop hooks, and surface block-stop reasons in status and transcript state.             |
 
 ## Completion Dashboard
 
@@ -135,6 +135,7 @@ This section is the canonical phase tracker. A phase is only complete when its `
 - Completed: finished Phase 3 by assigning stable child invocation ids, returning structured child metadata from the `agent` flow, and updating the TUI background-agent state to consume that metadata directly.
 - Note: a dedicated per-child active-tool field remains optional future polish, but the current lifecycle, transcript, result-path, tool-list, and cost metadata already satisfies the Phase 3 debugging and attribution bar.
 - Completed: finished Phase 4 by aligning child stop control with the shared query loop, adding child start/stop hooks, and surfacing stop-block reasons in both child status metadata and the persisted transcript.
+- Completed: created `release-note-v2.md` covering the shipped enhancement roadmap across file-tool hardening and subagent lifecycle improvements.
 
 ## Next Planning Baseline
 
