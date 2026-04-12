@@ -194,4 +194,28 @@ Verification completed:
 - ran `go build ./...`
 - ran `make release-local` in `gocode/tui`
 
+## Task 8 — Add a dedicated OpenAI-style tool schema guard
+
+**Files**: `gocode/internal/api/openai_schema.go`, `gocode/internal/api/openai_responses.go`, `gocode/internal/api/openai_compat.go`, `progress.md`
+
+Tightened the OpenAI/Copilot tool-schema path so provider compatibility no
+longer depends on reusing the Gemini schema sanitizer by accident.
+
+Implementation completed:
+
+- added a dedicated `sanitizeOpenAIToolSchema` helper for OpenAI-style function
+  calling endpoints
+- the helper now enforces a top-level object schema and strips unsupported root
+  combinators such as `oneOf`, `anyOf`, `allOf`, `not`, and `enum`
+- kept the alias-flattening behavior by sanitizing first and then applying the
+  OpenAI-specific root-schema contract
+- updated both OpenAI Responses and OpenAI-compatible chat tool builders to use
+  the dedicated sanitizer instead of the Gemini-named helper directly
+
+Verification completed:
+
+- ran `gofmt -w` on the changed Go files
+- ran `go build ./...`
+- ran `make release-local` in `gocode/tui`
+
 ---
