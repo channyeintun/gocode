@@ -66,11 +66,12 @@ type ImageAttachment struct {
 
 // Message is a conversation message.
 type Message struct {
-	Role       Role              `json:"role"`
-	Content    string            `json:"content,omitempty"`
-	Images     []ImageAttachment `json:"images,omitempty"`
-	ToolCalls  []ToolCall        `json:"tool_calls,omitempty"`
-	ToolResult *ToolResult       `json:"tool_result,omitempty"`
+	Role             Role              `json:"role"`
+	Content          string            `json:"content,omitempty"`
+	ReasoningContent string            `json:"reasoning_content,omitempty"`
+	Images           []ImageAttachment `json:"images,omitempty"`
+	ToolCalls        []ToolCall        `json:"tool_calls,omitempty"`
+	ToolResult       *ToolResult       `json:"tool_result,omitempty"`
 }
 
 // ToolCall represents a model-requested tool invocation.

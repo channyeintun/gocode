@@ -21,11 +21,11 @@ None.
 ### Phase 1: Bug Fixes
 
 - [x] **B1** Fix `decodeToolInput` error handling in `internal/api/openai_responses.go` (`handleOutputItemDone` and `buildOpenAIResponsesInput`).
-- [ ] **C1** Add `ReasoningContent` field to `Message` struct in `internal/api/client.go`.
-- [ ] **C2** Update streaming handlers (`openai_compat.go`, `openai_responses.go`, `anthropic.go`) to write thinking to `ReasoningContent` instead of `Content`.
-- [ ] **C3** Update `buildOpenAICompatMessages`, `buildOpenAIResponsesInput`, `buildAnthropicMessages` to exclude `ReasoningContent`.
-- [ ] **C4** Update TUI to hide/collapse past thinking blocks.
-- [ ] Build, format, verify.
+- [x] **C1** Add `ReasoningContent` field to `Message` struct in `internal/api/client.go`.
+- [x] **C2** Persist streamed thinking separately from assistant response text in the agent loop so it lands in `ReasoningContent` instead of `Content`.
+- [x] **C3** Keep provider request builders reasoning-free by continuing to serialize only assistant `Content`, which now excludes stored thinking.
+- [x] **C4** Update TUI to hide past thinking blocks while keeping live thinking visible during streaming.
+- [x] Build, format, verify.
 
 ### Phase 2: Subagent Type Model (A1–A3)
 
@@ -50,6 +50,7 @@ None.
 - Stream B root cause: `decodeToolInput()` in `internal/api/anthropic.go` does strict `json.Unmarshal`. Called from `openai_responses.go:730` (handleOutputItemDone) and `:452` (buildOpenAIResponsesInput). Fails when accumulated tool arguments are incomplete JSON.
 - Stream B implementation: `openai_responses.go` now prefers a valid final `output_item.done` arguments payload when the streamed buffer is incomplete, and degrades malformed historical tool-call inputs to `{}` instead of aborting request construction.
 - Stream C root cause: thinking/reasoning content is accumulated into `Message.Content`. All message-building functions (`buildOpenAICompatMessages`, `buildOpenAIResponsesInput`, `buildAnthropicMessages`) re-send full Content including thinking on subsequent turns. No separate storage field exists.
+- Stream C implementation: `internal/agent/loop.go` now persists thinking into `Message.ReasoningContent`, leaving `Message.Content` as user-visible assistant text only. The TUI keeps live thinking during streaming but drops it from completed assistant messages.
 
 ## Decisions
 

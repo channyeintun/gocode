@@ -383,11 +383,12 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as TurnCompletePayload;
         setUIState((s) => {
           if (p.stop_reason === "cancelled") {
-            const hasPartialResponse = assistantBlocksHaveContent(
+            const partialBlocks = completedAssistantBlocks(
               s.liveAssistantBlocks,
             );
+            const hasPartialResponse = partialBlocks.length > 0;
             const partialMessage = hasPartialResponse
-              ? createAssistantMessage(s.liveAssistantBlocks, {
+              ? createAssistantMessage(partialBlocks, {
                   model: s.model,
                 })
               : null;
@@ -415,12 +416,12 @@ export function useEvents(initialModel: string, initialMode: string) {
             };
           }
 
-          const blocks: UIAssistantBlock[] = assistantBlocksHaveText(
+          const completedBlocks = completedAssistantBlocks(
             s.liveAssistantBlocks,
-          )
-            ? s.liveAssistantBlocks
-            : assistantBlocksHaveContent(s.liveAssistantBlocks)
-              ? s.liveAssistantBlocks
+          );
+          const blocks: UIAssistantBlock[] =
+            completedBlocks.length > 0
+              ? completedBlocks
               : [{ kind: "text", text: "(Model returned an empty response)" }];
           const message = createAssistantMessage(blocks, { model: s.model });
           return {
@@ -2209,6 +2210,14 @@ function assistantBlocksHaveContent(blocks: UIAssistantBlock[]): boolean {
 
 function assistantBlocksHaveText(blocks: UIAssistantBlock[]): boolean {
   return blocks.some(
+    (block) => block.kind === "text" && block.text.trim().length > 0,
+  );
+}
+
+function completedAssistantBlocks(
+  blocks: UIAssistantBlock[],
+): UIAssistantBlock[] {
+  return blocks.filter(
     (block) => block.kind === "text" && block.text.trim().length > 0,
   );
 }

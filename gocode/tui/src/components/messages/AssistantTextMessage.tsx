@@ -6,7 +6,6 @@ import type {
 } from "../../hooks/useEvents.js";
 import MessageRow from "../MessageRow.js";
 import MarkdownText from "../MarkdownText.js";
-import AssistantThinkingMessage from "./AssistantThinkingMessage.js";
 
 interface AssistantTextMessageProps {
   message: UIAssistantMessage;
@@ -17,6 +16,14 @@ const AssistantTextMessage: FC<AssistantTextMessageProps> = ({
   message,
   continuation = false,
 }) => {
+  const visibleBlocks = message.blocks.filter(
+    (block) => block.kind === "text" && block.text.trim().length > 0,
+  );
+
+  if (visibleBlocks.length === 0) {
+    return null;
+  }
+
   return (
     <MessageRow
       markerColor="green"
@@ -30,8 +37,8 @@ const AssistantTextMessage: FC<AssistantTextMessageProps> = ({
       meta={renderMetadata(message)}
     >
       <Box flexDirection="column">
-        {message.blocks.map((block, index) =>
-          renderAssistantBlock(block, index, message.blocks.length),
+        {visibleBlocks.map((block, index) =>
+          renderAssistantBlock(block, index, visibleBlocks.length),
         )}
       </Box>
     </MessageRow>
@@ -47,11 +54,7 @@ function renderAssistantBlock(
 ) {
   return (
     <Box key={`${block.kind}-${index}`} marginTop={index === 0 ? 0 : 1}>
-      {block.kind === "thinking" ? (
-        <AssistantThinkingMessage text={block.text} />
-      ) : (
-        <MarkdownText text={block.text} streaming={index === blockCount - 1} />
-      )}
+      <MarkdownText text={block.text} streaming={index === blockCount - 1} />
     </Box>
   );
 }

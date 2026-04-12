@@ -14,10 +14,11 @@ import (
 )
 
 type modelTurn struct {
-	assistantText string
-	toolCalls     []api.ToolCall
-	stopReason    string
-	outputTokens  int
+	assistantText      string
+	assistantReasoning string
+	toolCalls          []api.ToolCall
+	stopReason         string
+	outputTokens       int
 }
 
 func runIteration(
@@ -81,9 +82,10 @@ func runIteration(
 	}
 
 	assistantMessage := api.Message{
-		Role:      api.RoleAssistant,
-		Content:   strings.TrimSpace(turn.assistantText),
-		ToolCalls: turn.toolCalls,
+		Role:             api.RoleAssistant,
+		Content:          strings.TrimSpace(turn.assistantText),
+		ReasoningContent: strings.TrimSpace(turn.assistantReasoning),
+		ToolCalls:        turn.toolCalls,
 	}
 	if assistantMessage.Content != "" || len(assistantMessage.ToolCalls) > 0 {
 		state.Messages = append(state.Messages, assistantMessage)
@@ -388,6 +390,7 @@ func streamModelTurn(
 				return modelTurn{}, context.Canceled
 			}
 		case api.ModelEventThinking:
+			turn.assistantReasoning += event.Text
 			if !yield(newEvent(ipc.EventThinkingDelta, ipc.TokenDeltaPayload{Text: event.Text}), nil) {
 				return modelTurn{}, context.Canceled
 			}
