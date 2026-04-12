@@ -115,3 +115,9 @@ Tracking fixes per plan.md.
 - Confirmed a high-severity bug: `makeSubagentRunner(...)` captures the startup `client` and `activeModelID` once, so child agents do not follow later lazy model initialization or `/model` switches.
 - Confirmed a hook-model mismatch versus VS Code Copilot Chat: child agents reuse generic `session_start` / `stop` hooks instead of dedicated subagent hook types, so parent hooks can unintentionally affect child-agent startup and completion.
 - No code fixes applied in this task; findings recorded for follow-up implementation.
+
+### Task 16 — Fix Subagent Runtime State and Hook Isolation ✅
+- **Files:** `gocode/cmd/gocode/model_state.go`, `gocode/cmd/gocode/engine.go`, `gocode/cmd/gocode/subagent_runtime.go`, `gocode/internal/hooks/types.go`
+- Added a shared active-model state so the `agent` tool reads the current model client and model id at invocation time instead of using startup snapshots.
+- Main engine now refreshes that state after lazy client initialization and after slash-command model/session changes, so child agents follow `/model`, restore, and delayed startup recovery.
+- Split child lifecycle hooks into dedicated `subagent_start`, `subagent_stop`, and `subagent_stop_failure` hook types so top-level session hooks no longer leak into child-agent runs.

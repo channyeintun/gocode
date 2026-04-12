@@ -75,11 +75,11 @@ func makeSubagentRunner(
 	sessionStore *session.Store,
 	artifactManager *artifactspkg.Manager,
 	hookRunner *hooks.Runner,
-	client api.LLMClient,
-	activeModelID string,
+	modelState *activeModelState,
 	cwd string,
 ) toolpkg.AgentRunner {
 	return func(ctx context.Context, req toolpkg.AgentRunRequest) (toolpkg.AgentRunResult, error) {
+		client, activeModelID := modelState.Get()
 		if client == nil {
 			return toolpkg.AgentRunResult{}, fmt.Errorf("agent tool is unavailable: model client is not initialized")
 		}
@@ -319,10 +319,12 @@ func runChildStartHooks(
 		return nil
 	}
 	responses, _ := hookRunner.Run(ctx, hooks.Payload{
-		Type:      hooks.HookSessionStart,
+		Type:      hooks.HookSubagentStart,
 		SessionID: childSessionID,
 		Extra: map[string]any{
 			"child_agent":       true,
+			"agent_id":          invocationID,
+			"agent_type":        subagentType,
 			"invocation_id":     invocationID,
 			"description":       req.Description,
 			"prompt":            req.Prompt,
@@ -376,11 +378,13 @@ func evaluateChildStopHooks(
 		return agent.StopDecision{}, nil
 	}
 	responses, err := hookRunner.Run(ctx, hooks.Payload{
-		Type:      hooks.HookStop,
+		Type:      hooks.HookSubagentStop,
 		SessionID: childSessionID,
 		Output:    stopReq.AssistantMessage.Content,
 		Extra: map[string]any{
 			"child_agent":       true,
+			"agent_id":          invocationID,
+			"agent_type":        subagentType,
 			"invocation_id":     invocationID,
 			"description":       req.Description,
 			"subagent_type":     subagentType,
@@ -434,12 +438,14 @@ func runChildStopFailureHooks(
 		return
 	}
 	_, _ = hookRunner.Run(ctx, hooks.Payload{
-		Type:      hooks.HookStopFailure,
+		Type:      hooks.HookSubagentStopFailure,
 		SessionID: childSessionID,
 		Output:    latestAssistantContent(messages),
 		Error:     err.Error(),
 		Extra: map[string]any{
 			"child_agent":       true,
+			"agent_id":          invocationID,
+			"agent_type":        subagentType,
 			"invocation_id":     invocationID,
 			"description":       req.Description,
 			"subagent_type":     subagentType,

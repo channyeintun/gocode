@@ -43,6 +43,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	} else {
 		activeModelID = modelRef(provider, client.ModelID())
 	}
+	modelState := newActiveModelState(client, activeModelID)
 	messages := make([]api.Message, 0, 32)
 	mode := parseExecutionMode(cfg.DefaultMode)
 	permissionCtx := newPermissionContext(cfg.PermissionMode)
@@ -69,7 +70,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, hookRunner, client, activeModelID, cwd)))
+	registry.Register(toolpkg.NewAgentTool(makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, hookRunner, modelState, cwd)))
 	registry.Register(toolpkg.NewAgentStatusTool(lookupBackgroundAgentStatus))
 	registry.Register(toolpkg.NewAgentStopTool(func(ctx context.Context, req toolpkg.AgentStopRequest) (toolpkg.AgentRunResult, error) {
 		return stopBackgroundAgent(ctx, bridge, req)
@@ -190,6 +191,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			}
 			client = resolvedClient
 			activeModelID = nextModelID
+			modelState.Set(client, activeModelID)
 			if err := emitToolUseCapabilityNotice(bridge, activeModelID, client, &toolUseNoticeModelID); err != nil {
 				return err
 			}
@@ -503,6 +505,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			if err != nil {
 				return err
 			}
+			modelState.Set(client, activeModelID)
 			if handled {
 				toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
 				continue
