@@ -318,7 +318,7 @@ const Input: FC<InputProps> = ({
       <Box
         flexDirection="column"
         borderStyle="round"
-        borderColor="cyan"
+        borderColor="gray"
         borderLeft={false}
         borderRight={false}
         paddingX={2}
