@@ -2,206 +2,189 @@
 
 ## Objective
 
-Add slash-command preview to the TUI and restyle the prompt chrome to match the screenshot:
+Three work streams for `gocode`:
 
-- prompt border should show only the top and bottom edges
-- prompt area should feel more padded and block-like
-- slash commands should preview while the user is still typing the leading `/command` token
-- preview rows should show command names plus descriptions
-- do not add tests
+1. **Subagent specialization** — Add Search and Execution subagent types alongside the existing Explore and General-Purpose modes, with dedicated tool allowlists, system prompts, result formatting, and TUI labels.
+2. **Bug fix: OpenAI Responses tool input JSON decode error** — Fix `decode tool input JSON: unexpected end of JSON input` when the OpenAI Responses API returns incomplete or malformed tool call arguments.
+3. **Bug fix: Previous thinking messages shown in conversation** — Stop previous turns' thinking/reasoning content from being re-sent to the API and displayed in the conversation history.
 
-## Current State
+---
 
-- `tui/src/components/Input.tsx` renders a fully rounded border on all four sides and has no slash preview UI.
-- `tui/src/App.tsx` only recognizes slash commands at submit time via `text.startsWith("/")`; there is no pre-submit slash state.
-- `tui/src/hooks/usePromptHistory.ts` already exposes the value and cursor offset needed for preview logic, but it has no notion of suggestion state or token replacement.
-- The real built-in slash commands currently live in `cmd/gocode/slash_commands.go` and are mirrored in `README.md`; the TUI protocol does not currently expose that catalog.
-- The existing `plan.md` and `progress.md` were stale and unrelated to this task, so they must be replaced rather than followed as-is.
+## Stream A: Subagent Specialization
 
-## Original Source Reference
+### Current State
 
-- `sourcecode/components/PromptInput/PromptInput.tsx`
-	- This is the most relevant visual reference for the requested input chrome.
-	- It uses `borderStyle="round"` with `borderLeft={false}` and `borderRight={false}`, which produces the top-and-bottom-only border treatment requested in the screenshot.
-	- It keeps the prompt row separate from the suggestion rendering path.
-- `sourcecode/components/PromptInput/PromptInputFooter.tsx`
-	- This is the clearest reference for where suggestions should render relative to the prompt.
-	- In non-fullscreen mode it renders suggestions outside the input body with `paddingX={2}`.
-	- In fullscreen mode it portals suggestions only to escape clipping, not because the suggestion list fundamentally belongs inside the input box.
-- `sourcecode/components/PromptInput/PromptInputFooterSuggestions.tsx`
-	- This provides the useful suggestion row contract: a small `SuggestionItem` model, selected-row highlighting, width stabilization, and a capped visible list.
-- `sourcecode/utils/suggestions/commandSuggestions.ts`
-	- This is the most relevant behavioral reference for slash-command preview.
-	- It only shows command suggestions while the user is still editing the command token.
-	- It stops suggesting once arguments begin.
-	- It formats accepted commands as `/<command> ` and immediately executes only no-argument commands on Enter.
-- `sourcecode/context/promptOverlayContext.tsx` and `sourcecode/components/FullscreenLayout.tsx`
-	- These explain the upstream fullscreen portal mechanism.
-	- They are reference material, not a required first-step dependency for gocode.
+- `agent`, `agent_status`, and `agent_stop` tools already exist.
+- Two subagent types exist: `explore` (read-only) and `general-purpose` (broader tools).
+- Background child-agent lifecycle is already rendered in the TUI.
+- Missing: dedicated `search` and `execution` types, specialized prompts, structured return formats, parent-agent steering.
 
-## Source Code Explanation
+### A1. Subagent type model and runtime routing
 
-The upstream implementation splits this feature into three separate concerns:
+Files: `internal/tools/agent.go`, `cmd/gocode/subagent_runtime.go`, `internal/ipc/protocol.go`, `tui/src/protocol/types.ts`
 
-1. prompt chrome
-2. suggestion state generation and ranking
-3. suggestion presentation and layout
+- Add `search` and `execution` to the `subagent_type` enum.
+- Update validation, schema, and runtime dispatch.
+- Route each type to its own tool allowlist and system prompt.
+- Keep `explore` as the default for backward compatibility.
 
-That split matters because gocode currently collapses most prompt behavior into `Input.tsx`. A direct port of the full upstream prompt stack would be larger than necessary for this task. The useful part to copy is the contract:
+### A2. Specialized tool allowlists
 
-- the input row uses horizontal borders only
-- suggestions are derived from the in-progress slash token, not from submit-time parsing
-- suggestion rendering is handled by a separate component with stable row layout
-- fullscreen portal logic is only needed if inline rendering hits clipping or layout problems
+Files: `cmd/gocode/subagent_runtime.go`
 
-## Recommended Design
+- **Explore** — keep current read-only tool set.
+- **Search** — `think`, `list_dir`, `file_read`, `glob`, `grep`, `go_definition`, `go_references`, `symbol_search`, `project_overview`, `dependency_overview`, `git`. Exclude `web_search`/`web_fetch` to stay workspace-focused.
+- **Execution** — `bash`, `list_commands`, `command_status`, `send_command_input`, `stop_command`, `forget_command`, and optionally `list_dir`/`file_read` for minimal context. No file-write tools.
+- **General-purpose** — retain current broader set.
 
-### 1. Keep slash command metadata authoritative in Go
+### A3. Subagent system prompts
 
-Preferred approach:
+Files: `cmd/gocode/subagent_runtime.go`
 
-- extend the startup payload emitted by the engine so the TUI receives a slash command catalog
-- include at least:
-	- `name`
-	- `description`
-	- `takes_arguments`
-	- optional `usage`
+- **Explore** — strengthen with parallel read-only encouragement, file-path-based reporting.
+- **Search** — iterative search, compact file-path + line-range references, `<final_answer>` block contract.
+- **Execution** — terminal-focused task, compact command summaries, `<final_answer>` block contract.
+- **General-purpose** — document as fallback for broader delegated work.
 
-Why:
+### A4. Parent-facing `agent` tool descriptions
 
-- avoids drift between `cmd/gocode/slash_commands.go`, `README.md`, and the preview UI
-- keeps the TUI synced when the built-in slash command list changes
+Files: `internal/tools/agent.go`, optionally `cmd/gocode/engine.go`
 
-Fallback if scope must stay smaller:
+- Extend `subagent_type` enum description with use-case guidance.
+- Add examples: explore=research, search=code discovery, execution=terminal tasks, general-purpose=fallback.
 
-- create a TUI-local catalog that mirrors the current built-in commands
-- acceptable only as a deliberate tradeoff, not the preferred long-term shape
+### A5. Child result formatting
 
-### 2. Add a focused TUI hook for slash preview state
+Files: `cmd/gocode/subagent_runtime.go`, `tui/src/components/ToolProgress.tsx`, `tui/src/hooks/useEvents.ts`
 
-Add a small hook, for example `tui/src/hooks/useSlashCommandPreview.ts`, responsible for:
+- Search: parse/preserve `<final_answer>` reference block, normalize path/line results.
+- Execution: compact command summaries, no raw terminal dumps.
+- Explore: keep concise findings.
 
-- detecting whether the cursor is still inside the leading slash token
-- filtering and ranking commands
-- tracking `selectedIndex`
-- exposing handlers for `up`, `down`, `tab`, `enter`, and `escape`
-- returning a compact list of display-ready items for rendering
+### A6. Permission and safety behavior
 
-Behavior contract:
+Files: `cmd/gocode/subagent_runtime.go`, `internal/permissions/clone.go`, `internal/permissions/executor.go`, `internal/permissions/gating.go`
 
-- show suggestions only when the prompt starts with `/` and the cursor is still in the command token
-- hide suggestions once the user starts typing arguments after a space
-- rank exact and prefix matches above weaker fuzzy matches
-- default selection to the first result
-- `Tab`: insert the selected command plus trailing space, do not submit
-- `Enter`: execute immediately only for commands that take no arguments; otherwise insert the command plus trailing space and keep focus in the input
-- `Up` and `Down`: cycle suggestions before history navigation
-- `Escape`: clear preview first, then fall back to the current cancel behavior
+- `explore` and `search` remain read-only.
+- `execution` may execute commands but no file-write by default.
+- `general-purpose` remains broad.
+- Execution tools must auto-approve under cloned policy or fail predictably.
 
-### 3. Keep the prompt row and the preview list visually separate
+### A7. TUI surfacing
 
-Recommended first implementation:
+Files: `tui/src/components/BackgroundAgentsPanel.tsx`, `tui/src/components/ToolProgress.tsx`, `tui/src/hooks/useEvents.ts`
 
-- keep `Input.tsx` as the prompt row renderer and primary keyboard owner
-- add a dedicated preview renderer such as `tui/src/components/SlashCommandPreview.tsx`
-- render the preview list immediately below the prompt row in the bottom prompt area
+- Friendly labels for `search` and `execution`.
+- Distinct summaries for research vs search-references vs terminal-execution.
+- Status copy tuned for each behavior.
 
-Recommendation:
+### A8. Documentation
 
-- start with inline rendering below the prompt row to match the screenshot
-- do not import the full upstream overlay/provider system in phase 1
-- only introduce portal or overlay plumbing if inline rendering causes transcript clipping or obvious layout regressions
+Files: `README.md`, optionally `docs/`
 
-### 4. Restyle the prompt chrome to match the screenshot
+- Document each subagent type, when to use them, current limitations.
 
-Prompt row changes in `tui/src/components/Input.tsx`:
+### A9. Tests
 
-- switch from all-sides rounded border to `borderStyle="round"` with `borderLeft={false}` and `borderRight={false}`
-- keep top and bottom borders enabled
-- increase padding so the prompt feels closer to the screenshot’s block spacing
-- preserve current multi-line editor behavior and cursor rendering
+Files: new tests in `cmd/gocode/`, `internal/tools/`
 
-Visual guardrails:
+- Schema validation for new `subagent_type` values.
+- Tool allowlist correctness per mode.
+- System prompt content per type.
+- Read-only enforcement for explore/search.
+- Background-agent payloads preserve new types end-to-end.
 
-- suggestions should feel like a separate list, not content inside the bordered prompt row
-- prompt row height should remain stable with and without suggestions
-- narrow terminals must still wrap safely
+---
 
-## Planned File Touches
+## Stream B: Fix OpenAI Responses Tool Input JSON Decode Error
 
-- `cmd/gocode/slash_commands.go`
-	- expose slash command descriptors from the current built-in command source of truth
-- `cmd/gocode/engine.go`
-	- emit the slash command catalog during startup
-- `tui/src/protocol/types.ts`
-	- add typed payload support for slash command metadata in the startup protocol
-- `tui/src/hooks/useEvents.ts`
-	- store the received slash command catalog in UI state
-- `tui/src/hooks/useSlashCommandPreview.ts`
-	- new hook for detection, ranking, selection, and apply logic
-- `tui/src/components/Input.tsx`
-	- prompt chrome restyle and preview-aware keyboard routing
-- `tui/src/components/SlashCommandPreview.tsx`
-	- new preview list renderer
-- `tui/src/App.tsx`
-	- pass slash metadata into the input, or render the preview component directly below it depending on the final component split
-- `README.md`
-	- update only if the final implementation adds user-visible keybindings or behavior worth documenting
+### Root Cause
+
+`decodeToolInput()` in `internal/api/anthropic.go` (shared helper) does a strict `json.Unmarshal` on tool call arguments. When the OpenAI Responses API streams tool arguments and the final accumulated string is incomplete or malformed JSON, this call fails with `unexpected end of JSON input`.
+
+The call sites are:
+- `internal/api/openai_responses.go:730` — `handleOutputItemDone()` validates tool arguments on stream completion.
+- `internal/api/openai_responses.go:452` — `buildOpenAIResponsesInput()` validates tool calls in message history.
+
+### Planned Fix
+
+- In `handleOutputItemDone()`, handle the `decodeToolInput` error gracefully — log a warning and either skip the malformed tool call or surface a user-visible error without crashing the stream.
+- Ensure `buildOpenAIResponsesInput()` tolerates previously-stored tool calls whose arguments may not have been fully received.
+- Consider adding a fallback: if the accumulated arguments string fails to parse, attempt recovery (e.g., treat as raw string or return a descriptive error to the model).
+
+### Files
+
+- `internal/api/openai_responses.go`
+- `internal/api/anthropic.go` (shared `decodeToolInput()` function)
+
+---
+
+## Stream C: Fix Previous Thinking Messages Shown in Conversation
+
+### Root Cause
+
+When models return thinking/reasoning content (via `reasoning_delta`, `reasoning` fields, or Anthropic thinking blocks), it is accumulated into `Message.Content` alongside the actual response text. On subsequent turns, `buildOpenAICompatMessages()`, `buildOpenAIResponsesInput()`, and `buildAnthropicMessages()` send the full `Message.Content` back to the API — including the thinking content. This causes:
+
+1. Massive context bloat from previous thinking being re-sent every turn.
+2. Previous thinking being visible in the conversation transcript in the TUI.
+
+### Planned Fix
+
+- Add a separate field (e.g., `ReasoningContent string`) to the `Message` struct in `internal/api/client.go` to store thinking content separately from `Content`.
+- Update streaming handlers to write thinking/reasoning output to `ReasoningContent` instead of `Content`.
+- Update all message-building functions (`buildOpenAICompatMessages`, `buildOpenAIResponsesInput`, `buildAnthropicMessages`) to exclude `ReasoningContent` from the messages sent to the API.
+- Update the TUI: thinking blocks should render as collapsible/hidden in past turns, only shown expanded for the current in-progress response.
+
+### Files
+
+- `internal/api/client.go` — add `ReasoningContent` field to `Message`.
+- `internal/api/openai_compat.go` — separate thinking from content in streaming; exclude from `buildOpenAICompatMessages()`.
+- `internal/api/openai_responses.go` — separate thinking; exclude from `buildOpenAIResponsesInput()`.
+- `internal/api/anthropic.go` — separate thinking; exclude from `buildAnthropicMessages()`.
+- `tui/src/hooks/useEvents.ts` — ensure past thinking blocks are not expanded.
+- `tui/src/components/` — update rendering to collapse past thinking.
+
+---
 
 ## Implementation Phases
 
-### Phase 1: Planning and scope lock
+### Phase 1: Bug fixes (Streams B & C)
 
-- replace the stale `plan.md` and `progress.md`
-- document the upstream references and the implementation shape
-- do not implement anything in this phase
+Priority: fix the two bugs first since they affect daily usability.
 
-### Phase 2: Backend slash catalog exposure
+1. Fix OpenAI Responses tool input JSON decode error (Stream B).
+2. Fix thinking messages in conversation history (Stream C).
+3. Build, format, test.
 
-- define a Go-side slash command descriptor list from the existing built-in commands
-- emit it to the TUI during startup
-- keep slash command execution and help text behavior unchanged
+### Phase 2: Subagent type model (Stream A, tasks A1–A3)
 
-### Phase 3: TUI preview state
+1. Add `search` and `execution` subagent types.
+2. Define tool allowlists per type.
+3. Add specialized system prompts.
 
-- add the slash preview hook
-- wire preview state to the current prompt value and cursor position
-- make suggestion navigation take priority over history only while preview is active
+### Phase 3: Parent guidance and result formatting (Stream A, tasks A4–A5)
 
-### Phase 4: Prompt chrome restyle
+1. Update `agent` tool descriptions.
+2. Add result postprocessing per type.
 
-- update the input border to top and bottom only
-- add padding that matches the screenshot more closely
-- render the preview list as a separate block below the prompt row
+### Phase 4: Permissions, TUI, docs, tests (Stream A, tasks A6–A9)
 
-### Phase 5: Integration and manual verification
+1. Tighten permission behavior.
+2. Update TUI labels and summaries.
+3. Documentation.
+4. Tests.
 
-- verify `/` shows the command list
-- verify `/pl` narrows to matching commands
-- verify typing a space after a slash command hides the preview
-- verify `Up` and `Down` navigate suggestions before history
-- verify `Tab` inserts the selected command without submitting
-- verify `Enter` handles no-argument and argument-taking commands correctly
-- verify non-slash prompts behave exactly as before
-- verify narrow terminals still render safely
-- do not add tests
+## Open Questions
 
-## Risks And Guardrails
+- Should `execution` allow `list_dir`/`file_read` for context, or stay terminal-only?
+- Should the parent system prompt explicitly steer toward `search`/`execution`?
+- Should `<final_answer>` blocks be parsed at runtime or initially returned raw?
+- Single `agent` tool vs future dedicated `search_subagent`/`execution_subagent` aliases?
+- Config knob for per-mode model selection, or single `SubagentModel` for phase 1?
 
-- do not port the full upstream typeahead stack; gocode only needs slash-command preview for this task
-- do not duplicate slash command truth in multiple places if backend emission is feasible
-- do not break current history navigation, transcript search, or cancel behavior
-- do not change slash command execution semantics
-- do not add tests
+## Verification Plan
 
-## Exit Criteria
-
-- the prompt row matches the screenshot’s top-and-bottom-only border treatment and roomier padding
-- slash commands preview while the user is still typing the initial slash token
-- preview rows show command name and description
-- selection and apply behavior is predictable and does not break existing submit or history flows
-- `plan.md` and `progress.md` reflect this task rather than the old refactor work
-
-## Current Status
-
-Planning only. No implementation has started.
+- Build verification for TUI protocol type changes.
+- Manual flows: explore, search, execution, background agents, plan mode unchanged.
+- Verify tool input JSON errors no longer crash the stream.
+- Verify previous thinking is not re-sent to API or displayed in history.
