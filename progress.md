@@ -37,3 +37,16 @@ convention (`{output: text}` for success, `{error: text}` for errors) used by
 pi-mono and the official SDK documentation.
 
 ---
+
+## Task 29 — Inject synthetic error results for orphaned tool calls
+
+**File**: `gocode/internal/api/gemini.go`
+
+`buildGeminiContents` now tracks pending tool calls from each model turn. When a
+new model turn or a user text turn arrives before all tool call IDs have been
+answered by `ToolResult` messages, synthetic `{error: "No result provided"}`
+function response parts are injected into the history. This prevents Gemini from
+receiving a malformed conversation where a `functionCall` has no following
+`functionResponse`.
+
+---

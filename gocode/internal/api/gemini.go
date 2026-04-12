@@ -272,12 +272,75 @@ func buildGeminiContents(systemPrompt string, messages []Message) ([]geminiConte
 	}
 
 	contents := make([]geminiContent, 0, len(messages))
+
+	// Track tool calls emitted by the most recent model turn that have not yet
+	// been answered by a tool-result message. If a new model turn or user text
+	// turn arrives before all pending tool calls are resolved, synthetic error
+	// responses are injected so Gemini always sees a balanced call/response history.
+	type pendingCall struct{ id, name string }
+	var pendingCalls []pendingCall
+	pendingCallIDs := map[string]struct{}{}
+
+	flushOrphanedCalls := func() {
+		if len(pendingCalls) == 0 {
+			return
+		}
+		for _, pc := range pendingCalls {
+			if _, resolved := pendingCallIDs[pc.id]; resolved {
+				continue
+			}
+			name := pc.name
+			if name == "" {
+				name = pc.id
+			}
+			part := geminiPart{
+				FunctionResponse: &geminiFunctionResponse{
+					ID:       pc.id,
+					Name:     name,
+					Response: map[string]any{"error": "No result provided"},
+				},
+			}
+			if len(contents) > 0 {
+				last := &contents[len(contents)-1]
+				if last.Role == "user" && geminiContentIsOnlyFunctionResponses(*last) {
+					last.Parts = append(last.Parts, part)
+					continue
+				}
+			}
+			contents = append(contents, geminiContent{Role: "user", Parts: []geminiPart{part}})
+		}
+		pendingCalls = pendingCalls[:0]
+		pendingCallIDs = map[string]struct{}{}
+	}
+
 	for _, msg := range messages {
 		if msg.Role == RoleSystem {
 			if trimmed := strings.TrimSpace(msg.Content); trimmed != "" {
 				systemParts = append(systemParts, geminiPart{Text: trimmed})
 			}
 			continue
+		}
+
+		// A new model turn or a user text message means any outstanding tool calls
+		// from the previous model turn will never receive results — inject synthetics.
+		isUserText := (msg.Role == RoleUser || msg.Role == RoleTool) && msg.ToolResult == nil &&
+			strings.TrimSpace(msg.Content) != ""
+		if msg.Role == RoleAssistant || isUserText {
+			flushOrphanedCalls()
+		}
+
+		// Track tool calls about to be added.
+		if msg.Role == RoleAssistant && len(msg.ToolCalls) > 0 {
+			for _, tc := range msg.ToolCalls {
+				if tc.ID != "" {
+					pendingCalls = append(pendingCalls, pendingCall{id: tc.ID, name: tc.Name})
+				}
+			}
+		}
+
+		// Mark resolved tool call IDs.
+		if msg.ToolResult != nil && msg.ToolResult.ToolCallID != "" {
+			pendingCallIDs[msg.ToolResult.ToolCallID] = struct{}{}
 		}
 
 		converted, err := convertGeminiMessage(msg, toolNames)
