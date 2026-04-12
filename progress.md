@@ -196,3 +196,10 @@ Tracking fixes per plan.md.
 - Added `id` to `functionResponse` replay so Gemini receives the original tool-call identifier along with the function name and response payload.
 - This closes the remaining Gemini tool-loop metadata gap for strict function-calling validation and multi-step tool turns.
 - Verified with `gofmt -w internal/api/gemini.go && go build ./...`.
+
+### Task 25 — Install Latest Local Build After Final Gemini Metadata Fix ✅
+
+- **Method:** Re-ran the documented local-clone install flow from `gocode/README.md` after Task 24.
+- Rebuilt the current release with `cd gocode/tui && make release-local`.
+- Installed updated `gocode` and `gocode-engine` into `~/.local/bin` using `install -m 755`.
+- Verified `gocode` resolves from `~/.local/bin/gocode` and `gocode --help` runs successfully.
