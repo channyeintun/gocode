@@ -24,6 +24,7 @@ interface InputProps {
 // still leaving a minimally usable wrapped editor width on narrow terminals.
 const PROMPT_CHROME_COLUMNS = 8;
 const MIN_PROMPT_TEXT_COLUMNS = 8;
+const DEFAULT_PROMPT_MARKER = "❯ ";
 
 function getPromptTextColumns(terminalColumns: number): number {
   return Math.max(
@@ -307,6 +308,7 @@ const Input: FC<InputProps> = ({
   });
 
   const showPlaceholder = prompt.value.length === 0;
+  const promptMarker = mode === "bash" ? "! " : DEFAULT_PROMPT_MARKER;
   const renderedLines = useMemo(
     () =>
       renderInputLines(prompt.value, prompt.cursorOffset, promptTextColumns),
@@ -326,7 +328,7 @@ const Input: FC<InputProps> = ({
           {showPlaceholder ? (
             <Box>
               <Text color="cyan" bold>
-                {"> "}
+                {promptMarker}
               </Text>
               <Text color="gray">
                 Ask gocode to inspect, plan, or edit code
@@ -337,7 +339,7 @@ const Input: FC<InputProps> = ({
             renderedLines.map((line, index) => (
               <Box key={index}>
                 <Text color={index === 0 ? "cyan" : "gray"} bold={index === 0}>
-                  {index === 0 ? "> " : "  "}
+                  {index === 0 ? promptMarker : "  "}
                 </Text>
                 <Text>{line.length > 0 ? line : " "}</Text>
               </Box>
