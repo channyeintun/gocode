@@ -73,6 +73,10 @@ func (c *Context) Check(toolName string, input tools.ToolInput, permLevel tools.
 		}
 	}
 
+	if isReadOnlySubagentLaunch(toolName, input) {
+		return DecisionAllow
+	}
+
 	// Session-wide allow-all: approve non-destructive commands
 	if c.SessionAllowAll {
 		if permLevel == tools.PermissionReadOnly {
@@ -121,6 +125,10 @@ func (c *Context) Check(toolName string, input tools.ToolInput, permLevel tools.
 
 // AssessRisk returns a coarse risk label and policy notes for a pending tool call.
 func AssessRisk(toolName string, input tools.ToolInput, permLevel tools.PermissionLevel) RiskAssessment {
+	if isReadOnlySubagentLaunch(toolName, input) {
+		return RiskAssessment{Level: "read"}
+	}
+
 	if toolName == "bash" {
 		command := ""
 		if params, ok := input.Params["command"]; ok {
@@ -252,6 +260,23 @@ func firstStringParam(params map[string]any, keys ...string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func isReadOnlySubagentLaunch(toolName string, input tools.ToolInput) bool {
+	if toolName != "agent" {
+		return false
+	}
+	subagentType, ok := firstStringParam(input.Params, "subagent_type")
+	if !ok {
+		subagentType = "explore"
+	}
+	subagentType = strings.TrimSpace(subagentType)
+	switch subagentType {
+	case "", "explore", "search":
+		return true
+	default:
+		return false
+	}
 }
 
 // AddAlwaysAllow registers a permanent allow rule.
