@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Implementation complete. Code formatting and build verification passed; interactive manual verification is still pending.
+Implementation complete. Root-level local release/install workflow is now being aligned with the documented commands.
 
 ## Completed
 
@@ -34,6 +34,8 @@ Implementation complete. Code formatting and build verification passed; interact
 - Updated the input prompt chrome to use top-and-bottom-only borders with larger padding.
 - Ran `gofmt` and `prettier` on the changed files.
 - Verified the implementation compiles with `go build ./cmd/gocode` and `cd tui && bun run build`.
+- Added a repo-root `Makefile` so `make release-local` and `make install` work from the documented root directory.
+- Made the install target honor `PREFIX` instead of hardcoding `/usr/local/bin`.
 
 ## Notes
 

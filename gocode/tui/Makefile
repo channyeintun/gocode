@@ -3,6 +3,7 @@ ENGINE_NAME := gocode-engine
 VERSION     := 0.1.0
 BUILD_DIR   := release
 GO_SRC      := ../cmd/gocode
+PREFIX      ?= /usr/local/bin
 
 PLATFORMS := darwin-arm64 darwin-amd64 linux-amd64 linux-arm64
 
@@ -56,6 +57,7 @@ clean:
 
 # Install locally (copies to /usr/local/bin)
 install: release-local
-	install -m 755 $(BUILD_DIR)/$(BINARY_NAME) /usr/local/bin/$(BINARY_NAME)
-	install -m 755 $(BUILD_DIR)/$(ENGINE_NAME) /usr/local/bin/$(ENGINE_NAME)
-	@echo "Installed to /usr/local/bin/"
+	install -d $(PREFIX)
+	install -m 755 $(BUILD_DIR)/$(BINARY_NAME) $(PREFIX)/$(BINARY_NAME)
+	install -m 755 $(BUILD_DIR)/$(ENGINE_NAME) $(PREFIX)/$(ENGINE_NAME)
+	@echo "Installed to $(PREFIX)/"
