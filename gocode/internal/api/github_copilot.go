@@ -89,6 +89,16 @@ func BuildGitHubCopilotDynamicHeaders(messages []Message) map[string]string {
 	return headers
 }
 
+func GitHubCopilotUsesAnthropicMessages(model string) bool {
+	lower := strings.ToLower(strings.TrimSpace(model))
+	return strings.Contains(lower, "claude") || strings.Contains(lower, "haiku") || strings.Contains(lower, "sonnet") || strings.Contains(lower, "opus")
+}
+
+func GitHubCopilotUsesOpenAIResponses(model string) bool {
+	lower := strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(lower, "gpt-5") || strings.HasPrefix(lower, "o1") || strings.HasPrefix(lower, "o3") || strings.HasPrefix(lower, "o4")
+}
+
 func gitHubCopilotInitiator(messages []Message) string {
 	if len(messages) == 0 {
 		return "user"

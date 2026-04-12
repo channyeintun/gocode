@@ -95,4 +95,44 @@ The docs now explain:
 
 The slash-command table was also updated to include `/connect`.
 
+## Task 5 — Route GitHub Copilot models to the correct API protocol
+
+**Files**: `gocode/internal/api/openai_responses.go`, `gocode/internal/api/anthropic.go`, `gocode/internal/api/github_copilot.go`, `gocode/internal/api/openai_compat.go`, `gocode/cmd/gocode/engine.go`, `progress.md`
+
+Fixed the post-connect GitHub Copilot runtime failure where a normal prompt would
+fail with `OpenAI-compatible request failed` even though `/connect` had already
+completed successfully.
+
+Root cause:
+
+- `gocode` was sending every GitHub Copilot model through the OpenAI-compatible
+  `/chat/completions` path
+- Copilot does not use one protocol for every model family
+- the selected main model `github-copilot/gpt-5.4` expects the OpenAI
+  Responses API
+- the selected subagent model `github-copilot/claude-haiku-4.5` expects the
+  Anthropic Messages API with Copilot bearer-auth headers
+
+Implementation completed:
+
+- added a new `openai_responses.go` client that streams Copilot/OpenAI
+  Responses events from `/responses`
+- added Copilot model-family detection helpers in
+  `gocode/internal/api/github_copilot.go`
+- updated engine client creation so GitHub Copilot now routes by model:
+  - GPT-5 and `o*` families use the Responses client
+  - Claude families use the Anthropic Messages client
+  - legacy Copilot-compatible models can still fall back to chat completions
+- updated the Anthropic client so Copilot Claude models use bearer auth and
+  Copilot headers instead of Anthropic API-key auth
+- improved network-level provider errors so the underlying transport failure is
+  included in the surfaced message instead of only showing a generic provider
+  label
+
+Verification completed:
+
+- ran `gofmt -w` on all changed Go files
+- ran `go build ./...`
+- ran `make release-local` in `gocode/tui`
+
 ---

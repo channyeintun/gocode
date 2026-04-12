@@ -140,7 +140,7 @@ func (c *OpenAICompatClient) openStream(ctx context.Context, payload openAICompa
 
 		currentResp, err := c.httpClient.Do(req)
 		if err != nil {
-			return &APIError{Type: ErrNetwork, Message: "OpenAI-compatible request failed", Err: err}
+			return &APIError{Type: ErrNetwork, Message: fmt.Sprintf("OpenAI-compatible request failed: %v", err), Err: err}
 		}
 		if currentResp.StatusCode >= http.StatusMultipleChoices {
 			defer currentResp.Body.Close()

@@ -23,6 +23,7 @@ var errStopStream = errors.New("stop stream")
 
 // AnthropicClient implements the Anthropic Messages API streaming protocol.
 type AnthropicClient struct {
+	provider     string
 	model        string
 	baseURL      string
 	apiKey       string
@@ -32,22 +33,38 @@ type AnthropicClient struct {
 
 // NewAnthropicClient constructs a streaming Anthropic client using configured defaults.
 func NewAnthropicClient(model, apiKey, baseURL string) (*AnthropicClient, error) {
-	preset := Presets["anthropic"]
+	return NewAnthropicClientForProvider("anthropic", model, apiKey, baseURL)
+}
+
+// NewAnthropicClientForProvider constructs a streaming Anthropic-compatible client
+// using the auth and default settings for the specified provider.
+func NewAnthropicClientForProvider(provider, model, apiKey, baseURL string) (*AnthropicClient, error) {
+	if strings.TrimSpace(provider) == "" {
+		provider = "anthropic"
+	}
+
+	preset, ok := Presets[provider]
+	if !ok {
+		return nil, fmt.Errorf("unknown Anthropic-compatible provider %q", provider)
+	}
 	if model == "" {
 		model = preset.DefaultModel
 	}
 	if baseURL == "" {
 		baseURL = preset.BaseURL
 	}
-	warnCustomBaseURL("anthropic", preset.BaseURL, baseURL)
+	if provider != "github-copilot" {
+		warnCustomBaseURL(provider, preset.BaseURL, baseURL)
+	}
 	if apiKey == "" {
 		apiKey = os.Getenv(preset.EnvKeyVar)
 	}
 	if apiKey == "" {
-		return nil, &APIError{Type: ErrAuth, Message: "missing Anthropic API key"}
+		return nil, &APIError{Type: ErrAuth, Message: fmt.Sprintf("missing API key for provider %q", provider)}
 	}
 
 	return &AnthropicClient{
+		provider:     provider,
 		model:        model,
 		baseURL:      strings.TrimRight(baseURL, "/"),
 		apiKey:       apiKey,
@@ -69,21 +86,30 @@ func (c *AnthropicClient) Capabilities() ModelCapabilities {
 // Warmup preconnects the Anthropic transport so the first real request avoids
 // paying the initial connection handshake cost on the critical path.
 func (c *AnthropicClient) Warmup(ctx context.Context) error {
-	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/v1/messages", map[string]string{
+	headers := map[string]string{
 		"accept":            "application/json",
 		"anthropic-version": anthropicVersion,
-		"x-api-key":         c.apiKey,
-	})
+	}
+	if c.provider == "github-copilot" {
+		headers["authorization"] = "Bearer " + c.apiKey
+		for key, value := range GitHubCopilotStaticHeaders() {
+			headers[strings.ToLower(key)] = value
+		}
+	} else {
+		headers["x-api-key"] = c.apiKey
+	}
+
+	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/v1/messages", headers)
 }
 
 // Stream opens a streaming Messages API request and yields model events.
 func (c *AnthropicClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
-	payload, err := c.buildRequest(req)
+	payload, extraHeaders, err := c.buildRequest(req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.openStream(ctx, payload)
+	resp, err := c.openStream(ctx, payload, extraHeaders)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +177,7 @@ func extractAnthropicRateLimitWindow(headers http.Header, window string) *RateLi
 	}
 }
 
-func (c *AnthropicClient) openStream(ctx context.Context, payload anthropicRequest) (*http.Response, error) {
+func (c *AnthropicClient) openStream(ctx context.Context, payload anthropicRequest, extraHeaders map[string]string) (*http.Response, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("marshal anthropic request: %w", err)
@@ -169,12 +195,22 @@ func (c *AnthropicClient) openStream(ctx context.Context, payload anthropicReque
 		}
 		req.Header.Set("content-type", "application/json")
 		req.Header.Set("accept", "text/event-stream")
-		req.Header.Set("x-api-key", c.apiKey)
 		req.Header.Set("anthropic-version", anthropicVersion)
+		if c.provider == "github-copilot" {
+			req.Header.Set("authorization", "Bearer "+c.apiKey)
+			for key, value := range GitHubCopilotStaticHeaders() {
+				req.Header.Set(key, value)
+			}
+		} else {
+			req.Header.Set("x-api-key", c.apiKey)
+		}
+		for key, value := range extraHeaders {
+			req.Header.Set(key, value)
+		}
 
 		currentResp, err := c.httpClient.Do(req)
 		if err != nil {
-			return &APIError{Type: ErrNetwork, Message: "anthropic request failed", Err: err}
+			return &APIError{Type: ErrNetwork, Message: fmt.Sprintf("anthropic request failed: %v", err), Err: err}
 		}
 		if currentResp.StatusCode >= http.StatusMultipleChoices {
 			defer currentResp.Body.Close()
@@ -196,7 +232,7 @@ func (c *AnthropicClient) openStream(ctx context.Context, payload anthropicReque
 	return resp, nil
 }
 
-func (c *AnthropicClient) buildRequest(req ModelRequest) (anthropicRequest, error) {
+func (c *AnthropicClient) buildRequest(req ModelRequest) (anthropicRequest, map[string]string, error) {
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = c.capabilities.MaxOutputTokens
@@ -204,7 +240,7 @@ func (c *AnthropicClient) buildRequest(req ModelRequest) (anthropicRequest, erro
 
 	systemPrompt, messages, err := buildAnthropicMessages(req.SystemPrompt, req.Messages)
 	if err != nil {
-		return anthropicRequest{}, err
+		return anthropicRequest{}, nil, err
 	}
 
 	payload := anthropicRequest{
@@ -217,6 +253,14 @@ func (c *AnthropicClient) buildRequest(req ModelRequest) (anthropicRequest, erro
 		StopSequences: req.StopSequences,
 	}
 
+	var extraHeaders map[string]string
+	if c.provider == "github-copilot" {
+		extraHeaders = GitHubCopilotStaticHeaders()
+		for key, value := range BuildGitHubCopilotDynamicHeaders(req.Messages) {
+			extraHeaders[key] = value
+		}
+	}
+
 	if req.ThinkingBudget > 0 {
 		payload.Thinking = &anthropicThinking{
 			Type:         "enabled",
@@ -226,7 +270,7 @@ func (c *AnthropicClient) buildRequest(req ModelRequest) (anthropicRequest, erro
 		payload.Temperature = req.Temperature
 	}
 
-	return payload, nil
+	return payload, extraHeaders, nil
 }
 
 func (c *AnthropicClient) handleEvent(

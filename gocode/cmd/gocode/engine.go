@@ -564,6 +564,15 @@ func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, err
 
 	baseURL := cfg.BaseURL
 	apiKey := cfg.APIKey
+	if provider == "github-copilot" {
+		switch {
+		case api.GitHubCopilotUsesAnthropicMessages(model):
+			return api.NewAnthropicClientForProvider(provider, model, apiKey, baseURL)
+		case api.GitHubCopilotUsesOpenAIResponses(model):
+			return api.NewOpenAIResponsesClient(provider, model, apiKey, baseURL)
+		}
+	}
+
 	switch api.Presets[provider].ClientType {
 	case api.AnthropicAPI:
 		return api.NewAnthropicClient(model, apiKey, baseURL)
