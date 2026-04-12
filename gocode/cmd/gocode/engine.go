@@ -554,20 +554,70 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 
 func newLLMClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
 	provider = normalizeProvider(provider)
+	if provider == "github-copilot" {
+		resolved, err := resolveGitHubCopilotConfig(cfg)
+		if err != nil {
+			return nil, err
+		}
+		cfg = resolved
+	}
 
 	baseURL := cfg.BaseURL
+	apiKey := cfg.APIKey
 	switch api.Presets[provider].ClientType {
 	case api.AnthropicAPI:
-		return api.NewAnthropicClient(model, cfg.APIKey, baseURL)
+		return api.NewAnthropicClient(model, apiKey, baseURL)
 	case api.GeminiAPI:
-		return api.NewGeminiClient(model, cfg.APIKey, baseURL)
+		return api.NewGeminiClient(model, apiKey, baseURL)
 	case api.OpenAICompatAPI:
-		return api.NewOpenAICompatClient(provider, model, cfg.APIKey, baseURL)
+		return api.NewOpenAICompatClient(provider, model, apiKey, baseURL)
 	case api.OllamaAPI:
-		return api.NewOllamaClient(model, cfg.APIKey, baseURL)
+		return api.NewOllamaClient(model, apiKey, baseURL)
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", provider)
 	}
+}
+
+func resolveGitHubCopilotConfig(cfg config.Config) (config.Config, error) {
+	loaded := config.Load()
+	if strings.TrimSpace(loaded.GitHubCopilot.GitHubToken) != "" {
+		cfg.GitHubCopilot = loaded.GitHubCopilot
+	}
+
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		creds := cfg.GitHubCopilot
+		if strings.TrimSpace(creds.GitHubToken) == "" {
+			return cfg, &api.APIError{Type: api.ErrAuth, Message: "GitHub Copilot is not connected. Run /connect first."}
+		}
+
+		expiresAt := time.UnixMilli(creds.ExpiresAtUnixMS)
+		if strings.TrimSpace(creds.AccessToken) == "" || time.Now().After(expiresAt) {
+			refreshCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			refreshed, err := api.RefreshGitHubCopilotToken(refreshCtx, creds.GitHubToken, creds.EnterpriseDomain)
+			if err != nil {
+				return cfg, err
+			}
+
+			creds.AccessToken = refreshed.AccessToken
+			creds.ExpiresAtUnixMS = refreshed.ExpiresAt.UnixMilli()
+			cfg.GitHubCopilot = creds
+
+			loaded.GitHubCopilot = creds
+			if err := config.Save(loaded); err != nil {
+				return cfg, fmt.Errorf("save refreshed GitHub Copilot credentials: %w", err)
+			}
+		}
+
+		cfg.APIKey = creds.AccessToken
+	}
+
+	if strings.TrimSpace(cfg.BaseURL) == "" {
+		cfg.BaseURL = api.GetGitHubCopilotBaseURL(cfg.GitHubCopilot.AccessToken, cfg.GitHubCopilot.EnterpriseDomain)
+	}
+
+	return cfg, nil
 }
 
 const clientWarmupTimeout = 3 * time.Second
@@ -649,6 +699,9 @@ func resolveModelSelection(input string, fallbackProvider string) (string, strin
 	}
 	if provider != "" {
 		return normalizeProvider(provider), model
+	}
+	if normalizeProvider(fallbackProvider) == "github-copilot" {
+		return "github-copilot", model
 	}
 
 	lower := strings.ToLower(model)

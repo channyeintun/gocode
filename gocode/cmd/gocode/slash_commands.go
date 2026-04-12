@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -40,6 +41,141 @@ func handleSlashCommand(
 	args := strings.TrimSpace(payload.Args)
 
 	switch command {
+	case "connect":
+		providerName, enterpriseInput, err := parseConnectArgs(args)
+		if err != nil {
+			if emitErr := emitTextResponse(bridge, err.Error()); emitErr != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+
+		switch providerName {
+		case "github-copilot":
+			persisted := config.Load()
+			domain, err := api.NormalizeGitHubCopilotDomain(enterpriseInput)
+			if err != nil {
+				if emitErr := emitTextResponse(bridge, err.Error()); emitErr != nil {
+					return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+				}
+				return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+			}
+
+			copilotAuth := persisted.GitHubCopilot
+			if strings.TrimSpace(domain) != "" {
+				copilotAuth.EnterpriseDomain = domain
+			}
+
+			appendSlashResponse(bridge, "Connecting GitHub Copilot...\n\n")
+
+			refreshCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
+
+			if strings.TrimSpace(copilotAuth.GitHubToken) != "" {
+				appendSlashResponse(bridge, "Refreshing saved credentials...\n\n")
+				refreshed, refreshErr := api.RefreshGitHubCopilotToken(refreshCtx, copilotAuth.GitHubToken, copilotAuth.EnterpriseDomain)
+				if refreshErr == nil {
+					copilotAuth.AccessToken = refreshed.AccessToken
+					copilotAuth.ExpiresAtUnixMS = refreshed.ExpiresAt.UnixMilli()
+				} else {
+					appendSlashResponse(bridge, "Saved credentials could not be refreshed. Starting device login...\n\n")
+					copilotAuth.AccessToken = ""
+					copilotAuth.ExpiresAtUnixMS = 0
+				}
+			}
+
+			if strings.TrimSpace(copilotAuth.AccessToken) == "" {
+				device, err := api.StartGitHubCopilotDeviceFlow(refreshCtx, copilotAuth.EnterpriseDomain)
+				if err != nil {
+					if emitErr := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot connect failed: %v", err)); emitErr != nil {
+						return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+					}
+					return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+				}
+
+				browserMessage := ""
+				if err := openBrowserURL(device.VerificationURI); err == nil {
+					browserMessage = "Opened the browser automatically.\n"
+				}
+				appendSlashResponse(bridge, fmt.Sprintf("%sVisit: %s\nEnter code: %s\n\nWaiting for GitHub authorization...\n\n", browserMessage, device.VerificationURI, device.UserCode))
+
+				githubToken, err := api.PollGitHubCopilotGitHubToken(
+					refreshCtx,
+					copilotAuth.EnterpriseDomain,
+					device.DeviceCode,
+					device.IntervalSeconds,
+					device.ExpiresIn,
+				)
+				if err != nil {
+					if emitErr := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot connect failed: %v", err)); emitErr != nil {
+						return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+					}
+					return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+				}
+
+				refreshed, err := api.RefreshGitHubCopilotToken(refreshCtx, githubToken, copilotAuth.EnterpriseDomain)
+				if err != nil {
+					if emitErr := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot token exchange failed: %v", err)); emitErr != nil {
+						return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+					}
+					return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+				}
+
+				copilotAuth.GitHubToken = githubToken
+				copilotAuth.AccessToken = refreshed.AccessToken
+				copilotAuth.ExpiresAtUnixMS = refreshed.ExpiresAt.UnixMilli()
+			}
+
+			persisted.GitHubCopilot = copilotAuth
+			persisted.Model = modelRef("github-copilot", api.Presets["github-copilot"].DefaultModel)
+			if err := config.Save(persisted); err != nil {
+				if emitErr := emitTextResponse(bridge, fmt.Sprintf("save GitHub Copilot credentials: %v", err)); emitErr != nil {
+					return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+				}
+				return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+			}
+
+			nextClient, err := newLLMClient("github-copilot", api.Presets["github-copilot"].DefaultModel, persisted)
+			if err != nil {
+				if emitErr := emitTextResponse(bridge, fmt.Sprintf("initialize GitHub Copilot client: %v", err)); emitErr != nil {
+					return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+				}
+				return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+			}
+
+			*client = nextClient
+			activeModelID = modelRef("github-copilot", nextClient.ModelID())
+			if err := emitToolUseCapabilityNotice(bridge, activeModelID, *client, nil); err != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+			}
+			if err := persistSessionState(store, sessionStateParams{
+				SessionID: sessionID,
+				CreatedAt: startedAt,
+				Mode:      mode,
+				Model:     activeModelID,
+				CWD:       cwd,
+				Branch:    agent.LoadTurnContext().GitBranch,
+				Tracker:   tracker,
+				Messages:  messages,
+			}); err != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+			}
+			if err := emitModelChanged(bridge, activeModelID, *client); err != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+			}
+			if err := emitContextWindowUsage(bridge, *client, messages); err != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+			}
+			if err := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot connected. Set model to %s", activeModelID)); err != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		default:
+			if err := emitTextResponse(bridge, fmt.Sprintf("unsupported connect provider: %s", providerName)); err != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
 	case "plan", "plan-mode":
 		mode = agent.ModePlan
 		if err := persistSessionState(store, sessionStateParams{
@@ -362,6 +498,50 @@ func emitTextResponse(bridge *ipc.Bridge, text string) error {
 	return bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "end_turn"})
 }
 
+func appendSlashResponse(bridge *ipc.Bridge, text string) {
+	if bridge == nil || strings.TrimSpace(text) == "" {
+		return
+	}
+	_ = bridge.Emit(ipc.EventTokenDelta, ipc.TokenDeltaPayload{Text: text})
+}
+
+func parseConnectArgs(args string) (string, string, error) {
+	parts := strings.Fields(args)
+	switch len(parts) {
+	case 0:
+		return "github-copilot", "", nil
+	case 1:
+		if strings.EqualFold(parts[0], "github-copilot") {
+			return "github-copilot", "", nil
+		}
+		return "", "", fmt.Errorf("usage: /connect [github-copilot [enterprise-domain]]")
+	case 2:
+		if !strings.EqualFold(parts[0], "github-copilot") {
+			return "", "", fmt.Errorf("usage: /connect [github-copilot [enterprise-domain]]")
+		}
+		return "github-copilot", parts[1], nil
+	default:
+		return "", "", fmt.Errorf("usage: /connect [github-copilot [enterprise-domain]]")
+	}
+}
+
+func openBrowserURL(target string) error {
+	if strings.TrimSpace(target) == "" {
+		return fmt.Errorf("empty browser URL")
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", target)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", target)
+	default:
+		cmd = exec.Command("xdg-open", target)
+	}
+	return cmd.Start()
+}
+
 func emitSessionArtifacts(ctx context.Context, bridge *ipc.Bridge, artifactManager *artifactspkg.Manager, sessionID string) error {
 	if artifactManager == nil || strings.TrimSpace(sessionID) == "" {
 		return nil
@@ -412,6 +592,7 @@ func formatCostSummary(snapshot costpkg.TrackerSnapshot, activeModelID string) s
 func formatHelpText() string {
 	return `Available slash commands:
 
+	/connect       Connect GitHub Copilot and switch to a Copilot model
   /plan          Switch to plan mode (read-only until approved)
   /fast          Switch to fast mode (direct execution)
   /model [name]  Show or switch the active model

@@ -116,6 +116,20 @@ var Presets = map[string]ProviderPreset{
 			MaxOutputTokens:  8192,
 		},
 	},
+	"github-copilot": {
+		Name:         "github-copilot",
+		ClientType:   OpenAICompatAPI,
+		BaseURL:      githubCopilotDefaultBaseURL,
+		EnvKeyVar:    "GITHUB_COPILOT_ACCESS_TOKEN",
+		DefaultModel: "gpt-4o",
+		Capabilities: ModelCapabilities{
+			SupportsToolUse:  true,
+			SupportsVision:   true,
+			SupportsJsonMode: true,
+			MaxContextWindow: 128000,
+			MaxOutputTokens:  16384,
+		},
+	},
 	"ollama": {
 		Name:         "ollama",
 		ClientType:   OllamaAPI,

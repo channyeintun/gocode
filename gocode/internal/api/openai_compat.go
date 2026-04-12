@@ -43,7 +43,9 @@ func NewOpenAICompatClient(provider, model, apiKey, baseURL string) (*OpenAIComp
 	if baseURL == "" {
 		baseURL = preset.BaseURL
 	}
-	warnCustomBaseURL(provider, preset.BaseURL, baseURL)
+	if provider != "github-copilot" {
+		warnCustomBaseURL(provider, preset.BaseURL, baseURL)
+	}
 	if apiKey == "" {
 		apiKey = os.Getenv(preset.EnvKeyVar)
 	}
@@ -73,20 +75,26 @@ func (c *OpenAICompatClient) Capabilities() ModelCapabilities {
 
 // Warmup preconnects the OpenAI-compatible transport before the first streamed turn.
 func (c *OpenAICompatClient) Warmup(ctx context.Context) error {
-	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/models", map[string]string{
+	headers := map[string]string{
 		"accept":        "application/json",
 		"authorization": "Bearer " + c.apiKey,
-	})
+	}
+	if c.provider == "github-copilot" {
+		for key, value := range GitHubCopilotStaticHeaders() {
+			headers[strings.ToLower(key)] = value
+		}
+	}
+	return issueWarmupRequest(ctx, c.httpClient, http.MethodHead, c.baseURL+"/models", headers)
 }
 
 // Stream opens a streaming chat completions request and yields model events.
 func (c *OpenAICompatClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[ModelEvent, error], error) {
-	payload, err := c.buildRequest(req)
+	payload, extraHeaders, err := c.buildRequest(req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.openStream(ctx, payload)
+	resp, err := c.openStream(ctx, payload, extraHeaders)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +115,7 @@ func (c *OpenAICompatClient) Stream(ctx context.Context, req ModelRequest) (iter
 	}, nil
 }
 
-func (c *OpenAICompatClient) openStream(ctx context.Context, payload openAICompatRequest) (*http.Response, error) {
+func (c *OpenAICompatClient) openStream(ctx context.Context, payload openAICompatRequest, extraHeaders map[string]string) (*http.Response, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("marshal OpenAI-compatible request: %w", err)
@@ -126,6 +134,9 @@ func (c *OpenAICompatClient) openStream(ctx context.Context, payload openAICompa
 		req.Header.Set("content-type", "application/json")
 		req.Header.Set("accept", "text/event-stream")
 		req.Header.Set("authorization", "Bearer "+c.apiKey)
+		for key, value := range extraHeaders {
+			req.Header.Set(key, value)
+		}
 
 		currentResp, err := c.httpClient.Do(req)
 		if err != nil {
@@ -151,7 +162,7 @@ func (c *OpenAICompatClient) openStream(ctx context.Context, payload openAICompa
 	return resp, nil
 }
 
-func (c *OpenAICompatClient) buildRequest(req ModelRequest) (openAICompatRequest, error) {
+func (c *OpenAICompatClient) buildRequest(req ModelRequest) (openAICompatRequest, map[string]string, error) {
 	maxTokens := req.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = c.capabilities.MaxOutputTokens
@@ -159,7 +170,7 @@ func (c *OpenAICompatClient) buildRequest(req ModelRequest) (openAICompatRequest
 
 	messages, err := buildOpenAICompatMessages(req.SystemPrompt, req.Messages)
 	if err != nil {
-		return openAICompatRequest{}, err
+		return openAICompatRequest{}, nil, err
 	}
 
 	payload := openAICompatRequest{
@@ -172,7 +183,15 @@ func (c *OpenAICompatClient) buildRequest(req ModelRequest) (openAICompatRequest
 		Temperature: req.Temperature,
 	}
 
-	return payload, nil
+	var extraHeaders map[string]string
+	if c.provider == "github-copilot" {
+		extraHeaders = GitHubCopilotStaticHeaders()
+		for key, value := range BuildGitHubCopilotDynamicHeaders(req.Messages) {
+			extraHeaders[key] = value
+		}
+	}
+
+	return payload, extraHeaders, nil
 }
 
 func (c *OpenAICompatClient) handleEvent(

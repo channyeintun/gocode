@@ -28,6 +28,16 @@ type Config struct {
 	// Paths
 	HooksDir string `json:"hooks_dir,omitempty"`
 	SkillDir string `json:"skill_dir,omitempty"`
+
+	// Provider auth
+	GitHubCopilot GitHubCopilotAuth `json:"github_copilot,omitempty"`
+}
+
+type GitHubCopilotAuth struct {
+	GitHubToken      string `json:"github_token,omitempty"`
+	AccessToken      string `json:"access_token,omitempty"`
+	ExpiresAtUnixMS  int64  `json:"expires_at_unix_ms,omitempty"`
+	EnterpriseDomain string `json:"enterprise_domain,omitempty"`
 }
 
 // DefaultConfig returns the configuration with sensible defaults.
