@@ -271,7 +271,7 @@ func (c *AnthropicClient) buildRequest(req ModelRequest) (anthropicRequest, map[
 		Model:         c.model,
 		System:        systemPrompt,
 		Messages:      messages,
-		Tools:         buildAnthropicTools(req.Tools),
+		Tools:         buildAnthropicTools(req.Tools, c.provider == "github-copilot"),
 		MaxTokens:     maxTokens,
 		Stream:        true,
 		StopSequences: req.StopSequences,
@@ -564,7 +564,7 @@ func decodeToolInput(input string) (any, error) {
 	return decoded, nil
 }
 
-func buildAnthropicTools(tools []ToolDefinition) []anthropicToolDefinition {
+func buildAnthropicTools(tools []ToolDefinition, flattenTopLevelCombinators bool) []anthropicToolDefinition {
 	if len(tools) == 0 {
 		return nil
 	}
@@ -574,10 +574,64 @@ func buildAnthropicTools(tools []ToolDefinition) []anthropicToolDefinition {
 		built = append(built, anthropicToolDefinition{
 			Name:        tool.Name,
 			Description: tool.Description,
-			InputSchema: tool.InputSchema,
+			InputSchema: normalizeAnthropicToolSchema(tool.InputSchema, flattenTopLevelCombinators),
 		})
 	}
 	return built
+}
+
+func normalizeAnthropicToolSchema(schema any, flattenTopLevelCombinators bool) any {
+	if !flattenTopLevelCombinators {
+		return schema
+	}
+	root, ok := schema.(map[string]any)
+	if !ok {
+		return schema
+	}
+	if len(schemaOptionList(root["oneOf"])) == 0 && len(schemaOptionList(root["anyOf"])) == 0 && len(schemaOptionList(root["allOf"])) == 0 {
+		return schema
+	}
+
+	clone := make(map[string]any, len(root))
+	for key, value := range root {
+		clone[key] = value
+	}
+	delete(clone, "oneOf")
+	delete(clone, "anyOf")
+	delete(clone, "allOf")
+
+	description := strings.TrimSpace(stringValue(clone["description"]))
+	note := "Provide arguments using the documented properties. Top-level schema alternatives were flattened for GitHub Copilot compatibility."
+	if description == "" {
+		clone["description"] = note
+	} else {
+		clone["description"] = description + " " + note
+	}
+	return clone
+}
+
+func schemaOptionList(value any) []map[string]any {
+	items, ok := value.([]map[string]any)
+	if ok {
+		return items
+	}
+	rawItems, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]any, 0, len(rawItems))
+	for _, item := range rawItems {
+		entry, ok := item.(map[string]any)
+		if ok {
+			result = append(result, entry)
+		}
+	}
+	return result
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
 }
 
 func readSSE(ctx context.Context, body io.Reader, handle func(eventName, data string) error) error {
