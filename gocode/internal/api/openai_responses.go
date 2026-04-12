@@ -215,6 +215,7 @@ func (c *OpenAIResponsesClient) handleEvent(data string, state *openAIResponsesS
 		if evt.Delta == "" {
 			return nil
 		}
+		state.sawReasoningText = true
 		if !yield(ModelEvent{Type: ModelEventThinking, Text: evt.Delta}, nil) {
 			return errStopStream
 		}
@@ -235,6 +236,7 @@ func (c *OpenAIResponsesClient) handleEvent(data string, state *openAIResponsesS
 		if evt.Delta == "" {
 			return nil
 		}
+		state.currentText.WriteString(evt.Delta)
 		if !yield(ModelEvent{Type: ModelEventToken, Text: evt.Delta}, nil) {
 			return errStopStream
 		}
@@ -247,6 +249,7 @@ func (c *OpenAIResponsesClient) handleEvent(data string, state *openAIResponsesS
 		if evt.Delta == "" {
 			return nil
 		}
+		state.currentText.WriteString(evt.Delta)
 		if !yield(ModelEvent{Type: ModelEventToken, Text: evt.Delta}, nil) {
 			return errStopStream
 		}
@@ -490,11 +493,23 @@ type openAIResponsesOutputItemEvent struct {
 }
 
 type openAIResponsesOutputItem struct {
-	Type      string `json:"type"`
-	ID        string `json:"id,omitempty"`
-	CallID    string `json:"call_id,omitempty"`
-	Name      string `json:"name,omitempty"`
-	Arguments string `json:"arguments,omitempty"`
+	Type      string                          `json:"type"`
+	ID        string                          `json:"id,omitempty"`
+	CallID    string                          `json:"call_id,omitempty"`
+	Name      string                          `json:"name,omitempty"`
+	Arguments string                          `json:"arguments,omitempty"`
+	Content   []openAIResponsesMessageContent `json:"content,omitempty"`
+	Summary   []openAIResponsesSummaryPart    `json:"summary,omitempty"`
+}
+
+type openAIResponsesMessageContent struct {
+	Type    string `json:"type,omitempty"`
+	Text    string `json:"text,omitempty"`
+	Refusal string `json:"refusal,omitempty"`
+}
+
+type openAIResponsesSummaryPart struct {
+	Text string `json:"text,omitempty"`
 }
 
 type openAIResponsesReasoningDeltaEvent struct {
@@ -563,6 +578,7 @@ type openAIResponsesErrorEvent struct {
 
 type openAIResponsesStreamState struct {
 	currentTool      *openAIResponsesToolCallState
+	currentText      strings.Builder
 	sawReasoningText bool
 	sawToolCall      bool
 	sentStop         bool
@@ -578,6 +594,10 @@ func (s *openAIResponsesStreamState) handleOutputItemAdded(data string) error {
 	var evt openAIResponsesOutputItemEvent
 	if err := json.Unmarshal([]byte(data), &evt); err != nil {
 		return fmt.Errorf("decode OpenAI Responses output item: %w", err)
+	}
+	if evt.Item.Type == "message" {
+		s.currentText.Reset()
+		return nil
 	}
 	if evt.Item.Type != "function_call" {
 		return nil
@@ -610,6 +630,15 @@ func (s *openAIResponsesStreamState) handleOutputItemDone(data string, yield fun
 	var evt openAIResponsesOutputItemEvent
 	if err := json.Unmarshal([]byte(data), &evt); err != nil {
 		return fmt.Errorf("decode OpenAI Responses output item done: %w", err)
+	}
+	if evt.Item.Type == "message" {
+		return s.emitMessageSuffix(evt.Item, yield)
+	}
+	if evt.Item.Type == "reasoning" {
+		if len(evt.Item.Summary) > 0 {
+			s.sawReasoningText = true
+		}
+		return nil
 	}
 	if evt.Item.Type != "function_call" {
 		return nil
@@ -648,6 +677,40 @@ func (s *openAIResponsesStreamState) handleOutputItemDone(data string, yield fun
 		return errStopStream
 	}
 	return nil
+}
+
+func (s *openAIResponsesStreamState) emitMessageSuffix(item openAIResponsesOutputItem, yield func(ModelEvent, error) bool) error {
+	finalText := strings.TrimSpace(joinOpenAIResponsesMessageContent(item.Content))
+	streamed := s.currentText.String()
+	s.currentText.Reset()
+	if finalText == "" {
+		return nil
+	}
+
+	suffix := finalText
+	if streamed != "" && strings.HasPrefix(finalText, streamed) {
+		suffix = finalText[len(streamed):]
+	}
+	if suffix == "" {
+		return nil
+	}
+	if !yield(ModelEvent{Type: ModelEventToken, Text: suffix}, nil) {
+		return errStopStream
+	}
+	return nil
+}
+
+func joinOpenAIResponsesMessageContent(content []openAIResponsesMessageContent) string {
+	var builder strings.Builder
+	for _, part := range content {
+		switch part.Type {
+		case "output_text":
+			builder.WriteString(part.Text)
+		case "refusal":
+			builder.WriteString(part.Refusal)
+		}
+	}
+	return builder.String()
 }
 
 func (s *openAIResponsesStreamState) emitStop(stopReason string, yield func(ModelEvent, error) bool) error {

@@ -250,4 +250,41 @@ Verification completed:
 - ran `go build ./...`
 - ran `make release-local` in `gocode/tui`
 
+## Task 10 — Fix Responses turns that end with thinking-only output
+
+**Files**: `gocode/internal/api/openai_responses.go`, `gocode/tui/src/hooks/useEvents.ts`, `progress.md`
+
+Fixed a Copilot GPT-5.4 review/runtime issue where the UI could appear to stop
+after showing only `Thinking` text following tool use.
+
+Root cause:
+
+- the OpenAI Responses adapter was streaming reasoning-summary text into the TUI
+  correctly
+- but it did not recover assistant message content from
+  `response.output_item.done` when the item type was `message`
+- if Copilot delivered the final answer only at that stage, the turn completed
+  with reasoning visible but no assistant text deltas emitted
+- the TUI then preserved a thinking-only assistant message, which looked like a
+  stalled or truncated response
+
+Implementation completed:
+
+- updated the Responses stream parser to:
+  - track streamed text deltas
+  - recover final assistant message content from `response.output_item.done`
+  - emit only any missing text suffix when the provider sends the full message
+    at completion time
+  - mark reasoning-summary output correctly
+- updated the TUI completion logic so a thinking-only stream is not treated as a
+  normal final assistant answer; it now falls back to the empty-response marker
+  unless real text was produced
+
+Verification completed:
+
+- ran `gofmt -w` on the changed Go file
+- ran `go build ./...`
+- ran `bunx tsc` in `gocode/tui`
+- ran `make release-local` in `gocode/tui`
+
 ---

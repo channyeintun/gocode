@@ -404,7 +404,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             };
           }
 
-          const blocks: UIAssistantBlock[] = assistantBlocksHaveContent(
+          const blocks: UIAssistantBlock[] = assistantBlocksHaveText(
             s.liveAssistantBlocks,
           )
             ? s.liveAssistantBlocks
@@ -2166,6 +2166,12 @@ function appendAssistantBlock(
 
 function assistantBlocksHaveContent(blocks: UIAssistantBlock[]): boolean {
   return blocks.some((block) => block.text.trim().length > 0);
+}
+
+function assistantBlocksHaveText(blocks: UIAssistantBlock[]): boolean {
+  return blocks.some(
+    (block) => block.kind === "text" && block.text.trim().length > 0,
+  );
 }
 
 function findArtifactField(
