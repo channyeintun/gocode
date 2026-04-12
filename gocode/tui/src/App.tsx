@@ -497,7 +497,9 @@ function selectRecentArtifacts(
 ) {
   const nonPlanArtifacts = artifacts.filter(
     (artifact) =>
-      artifact.kind !== "implementation-plan" && artifact.kind !== "tool-log",
+      artifact.kind !== "implementation-plan" &&
+      artifact.kind !== "tool-log" &&
+      artifact.kind !== "diff-preview",
   );
 
   if (!focusedArtifactId) {

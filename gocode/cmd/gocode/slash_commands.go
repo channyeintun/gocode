@@ -15,6 +15,7 @@ import (
 	"github.com/channyeintun/gocode/internal/compact"
 	"github.com/channyeintun/gocode/internal/config"
 	costpkg "github.com/channyeintun/gocode/internal/cost"
+	"github.com/channyeintun/gocode/internal/debuglog"
 	"github.com/channyeintun/gocode/internal/ipc"
 	"github.com/channyeintun/gocode/internal/session"
 	"github.com/channyeintun/gocode/internal/timing"
@@ -162,6 +163,9 @@ func handleSlashCommand(
 				return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
 			}
 
+			if debuglog.Enabled {
+				nextClient = newDebugClientProxy(nextClient)
+			}
 			*client = nextClient
 			activeModelID = modelRef("github-copilot", nextClient.ModelID())
 			if err := emitToolUseCapabilityNotice(bridge, activeModelID, *client, nil); err != nil {
@@ -254,6 +258,9 @@ func handleSlashCommand(
 			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
 		}
 
+		if debuglog.Enabled {
+			nextClient = newDebugClientProxy(nextClient)
+		}
 		*client = nextClient
 		activeModelID = modelRef(provider, nextClient.ModelID())
 		if err := emitToolUseCapabilityNotice(bridge, activeModelID, *client, nil); err != nil {

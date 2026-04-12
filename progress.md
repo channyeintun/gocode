@@ -503,3 +503,30 @@ Root causes (two bugs):
    actually created).
 
 Verification: `go build ./...` passes, binary installed.
+
+---
+
+## Task 17 — Hide diff-preview artifact + fix debug proxy after slash commands
+
+**Files**: `gocode/tui/src/App.tsx`, `gocode/cmd/gocode/slash_commands.go`, `progress.md`
+
+Two fixes based on code review feedback from the model:
+
+1. **Diff-preview artifact shown permanently** — `selectRecentArtifacts` in
+   `App.tsx` filtered out `implementation-plan` and `tool-log` but kept
+   `diff-preview` artifacts. When the model ran `git diff` during a code review,
+   the diff-preview artifact occupied one of the 2 visible artifact slots
+   permanently, providing no user value.
+   
+   Fix: exclude `diff-preview` from `selectRecentArtifacts`.
+
+2. **Debug proxy lost after `/model` and `/connect`** — slash commands assigned
+   `*client = nextClient` with a raw (unwrapped) client. After this,
+   `ensureClientForSelection` returned the same non-nil client unchanged, and
+   the engine guard (`resolvedClient != client`) never triggered re-wrapping.
+   All subsequent model traffic was unlogged under `GOCODE_DEBUG=1`.
+   
+   Fix: wrap `nextClient` with `newDebugClientProxy` in both `/connect` and
+   `/model` paths before assigning to `*client`.
+
+Verification: `go build ./...` passes, TUI rebuilt, both binaries installed.
