@@ -7,6 +7,7 @@ Tracking fixes per plan.md.
 ## Phase 1: Critical Bugs
 
 ### Task 1 — Fix Gemini `FunctionResponse.Name` ✅
+
 - **File:** `internal/api/gemini.go`
 - Built a `toolCallID → toolName` map in `buildGeminiContents` by scanning all
   assistant messages, passed it through `convertGeminiMessage` and
@@ -14,6 +15,7 @@ Tracking fixes per plan.md.
   instead of the opaque call ID.
 
 ### Task 2 — Fix Race Condition in Title Generation Goroutine ✅
+
 - **Files:** `internal/api/client.go`, `cmd/gocode/main.go`
 - Added `api.DeepCopyMessages()` that deep-copies `ToolCalls`, `Images`, and
   `ToolResult` for each message.
@@ -21,12 +23,14 @@ Tracking fixes per plan.md.
   shallow `append` slice copy.
 
 ### Task 3 — Fix Race Condition on `globalFileHistory` ✅
+
 - **File:** `internal/tools/file_history.go`
 - Converted the bare `*FileHistory` global into an anonymous struct protected
   by `sync.RWMutex`; `SetGlobalFileHistory` holds a write lock,
   `GetGlobalFileHistory` holds a read lock.
 
 ### Task 4 — Add Timeouts to `http.Client` ✅
+
 - **Files:** `internal/api/client.go`, `anthropic.go`, `gemini.go`, `ollama.go`,
   `openai_compat.go`
 - Added `newHTTPClient()` helper returning `&http.Client{Timeout: 5 * time.Minute}`.
@@ -38,12 +42,14 @@ Tracking fixes per plan.md.
 ## Phase 2: Medium Severity Bugs and Security
 
 ### Task 5 — Fix Child Agent Cost Double-Counting ✅
+
 - **File:** `internal/cost/tracker.go`
-- `RecordChildAgentSnapshot` now adds only the child's *own* cost/tokens
+- `RecordChildAgentSnapshot` now adds only the child's _own_ cost/tokens
   (total minus its own nested-child subtotals) to the `ChildAgent*` fields,
   preventing double-counting with what `mergeSnapshotLocked` already adds.
 
 ### Task 6 — Consolidate Duplicate Bash Security Rules ✅
+
 - **Files:** new `internal/bashsecurity/rules.go`, `internal/tools/bash.go`,
   `internal/permissions/bash_rules.go`
 - Created `internal/bashsecurity` package as the single canonical source for
@@ -53,12 +59,14 @@ Tracking fixes per plan.md.
 - Duplicate regex vars removed from both packages.
 
 ### Task 7 — Resolve Symlinks in `resolveToolPath` ✅
+
 - **File:** `internal/tools/path_resolution.go`
 - After the normal path-escape check, calls `filepath.EvalSymlinks()` when the
   path already exists and re-validates the real path against `baseDir`.
   Non-existent paths (e.g. `create_file`) are skipped silently.
 
 ### Task 8 — Validate `base_url` Against Known Provider Domains ✅
+
 - **Files:** `internal/api/client.go`, `anthropic.go`, `gemini.go`, `ollama.go`,
   `openai_compat.go`
 - Added `warnCustomBaseURL()` helper that prints a stderr warning whenever the
@@ -67,6 +75,7 @@ Tracking fixes per plan.md.
 - Warning is suppressed when `GOCODE_ALLOW_CUSTOM_BASE_URL=1` is set.
 
 ### Task 9 — Validate Permission Mode on Load ✅
+
 - **File:** `internal/config/config.go`
 - `Load()` now validates `cfg.PermissionMode` after all overrides are applied.
   Unknown values print a warning to stderr and fall back to `"default"`.
@@ -76,6 +85,7 @@ Tracking fixes per plan.md.
 ## Phase 3: Code Quality
 
 ### Task 10 — Remove `max()` Redefinition and `minInt` Helper ✅
+
 - **Files:** `internal/tools/file_read.go`, `internal/tools/file_diff_preview.go`,
   `internal/agent/memory_files.go`, `internal/tools/web_search.go`,
   `internal/agent/output_budget.go`, `internal/agent/memory_files.go`,
@@ -84,6 +94,7 @@ Tracking fixes per plan.md.
 - Replaced all call sites with the Go 1.21+ builtin `min()`/`max()`.
 
 ### Task 11 — Expand Bash Security Validation ✅
+
 - **File:** `internal/bashsecurity/rules.go` (via Task 6)
 - Added `EvalExec` pattern blocking `eval`, `exec`, `source`, `.` (dot-source),
   and backtick command substitution.
@@ -94,6 +105,7 @@ Tracking fixes per plan.md.
 ## Phase 4: Structural Improvements
 
 ### Task 12 — Extract Engine Loop from `main.go` ✅
+
 - **Files:** `cmd/gocode/main.go` (trimmed to ~147 lines), new files:
   - `cmd/gocode/engine.go` (~1065 lines) — `runStdioEngine`, model helpers, stream emitters, plan review gate
   - `cmd/gocode/tool_executor.go` (~686 lines) — `executeToolCalls`, permission helpers, tool param utilities
@@ -102,22 +114,33 @@ Tracking fixes per plan.md.
 - Pure file reorganization; no logic changes. Build verified after split.
 
 ### Task 13 — Add Foundational Tests ⏭️
+
 - Skipped per project policy.
 
 ### Task 14 — Reduce Simple-Task Retry Thrash and Search Alias Errors ✅
+
 - **Files:** `gocode/cmd/gocode/tool_executor.go`, `gocode/internal/agent/loop.go`, `gocode/cmd/gocode/engine.go`
 - Normalized invented tool names like `google:search`/`google_search` into the native `web_search` tool and mapped `queries[0]` to `query` so local-model compatibility errors stop derailing turns.
 - When the model asks a routine clarification for a concrete implementation request, the engine now emits a visible recoverable status and retries once with a stronger directive that forbids unnecessary web search for basic scaffold/syntax tasks.
 - Tightened the default system prompt so simple self-contained requests are handled by direct file edits instead of pointless browsing or clarification loops.
 
 ### Task 15 — Audit Subagent Implementation ✅
+
 - **Files reviewed:** `gocode/cmd/gocode/subagent_runtime.go`, `gocode/cmd/gocode/subagent_background.go`, `gocode/internal/tools/agent.go`, `gocode/internal/hooks/types.go`, `gocode/internal/tools/registry.go`, plus `vscode-copilot-chat/src/extension/agents/vscode-node/*` and `vscode-copilot-chat/src/extension/intents/node/toolCallingLoop.ts`
 - Confirmed a high-severity bug: `makeSubagentRunner(...)` captures the startup `client` and `activeModelID` once, so child agents do not follow later lazy model initialization or `/model` switches.
 - Confirmed a hook-model mismatch versus VS Code Copilot Chat: child agents reuse generic `session_start` / `stop` hooks instead of dedicated subagent hook types, so parent hooks can unintentionally affect child-agent startup and completion.
 - No code fixes applied in this task; findings recorded for follow-up implementation.
 
 ### Task 16 — Fix Subagent Runtime State and Hook Isolation ✅
+
 - **Files:** `gocode/cmd/gocode/model_state.go`, `gocode/cmd/gocode/engine.go`, `gocode/cmd/gocode/subagent_runtime.go`, `gocode/internal/hooks/types.go`
 - Added a shared active-model state so the `agent` tool reads the current model client and model id at invocation time instead of using startup snapshots.
 - Main engine now refreshes that state after lazy client initialization and after slash-command model/session changes, so child agents follow `/model`, restore, and delayed startup recovery.
 - Split child lifecycle hooks into dedicated `subagent_start`, `subagent_stop`, and `subagent_stop_failure` hook types so top-level session hooks no longer leak into child-agent runs.
+
+### Task 17 — Install Latest Local Build ✅
+
+- **Method:** Followed the local-clone install flow from `README.md` via `gocode/tui/Makefile`.
+- Rebuilt the local release with `cd gocode/tui && make release-local`.
+- Installed updated `gocode` and `gocode-engine` into `~/.local/bin` using `install -m 755`.
+- Verified the installed launcher resolves from `~/.local/bin/gocode` and `gocode --help` runs successfully.
