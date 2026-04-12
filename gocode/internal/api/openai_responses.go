@@ -101,6 +101,12 @@ func (c *OpenAIResponsesClient) Stream(ctx context.Context, req ModelRequest) (i
 		})
 		if err != nil && !errors.Is(err, errStopStream) {
 			yield(ModelEvent{}, err)
+			return
+		}
+		// Safety net: if the SSE stream ended without a terminal event, emit
+		// a stop so the agent loop always receives a proper stop reason.
+		if !state.sentStop {
+			state.emitStop("end_turn", yield)
 		}
 	}, nil
 }
@@ -195,6 +201,9 @@ func (c *OpenAIResponsesClient) handleEvent(data string, state *openAIResponsesS
 	trimmed := strings.TrimSpace(data)
 	if trimmed == "" {
 		return nil
+	}
+	if trimmed == "[DONE]" {
+		return state.emitStop("end_turn", yield)
 	}
 
 	var envelope openAIResponsesEnvelope

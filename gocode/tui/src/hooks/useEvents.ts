@@ -408,7 +408,9 @@ export function useEvents(initialModel: string, initialMode: string) {
             s.liveAssistantBlocks,
           )
             ? s.liveAssistantBlocks
-            : [{ kind: "text", text: "(Model returned an empty response)" }];
+            : assistantBlocksHaveContent(s.liveAssistantBlocks)
+              ? s.liveAssistantBlocks
+              : [{ kind: "text", text: "(Model returned an empty response)" }];
           const message = createAssistantMessage(blocks, { model: s.model });
           return {
             ...s,

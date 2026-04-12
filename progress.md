@@ -400,4 +400,43 @@ Verification completed:
 - ran `go build ./...`
 - ran `make release-local` in `gocode/tui`
 
+## Task 14 — Guarantee stop event and show thinking-only turns
+
+**Files**: `gocode/internal/api/openai_responses.go`, `gocode/tui/src/hooks/useEvents.ts`, `progress.md`
+
+Fixed a persistent `(Model returned an empty response)` failure on Copilot
+GPT-5.4 review prompts even after the earlier terminal-event fix.
+
+Root causes (three remaining gaps):
+
+1. **No stop event on clean stream EOF** — if the SSE stream closed without a
+   terminal event (`response.completed`, `response.done`), no `ModelEventStop`
+   was ever emitted. The loop finished silently with whatever was accumulated,
+   and the turn completed with an empty result.
+
+2. **Thinking-only turns discarded by the TUI** — `assistantBlocksHaveText`
+   required `kind === "text"`. If the model produced only reasoning/thinking
+   content (common with GPT-5.4 on review tasks), those blocks had
+   `kind: "thinking"` and were replaced with the empty-response placeholder.
+
+3. **`[DONE]` sentinel not handled** — if Copilot sends the standard OpenAI
+   `[DONE]` SSE sentinel, the JSON parser would crash and propagate an error.
+
+Implementation completed:
+
+- added a safety net at the end of the Stream iterator: if `readSSE` returns
+  without error and no stop was emitted, emit a synthetic `end_turn` stop so
+  the agent loop always receives a proper termination
+- handled the `[DONE]` sentinel by emitting a stop event instead of trying to
+  parse it as JSON
+- updated the TUI turn_complete handler so when no text blocks exist but
+  thinking blocks do, the thinking blocks are preserved and shown instead of
+  being replaced with the empty-response placeholder
+
+Verification completed:
+
+- ran `gofmt -w` on the changed Go file
+- ran `go build ./...`
+- ran `make release-local` in `gocode/tui`
+
 ---
