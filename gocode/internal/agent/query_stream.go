@@ -13,15 +13,17 @@ import (
 
 // QueryRequest holds everything needed to start a query.
 type QueryRequest struct {
-	Messages      []api.Message
-	SystemPrompt  string
-	Mode          ExecutionMode
-	SessionID     string
-	Skills        []skillspkg.Skill
-	Tools         []api.ToolDefinition
-	Capabilities  api.ModelCapabilities
-	ContextWindow int
-	MaxTokens     int
+	Messages        []api.Message
+	SystemPrompt    string
+	ModelID         string
+	ReasoningEffort string
+	Mode            ExecutionMode
+	SessionID       string
+	Skills          []skillspkg.Skill
+	Tools           []api.ToolDefinition
+	Capabilities    api.ModelCapabilities
+	ContextWindow   int
+	MaxTokens       int
 }
 
 // CompactReason indicates why compaction was triggered.
@@ -66,6 +68,8 @@ type QueryState struct {
 	Messages            []api.Message
 	BasePrompt          string
 	SystemPrompt        string
+	ModelID             string
+	ReasoningEffort     string
 	SystemContext       SystemContext
 	TurnContext         TurnContext
 	PromptCache         *PromptAssemblyCache
@@ -92,6 +96,8 @@ func NewQueryState(req QueryRequest) *QueryState {
 		Messages:         req.Messages,
 		BasePrompt:       req.SystemPrompt,
 		SystemPrompt:     req.SystemPrompt,
+		ModelID:          req.ModelID,
+		ReasoningEffort:  req.ReasoningEffort,
 		SystemContext:    LoadSystemContext(),
 		PromptCache:      NewPromptAssemblyCache(),
 		Mode:             req.Mode,

@@ -218,4 +218,36 @@ Verification completed:
 - ran `go build ./...`
 - ran `make release-local` in `gocode/tui`
 
+## Task 9 — Add GPT-5.4 reasoning-effort selection
+
+**Files**: `gocode/internal/config/config.go`, `gocode/internal/api/client.go`, `gocode/internal/api/openai_reasoning.go`, `gocode/internal/agent/query_stream.go`, `gocode/internal/agent/loop.go`, `gocode/internal/api/openai_responses.go`, `gocode/cmd/gocode/engine.go`, `gocode/cmd/gocode/subagent_runtime.go`, `gocode/cmd/gocode/slash_commands.go`, `progress.md`
+
+Added a user-selectable reasoning-effort setting for OpenAI Responses models so
+GitHub Copilot GPT-5.4 can be used with the same low / medium / high / xhigh
+effort levels exposed in VS Code.
+
+Implementation completed:
+
+- added persisted `reasoning_effort` config support plus the
+  `GOCODE_REASONING_EFFORT` environment override
+- added model-aware OpenAI reasoning helpers that:
+  - validate `low`, `medium`, `high`, and `xhigh`
+  - clamp `xhigh` down to `high` on models that do not support it
+  - default supported OpenAI reasoning models to `medium`
+- threaded the configured reasoning effort through the query request path
+- updated the OpenAI Responses client to send `reasoning.effort` and automatic
+  reasoning summaries on supported models
+- preserved the existing `ultrathink` prompt behavior by raising the current
+  turn's effort on supported Responses models instead of dropping the request
+- added `/reasoning [low|medium|high|xhigh|default]`
+- updated `/status` to display the active reasoning level
+- updated `/connect` so GitHub Copilot initializes with `medium` reasoning if
+  no explicit setting has been saved yet
+
+Verification completed:
+
+- ran `gofmt -w` on the changed Go files
+- ran `go build ./...`
+- ran `make release-local` in `gocode/tui`
+
 ---

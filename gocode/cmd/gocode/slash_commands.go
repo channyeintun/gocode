@@ -129,6 +129,9 @@ func handleSlashCommand(
 			persisted.GitHubCopilot = copilotAuth
 			persisted.Model = modelRef("github-copilot", api.Presets["github-copilot"].DefaultModel)
 			persisted.SubagentModel = modelRef("github-copilot", api.GitHubCopilotDefaultSubagentModel)
+			if strings.TrimSpace(persisted.ReasoningEffort) == "" {
+				persisted.ReasoningEffort = api.ReasoningEffortMedium
+			}
 			if err := config.Save(persisted); err != nil {
 				if emitErr := emitTextResponse(bridge, fmt.Sprintf("save GitHub Copilot credentials: %v", err)); emitErr != nil {
 					return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
@@ -167,7 +170,7 @@ func handleSlashCommand(
 			if err := emitContextWindowUsage(bridge, *client, messages); err != nil {
 				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 			}
-			if err := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot connected. Set main model to %s and subagent model to github-copilot/%s", activeModelID, api.GitHubCopilotDefaultSubagentModel)); err != nil {
+			if err := emitTextResponse(bridge, fmt.Sprintf("GitHub Copilot connected. Set main model to %s, subagent model to github-copilot/%s, and reasoning effort to %s.", activeModelID, api.GitHubCopilotDefaultSubagentModel, persisted.ReasoningEffort)); err != nil {
 				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 			}
 			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
@@ -260,6 +263,45 @@ func handleSlashCommand(
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		if err := emitTextResponse(bridge, fmt.Sprintf("Set model to %s", activeModelID)); err != nil {
+			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+		}
+		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+	case "reasoning":
+		persisted := config.Load()
+		currentModelID := activeModelID
+		if client != nil && *client != nil {
+			currentModelID = strings.TrimSpace((*client).ModelID())
+		}
+		current := describeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
+		if strings.TrimSpace(args) == "" {
+			if err := emitTextResponse(bridge, fmt.Sprintf("Current reasoning effort: %s", current)); err != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+
+		nextEffort, clearSetting, err := parseReasoningArgs(args)
+		if err != nil {
+			if emitErr := emitTextResponse(bridge, err.Error()); emitErr != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+
+		if clearSetting {
+			persisted.ReasoningEffort = ""
+		} else {
+			persisted.ReasoningEffort = nextEffort
+		}
+		if err := config.Save(persisted); err != nil {
+			if emitErr := emitTextResponse(bridge, fmt.Sprintf("save reasoning effort: %v", err)); emitErr != nil {
+				return false, sessionID, startedAt, mode, activeModelID, cwd, messages, emitErr
+			}
+			return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
+		}
+
+		updated := describeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
+		if err := emitTextResponse(bridge, fmt.Sprintf("Set reasoning effort to %s", updated)); err != nil {
 			return false, sessionID, startedAt, mode, activeModelID, cwd, messages, err
 		}
 		return true, sessionID, startedAt, mode, activeModelID, cwd, messages, nil
@@ -526,6 +568,38 @@ func parseConnectArgs(args string) (string, string, error) {
 	}
 }
 
+func parseReasoningArgs(args string) (string, bool, error) {
+	selection := strings.ToLower(strings.TrimSpace(args))
+	if selection == "default" {
+		return "", true, nil
+	}
+	normalized, ok := api.NormalizeReasoningEffort(selection)
+	if !ok {
+		return "", false, fmt.Errorf("usage: /reasoning [low|medium|high|xhigh|default]")
+	}
+	return normalized, false, nil
+}
+
+func describeReasoningEffort(configured string, modelID string) string {
+	effective := api.ClampReasoningEffort(modelID, configured)
+	if effective == "" {
+		effective = api.DefaultReasoningEffort(modelID)
+		if effective == "" {
+			if configured == "" {
+				return "default"
+			}
+			return configured + " (saved for supported models)"
+		}
+		if configured == "" {
+			return effective + " (default)"
+		}
+	}
+	if configured != "" && configured != effective {
+		return fmt.Sprintf("%s (clamped from %s for %s)", effective, configured, modelID)
+	}
+	return effective
+}
+
 func openBrowserURL(target string) error {
 	if strings.TrimSpace(target) == "" {
 		return fmt.Errorf("empty browser URL")
@@ -597,6 +671,7 @@ func formatHelpText() string {
   /plan          Switch to plan mode (read-only until approved)
   /fast          Switch to fast mode (direct execution)
   /model [name]  Show or switch the active model
+	/reasoning     Show or set GPT-5 reasoning effort: low, medium, high, xhigh, or default
   /cost          Show token usage and cost breakdown
   /usage         Alias for /cost
   /compact       Compact the conversation to save context
@@ -611,13 +686,15 @@ func formatHelpText() string {
 func formatStatusText(sessionID string, startedAt time.Time, mode agent.ExecutionMode, model string, cwd string, msgCount int, tracker *costpkg.Tracker) string {
 	elapsed := time.Since(startedAt).Round(time.Second)
 	snap := tracker.Snapshot()
+	reasoning := describeReasoningEffort(strings.TrimSpace(config.Load().ReasoningEffort), model)
 	return fmt.Sprintf(
-		"Session: %s\nStarted: %s (%s ago)\nMode: %s\nModel: %s\nCWD: %s\nMessages: %d\nCost: $%.4f\nTokens: %d in / %d out",
+		"Session: %s\nStarted: %s (%s ago)\nMode: %s\nModel: %s\nReasoning: %s\nCWD: %s\nMessages: %d\nCost: $%.4f\nTokens: %d in / %d out",
 		sessionID,
 		startedAt.Format(time.RFC3339),
 		elapsed,
 		string(mode),
 		model,
+		reasoning,
 		cwd,
 		msgCount,
 		snap.TotalCostUSD,

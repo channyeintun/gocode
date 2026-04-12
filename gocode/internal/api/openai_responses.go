@@ -172,6 +172,13 @@ func (c *OpenAIResponsesClient) buildRequest(req ModelRequest) (openAIResponsesR
 		Stream:          true,
 		Store:           false,
 	}
+	if effort := ClampReasoningEffort(c.model, req.ReasoningEffort); effort != "" {
+		payload.Reasoning = &openAIResponsesReasoning{
+			Effort:  effort,
+			Summary: "auto",
+		}
+		payload.Include = []string{"reasoning.encrypted_content"}
+	}
 
 	var extraHeaders map[string]string
 	if c.provider == "github-copilot" {
@@ -455,8 +462,15 @@ type openAIResponsesRequest struct {
 	Tools           []openAIResponsesToolDefinition `json:"tools,omitempty"`
 	MaxOutputTokens int                             `json:"max_output_tokens,omitempty"`
 	Temperature     *float64                        `json:"temperature,omitempty"`
+	Reasoning       *openAIResponsesReasoning       `json:"reasoning,omitempty"`
+	Include         []string                        `json:"include,omitempty"`
 	Stream          bool                            `json:"stream"`
 	Store           bool                            `json:"store"`
+}
+
+type openAIResponsesReasoning struct {
+	Effort  string `json:"effort,omitempty"`
+	Summary string `json:"summary,omitempty"`
 }
 
 type openAIResponsesToolDefinition struct {

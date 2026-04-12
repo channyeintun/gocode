@@ -415,10 +415,29 @@ func buildModelRequest(state *QueryState) api.ModelRequest {
 	if state.Capabilities.SupportsToolUse {
 		request.Tools = state.Tools
 	}
+	if effort := effectiveReasoningEffort(state.ModelID, state.ReasoningEffort, latestUserPrompt(state.Messages)); effort != "" {
+		request.ReasoningEffort = effort
+		return request
+	}
 	if budget := thinkingBudgetForPrompt(latestUserPrompt(state.Messages), state.Capabilities, state.MaxTokens); budget > 0 {
 		request.ThinkingBudget = budget
 	}
 	return request
+}
+
+func effectiveReasoningEffort(modelID, configured, prompt string) string {
+	if !api.SupportsOpenAIReasoningEffort(modelID) {
+		return ""
+	}
+
+	baseline := api.ClampReasoningEffort(modelID, configured)
+	if baseline == "" {
+		baseline = api.DefaultReasoningEffort(modelID)
+	}
+	if requestsExtendedThinking(prompt) {
+		return api.MaxReasoningEffort(modelID, baseline, api.ReasoningEffortXHigh)
+	}
+	return baseline
 }
 
 func capabilitySystemPrompt(capabilities api.ModelCapabilities) string {

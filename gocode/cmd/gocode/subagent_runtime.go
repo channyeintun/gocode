@@ -245,15 +245,17 @@ func executeSubagent(
 	}
 
 	stream := agent.QueryStream(ctx, agent.QueryRequest{
-		Messages:      childMessages,
-		SystemPrompt:  childPrompt,
-		Mode:          childMode,
-		SessionID:     childSessionID,
-		Skills:        childSkills,
-		Tools:         childRegistry.Definitions(),
-		Capabilities:  client.Capabilities(),
-		ContextWindow: client.Capabilities().MaxContextWindow,
-		MaxTokens:     client.Capabilities().MaxOutputTokens,
+		Messages:        childMessages,
+		SystemPrompt:    childPrompt,
+		ModelID:         client.ModelID(),
+		ReasoningEffort: config.Load().ReasoningEffort,
+		Mode:            childMode,
+		SessionID:       childSessionID,
+		Skills:          childSkills,
+		Tools:           childRegistry.Definitions(),
+		Capabilities:    client.Capabilities(),
+		ContextWindow:   client.Capabilities().MaxContextWindow,
+		MaxTokens:       client.Capabilities().MaxOutputTokens,
 	}, childDeps)
 
 	turnStopReason := ""

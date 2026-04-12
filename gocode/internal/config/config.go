@@ -12,8 +12,9 @@ import (
 // Config holds all CLI configuration.
 type Config struct {
 	// Model selection: provider/model-name format
-	Model         string `json:"model,omitempty"`
-	SubagentModel string `json:"subagent_model,omitempty"`
+	Model           string `json:"model,omitempty"`
+	SubagentModel   string `json:"subagent_model,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 
 	// Provider-level overrides
 	BaseURL string `json:"base_url,omitempty"`
@@ -82,6 +83,9 @@ func Load() Config {
 	}
 	if v := os.Getenv("GOCODE_API_KEY"); v != "" {
 		cfg.APIKey = v
+	}
+	if v := os.Getenv("GOCODE_REASONING_EFFORT"); v != "" {
+		cfg.ReasoningEffort = v
 	}
 	if v := os.Getenv("GOCODE_PERMISSION_MODE"); v != "" {
 		cfg.PermissionMode = v

@@ -308,15 +308,17 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				})
 
 				stream := agent.QueryStream(queryCtx, agent.QueryRequest{
-					Messages:      messages,
-					SystemPrompt:  systemPromptForMode(mode),
-					Mode:          mode,
-					SessionID:     sessionID,
-					Skills:        availableSkills,
-					Tools:         registry.Definitions(),
-					Capabilities:  client.Capabilities(),
-					ContextWindow: client.Capabilities().MaxContextWindow,
-					MaxTokens:     client.Capabilities().MaxOutputTokens,
+					Messages:        messages,
+					SystemPrompt:    systemPromptForMode(mode),
+					ModelID:         client.ModelID(),
+					ReasoningEffort: config.Load().ReasoningEffort,
+					Mode:            mode,
+					SessionID:       sessionID,
+					Skills:          availableSkills,
+					Tools:           registry.Definitions(),
+					Capabilities:    client.Capabilities(),
+					ContextWindow:   client.Capabilities().MaxContextWindow,
+					MaxTokens:       client.Capabilities().MaxOutputTokens,
 				}, deps)
 
 				queryFailed := false

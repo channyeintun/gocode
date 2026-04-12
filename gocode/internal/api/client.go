@@ -97,13 +97,14 @@ type ToolDefinition struct {
 
 // ModelRequest is the input to an LLM call.
 type ModelRequest struct {
-	Messages       []Message
-	SystemPrompt   string
-	Tools          []ToolDefinition
-	MaxTokens      int
-	Temperature    *float64
-	StopSequences  []string
-	ThinkingBudget int // 0 = no extended thinking
+	Messages        []Message
+	SystemPrompt    string
+	Tools           []ToolDefinition
+	MaxTokens       int
+	Temperature     *float64
+	StopSequences   []string
+	ThinkingBudget  int // 0 = no extended thinking
+	ReasoningEffort string
 }
 
 // ModelEventType discriminates model stream events.
