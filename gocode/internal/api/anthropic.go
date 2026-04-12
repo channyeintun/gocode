@@ -127,7 +127,8 @@ func (c *AnthropicClient) Stream(ctx context.Context, req ModelRequest) (iter.Se
 			}
 		}
 
-		err := readSSE(ctx, resp.Body, func(eventName, data string) error {
+		sseBody := sseBodyWithDebug(resp.Body, "anthropic")
+		err := readSSE(ctx, sseBody, func(eventName, data string) error {
 			return c.handleEvent(eventName, data, &state, yield)
 		})
 		if err != nil && !errors.Is(err, errStopStream) {

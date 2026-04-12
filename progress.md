@@ -440,3 +440,35 @@ Verification completed:
 - ran `make release-local` in `gocode/tui`
 
 ---
+
+## Task 15 — AOP Debugger monitoring tool
+
+**Files**: `gocode/internal/debuglog/logger.go`, `gocode/internal/debuglog/sse_reader.go`, `gocode/internal/debuglog/goroutine.go`, `gocode/internal/debuglog/bridge_proxy.go`, `gocode/internal/api/sse_debug.go`, `gocode/cmd/gocode/debug_proxy.go`, `gocode/cmd/gocode/engine.go`, `gocode/internal/api/openai_responses.go`, `gocode/internal/api/anthropic.go`, `gocode/internal/api/gemini.go`, `progress.md`
+
+Implemented a zero-source-change runtime debugger activated by `GOCODE_DEBUG=1`.
+All logs go to a JSONL `debug.log` file in the session directory.
+
+Components:
+
+- **debuglog/logger.go** — core JSONL writer with timestamp, goroutine ID,
+  category, event name, arbitrary fields. 50 MB cap. Conditional on `Enabled`.
+- **debuglog/sse_reader.go** — `SSEReaderProxy` wrapping `io.Reader` to capture
+  raw SSE bytes from all provider streams.
+- **debuglog/goroutine.go** — `LogGoroutineCount()` and `LogGoroutineSnapshot()`
+  using `runtime.Stack` and `runtime.NumGoroutine()`.
+- **debuglog/bridge_proxy.go** — `IPCWriter` and `IPCReader` wrapping the
+  Bridge's stdin/stdout to capture all inbound/outbound NDJSON IPC traffic.
+- **api/sse_debug.go** — `sseBodyWithDebug()` helper that wraps resp.Body when
+  debug is enabled.
+- **cmd/gocode/debug_proxy.go** — `debugClientProxy` wrapping `api.LLMClient`
+  to log every `Stream()` request, every `ModelEvent` yielded, and warmup calls.
+
+Wiring:
+
+- `engine.go` checks `GOCODE_DEBUG` env, wraps stdin/stdout with IPC loggers,
+  initialises debug log in the session directory, wraps client with proxy, and
+  defers `debuglog.Close()`.
+- All three SSE-consuming providers (openai_responses, anthropic, gemini) wrap
+  `resp.Body` through `sseBodyWithDebug()` before passing to `readSSE`.
+
+Verification: `go build ./...` passes, binary installed.

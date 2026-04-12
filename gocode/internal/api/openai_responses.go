@@ -96,7 +96,8 @@ func (c *OpenAIResponsesClient) Stream(ctx context.Context, req ModelRequest) (i
 		defer resp.Body.Close()
 
 		state := openAIResponsesStreamState{}
-		err := readSSE(ctx, resp.Body, func(_ string, data string) error {
+		sseBody := sseBodyWithDebug(resp.Body, "responses")
+		err := readSSE(ctx, sseBody, func(_ string, data string) error {
 			return c.handleEvent(data, &state, yield)
 		})
 		if err != nil && !errors.Is(err, errStopStream) {

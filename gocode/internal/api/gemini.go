@@ -103,7 +103,8 @@ func (c *GeminiClient) Stream(ctx context.Context, req ModelRequest) (iter.Seq2[
 
 			state := geminiStreamState{}
 			eventCount := 0
-			sseErr := readSSE(ctx, resp.Body, func(_ string, data string) error {
+			sseBody := sseBodyWithDebug(resp.Body, "gemini")
+			sseErr := readSSE(ctx, sseBody, func(_ string, data string) error {
 				eventCount++
 				return c.handleEvent(data, &state, yield)
 			})

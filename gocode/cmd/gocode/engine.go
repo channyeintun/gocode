@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"iter"
 	"os"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"github.com/channyeintun/gocode/internal/compact"
 	"github.com/channyeintun/gocode/internal/config"
 	costpkg "github.com/channyeintun/gocode/internal/cost"
+	"github.com/channyeintun/gocode/internal/debuglog"
 	"github.com/channyeintun/gocode/internal/hooks"
 	"github.com/channyeintun/gocode/internal/ipc"
 	"github.com/channyeintun/gocode/internal/localmodel"
@@ -27,7 +29,20 @@ import (
 
 func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	engineStartedAt := time.Now()
-	bridge := ipc.NewBridge(os.Stdin, os.Stdout)
+
+	// Debug logging: activated by GOCODE_DEBUG=1
+	if os.Getenv("GOCODE_DEBUG") != "" {
+		debuglog.Enabled = true
+	}
+
+	var stdinR io.Reader = os.Stdin
+	var stdoutW io.Writer = os.Stdout
+	if debuglog.Enabled {
+		stdinR = debuglog.NewIPCReader(os.Stdin)
+		stdoutW = debuglog.NewIPCWriter(os.Stdout)
+	}
+
+	bridge := ipc.NewBridge(stdinR, stdoutW)
 	registry := toolpkg.NewRegistry()
 	provider, model := config.ParseModel(cfg.Model)
 	provider = normalizeProvider(provider)
@@ -42,6 +57,9 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 		startupModelErr = err
 	} else {
 		activeModelID = modelRef(provider, client.ModelID())
+	}
+	if debuglog.Enabled && client != nil {
+		client = newDebugClientProxy(client)
 	}
 	modelState := newActiveModelState(client, activeModelID)
 	messages := make([]api.Message, 0, 32)
@@ -58,6 +76,14 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	timingLogger := timing.NewSessionLogger(sessionStore.SessionDir(sessionID))
+
+	// Init debug logging now that we have a session directory.
+	if debuglog.Enabled {
+		debuglog.Init(sessionStore.SessionDir(sessionID))
+		defer debuglog.Close()
+		debuglog.LogGoroutineCount()
+	}
+
 	startupMetrics := timing.NewCheckpointRecorder(engineStartedAt)
 	fileHistory := toolpkg.NewFileHistory(toolpkg.DefaultFileHistoryDir(sessionStore.SessionDir(sessionID)))
 	toolpkg.SetGlobalFileHistory(fileHistory)
@@ -190,6 +216,9 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				continue
 			}
 			client = resolvedClient
+			if debuglog.Enabled {
+				client = newDebugClientProxy(client)
+			}
 			activeModelID = nextModelID
 			modelState.Set(client, activeModelID)
 			if err := emitToolUseCapabilityNotice(bridge, activeModelID, client, &toolUseNoticeModelID); err != nil {
