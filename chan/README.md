@@ -189,9 +189,9 @@ When the agent wants to run a command or write a file, you'll see a permission p
 | `y` | Allow this one command                                                              |
 | `n` | Deny this command                                                                   |
 | `a` | Always allow this exact command                                                     |
-| `s` | Allow future read-only requests and non-destructive shell commands for this session |
+| `s` | Allow future non-destructive, non-sensitive requests for this session               |
 
-Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, etc.) always require explicit approval, even with `[s]`.
+Destructive commands (`rm -rf`, `git push --force`, `DROP TABLE`, etc.) and sensitive edits such as `.env`, lockfiles, `.git`, or workspace settings still require explicit approval, even with `[s]`.
 
 ## Tools
 

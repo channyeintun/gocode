@@ -26,7 +26,7 @@ type Rule struct {
 // Context holds the current permission state.
 type Context struct {
 	Mode             Mode
-	SessionAllowAll  bool // auto-approve read-only tools and non-destructive bash commands for this session
+	SessionAllowAll  bool // auto-approve non-destructive, non-sensitive tool calls for this session
 	AlwaysAllowRules []Rule
 	AlwaysDenyRules  []Rule
 	AlwaysAskRules   []Rule
@@ -77,20 +77,12 @@ func (c *Context) Check(toolName string, input tools.ToolInput, permLevel tools.
 		return DecisionAllow
 	}
 
-	// Session-wide allow-all: approve non-destructive commands
+	// Session-wide safe auto-approve: allow normal requests, but keep prompting for
+	// destructive or explicitly sensitive operations.
 	if c.SessionAllowAll {
-		if permLevel == tools.PermissionReadOnly {
+		risk := AssessRisk(toolName, input, permLevel)
+		if isSessionSafeAutoApprove(risk) {
 			return DecisionAllow
-		}
-		if toolName == "bash" {
-			command := ""
-			if params, ok := input.Params["command"]; ok {
-				command, _ = params.(string)
-			}
-			if CheckDestructive(command) == "" {
-				return DecisionAllow
-			}
-			// destructive bash commands still require explicit approval
 		}
 	}
 
@@ -273,6 +265,18 @@ func isReadOnlySubagentLaunch(toolName string, input tools.ToolInput) bool {
 	subagentType = strings.TrimSpace(subagentType)
 	switch subagentType {
 	case "", "explore", "search":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSessionSafeAutoApprove(risk RiskAssessment) bool {
+	if risk.DisallowPersistentAllow {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(risk.Level)) {
+	case "", "read", "write", "execute":
 		return true
 	default:
 		return false

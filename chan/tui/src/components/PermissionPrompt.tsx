@@ -52,7 +52,7 @@ const OPTIONS: PermissionOption[] = [
     decision: "allow_all_session",
     label: "Allow Safe This Session",
     description:
-      "Auto-approve future read-only requests and safe shell commands in this session.",
+      "Auto-approve future non-destructive, non-sensitive requests in this session.",
     shortcut: "S",
     color: "magenta",
   },
