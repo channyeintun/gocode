@@ -6,6 +6,7 @@
 
 ## Notes
 
+- Updated chan's runtime prompt in `chan/cmd/chan/engine.go` and `chan/internal/agent/planner.go` so the agent prefers subagent choreography for bounded exploration and execution, avoids polling non-background child agents, and treats implementation plans as durable artifacts that should be created or revised in place for substantial work.
 - Reworked `chan/internal/debuglog` into a runtime-configurable JSONL logger with a versioned event envelope.
 - Added centralized secret redaction and truncation for raw IPC and SSE payload logging.
 - Switched IPC, SSE, and client debug wrappers to stay active so `/debug` can start capturing mid-session.
