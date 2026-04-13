@@ -160,8 +160,6 @@ chan --help                        # Show help
 | `/fast`              | Switch to fast mode (direct execution)         |
 | `/model [name]`      | Show or switch the active model                |
 | `/reasoning [level]` | Show or set GPT-5 reasoning effort             |
-| `/cost`              | Show token usage and cost breakdown            |
-| `/usage`             | Alias for `/cost`                              |
 | `/compact`           | Compact the conversation to save context       |
 | `/resume [id]`       | Resume a previous session                      |
 | `/clear`             | Clear the conversation and start a new session |

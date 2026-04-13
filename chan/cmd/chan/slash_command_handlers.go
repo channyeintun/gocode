@@ -56,7 +56,6 @@ var slashCommandRegistry = map[string]slashCommandHandler{
 	"clear":     slashCommandHandlerFunc(handleClearSlashCommand),
 	"compact":   slashCommandHandlerFunc(handleCompactSlashCommand),
 	"connect":   slashCommandHandlerFunc(handleConnectSlashCommand),
-	"cost":      slashCommandHandlerFunc(handleCostSlashCommand),
 	"diff":      slashCommandHandlerFunc(handleDiffSlashCommand),
 	"fast":      slashCommandHandlerFunc(handleFastSlashCommand),
 	"help":      slashCommandHandlerFunc(handleHelpSlashCommand),
@@ -67,7 +66,6 @@ var slashCommandRegistry = map[string]slashCommandHandler{
 	"resume":    slashCommandHandlerFunc(handleResumeSlashCommand),
 	"sessions":  slashCommandHandlerFunc(handleSessionsSlashCommand),
 	"status":    slashCommandHandlerFunc(handleStatusSlashCommand),
-	"usage":     slashCommandHandlerFunc(handleCostSlashCommand),
 }
 
 func newSlashCommandContext(
@@ -367,10 +365,6 @@ func handleReasoningSlashCommand(cmd *slashCommandContext) error {
 
 	updated := describeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
 	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set reasoning effort to %s", updated))
-}
-
-func handleCostSlashCommand(cmd *slashCommandContext) error {
-	return emitTextResponse(cmd.bridge, formatCostSummary(cmd.tracker.Snapshot(), cmd.state.ActiveModelID))
 }
 
 func handleCompactSlashCommand(cmd *slashCommandContext) error {

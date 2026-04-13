@@ -168,7 +168,6 @@ chan --help                        # Show help
 | `/plan`      | Switch to plan mode (think before writing) |
 | `/fast`      | Switch to fast mode (execute directly)     |
 | `/model <m>` | Change model (e.g. `/model openai/gpt-4o`) |
-| `/cost`      | Show token usage and cost                  |
 | `/compact`   | Compress conversation to free up context   |
 | `/resume`    | Resume a previous session                  |
 

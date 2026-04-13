@@ -56,16 +56,6 @@ var slashCommandCatalog = []slashCommandDescriptor{
 		TakesArguments: true,
 	},
 	{
-		Name:        "cost",
-		Description: "Show token usage and cost breakdown",
-		Usage:       "/cost",
-	},
-	{
-		Name:        "usage",
-		Description: "Alias for /cost",
-		Usage:       "/usage",
-	},
-	{
 		Name:        "compact",
 		Description: "Compact the conversation to save context",
 		Usage:       "/compact",
@@ -339,19 +329,6 @@ func emitSessionArtifacts(ctx context.Context, bridge *ipc.Bridge, artifactManag
 
 	return nil
 }
-
-func formatCostSummary(snapshot costpkg.TrackerSnapshot, activeModelID string) string {
-	return fmt.Sprintf(
-		"Model: %s\nTotal cost: $%.4f\nInput tokens: %d\nOutput tokens: %d\nAPI duration: %s\nTool duration: %s",
-		activeModelID,
-		snapshot.TotalCostUSD,
-		snapshot.TotalInputTokens,
-		snapshot.TotalOutputTokens,
-		snapshot.TotalAPIDuration.Round(time.Millisecond),
-		snapshot.TotalToolDuration.Round(time.Millisecond),
-	)
-}
-
 func formatHelpText() string {
 	var b strings.Builder
 	b.WriteString("Available slash commands:\n\n")
