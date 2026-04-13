@@ -3,6 +3,7 @@
 ## Active Task
 
 - Completed: reduced transcript and panel distraction in the TUI by adopting ClaudeCode-style status-first affordances.
+- Completed: improved footer mode badge contrast for accessibility.
 
 ## Notes
 
@@ -11,3 +12,4 @@
 - Kept background work visible through the status bar summaries and existing status notices.
 - Hid streaming thinking content by default and added an explicit `Opt+T` reveal/hide shortcut.
 - Collapsed inline file diff previews to concise mutation summaries so edits no longer dominate the transcript.
+- Replaced low-contrast footer mode text with high-contrast badges so `FAST` and `PLAN` remain readable across terminal themes.

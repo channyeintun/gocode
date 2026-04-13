@@ -143,9 +143,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
         justifyContent="space-between"
       >
         <Text dimColor>
-          <Text color={getModeColor(mode)} bold>
-            {formatModeLabel(mode)}
-          </Text>
+          {renderModeBadge(mode)}
           {"  "}
           <Text>{activityLabel}</Text>
           {activityDetails ? `  ${activityDetails}` : ""}
@@ -165,16 +163,30 @@ function formatModeLabel(mode: string): string {
   return mode === "plan" ? "PLAN" : mode.toUpperCase();
 }
 
-function getModeColor(mode: string): "blue" | "green" | "yellow" {
+function renderModeBadge(mode: string) {
+  const label = ` ${formatModeLabel(mode)} `;
+
   if (mode === "plan") {
-    return "blue";
+    return (
+      <Text color="black" backgroundColor="cyan" bold>
+        {label}
+      </Text>
+    );
   }
 
   if (mode === "fast") {
-    return "green";
+    return (
+      <Text color="black" backgroundColor="yellow" bold>
+        {label}
+      </Text>
+    );
   }
 
-  return "yellow";
+  return (
+    <Text color="black" backgroundColor="white" bold>
+      {label}
+    </Text>
+  );
 }
 
 function getPromptTextColumns(terminalColumns: number): number {

@@ -17,3 +17,7 @@ Reduce TUI distraction by aligning the default interaction flow more closely wit
 2. Hide streaming thinking content by default and add an explicit keyboard shortcut affordance to reveal or hide it.
 3. Collapse inline file diff previews in the transcript to concise mutation summaries.
 4. Regenerate the TUI build output, update progress tracking, and commit the completed task.
+
+## Follow-up
+
+1. Replace low-contrast footer mode colors with high-contrast badges for `FAST` and `PLAN`.
