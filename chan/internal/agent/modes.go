@@ -22,7 +22,7 @@ func ProfileForMode(mode ExecutionMode) ExecutionProfile {
 	switch mode {
 	case ModePlan:
 		return ExecutionProfile{
-			RequirePlanBeforeWrite: false,
+			RequirePlanBeforeWrite: true,
 			PreferFastModel:        false,
 			MaxParallelReadTools:   5,
 			ToolSummaryVerbosity:   "full",
