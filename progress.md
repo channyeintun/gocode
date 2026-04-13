@@ -18,3 +18,4 @@
 - Updated `web/docs.html` with the new `/debug` and `chan debug-view` workflow details.
 - Restored the animated gradient NDJSON connector in the architecture section styling for `web/index.html` via `web/styles.css`.
 - Adjusted the architecture visual layout so the NDJSON connector line now physically touches and bridges both boxes.
+- Added `ollama/gemma4:e4b` examples to the setup and usage documentation for local Ollama runs.

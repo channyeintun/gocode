@@ -147,6 +147,7 @@ Artifacts are first-class outputs in `chan`, not just long-text spill buckets. W
 ```
 chan --model openai/gpt-4o        # Use a different model
 chan --model ollama/gemma3         # Use a local model via Ollama
+chan --model ollama/gemma4:e4b     # Use Gemma 4 via Ollama
 chan --mode fast                   # Skip planning, execute directly
 chan --help                        # Show help
 ```
