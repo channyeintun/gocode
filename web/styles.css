@@ -547,3 +547,118 @@ td {
         min-width: 700px;
     }
 }
+/* ── Premium SVG Filters & Animations ─── */
+
+svg .glow-orange {
+    filter: drop-shadow(0 0 4px rgba(255, 64, 0, 0.6)) drop-shadow(0 0 12px rgba(255, 64, 0, 0.3));
+}
+
+svg .glow-blue {
+    filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.6)) drop-shadow(0 0 12px rgba(96, 165, 250, 0.3));
+}
+
+svg .glow-soft {
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.1));
+}
+
+@keyframes dash-flow {
+    from { stroke-dashoffset: 100; }
+    to { stroke-dashoffset: 0; }
+}
+
+@keyframes node-pulse {
+    0%, 100% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes data-ping {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(2); opacity: 0; }
+}
+
+.animate-flow {
+    stroke-dasharray: 10;
+    animation: dash-flow 3s linear infinite;
+}
+
+.animate-pulse-slow {
+    animation: node-pulse 4s ease-in-out infinite;
+    transform-origin: center;
+}
+
+.arch-node-premium {
+    fill: #050505;
+    stroke: #1a1a1a;
+    transition: all 0.3s ease;
+}
+
+.arch-node-premium:hover {
+    fill: #0a0a0a;
+    stroke: var(--brand);
+}
+
+.connection-path {
+    fill: none;
+    stroke: #1a1a1a;
+    stroke-width: 1.5;
+    transition: stroke 0.3s ease;
+}
+
+.connection-path.active {
+    stroke: var(--brand);
+    opacity: 0.6;
+}
+
+/* Glassmorphism Overlays */
+.glass-panel {
+    background: rgba(10, 10, 10, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ── Constellation Visualization Styles ─── */
+
+.constellation-point {
+    fill: #1a1a1a;
+    stroke: #333;
+    stroke-width: 0.5;
+    transition: all 0.5s ease;
+}
+
+.active-point {
+    fill: var(--brand);
+    filter: drop-shadow(0 0 4px var(--brand));
+    stroke: var(--brand);
+    stroke-width: 1.5;
+}
+
+.mapping-line {
+    fill: none;
+    stroke: #1a1a1a;
+    stroke-width: 0.8;
+    stroke-dashoffset: 0;
+    transition: all 1s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.mapping-line.active {
+    stroke: var(--brand);
+    stroke-opacity: 0.4;
+}
+
+.constellation-label {
+    font-size: 6px;
+    font-weight: 700;
+    fill: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    pointer-events: none;
+}
+
+@keyframes breathe-glow {
+    0%, 100% { filter: drop-shadow(0 0 2px var(--brand)); opacity: 0.8; }
+    50% { filter: drop-shadow(0 0 8px var(--brand)); opacity: 1; }
+}
+
+.animate-breathe {
+    animation: breathe-glow 6s ease-in-out infinite;
+}
