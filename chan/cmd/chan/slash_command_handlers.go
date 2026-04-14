@@ -480,6 +480,7 @@ func handleResumeSlashCommand(cmd *slashCommandContext) error {
 
 func handleClearSlashCommand(cmd *slashCommandContext) error {
 	cmd.state.Messages = cmd.state.Messages[:0]
+	cmd.tracker.Reset()
 	newID, err := newSessionID()
 	if err != nil {
 		return err
@@ -493,6 +494,9 @@ func handleClearSlashCommand(cmd *slashCommandContext) error {
 		return err
 	}
 	if err := emitSessionUpdated(cmd.bridge, cmd.state.SessionID, ""); err != nil {
+		return err
+	}
+	if err := emitCostUpdate(cmd.bridge, cmd.tracker); err != nil {
 		return err
 	}
 	if err := emitContextWindowUsage(cmd.bridge, *cmd.client, cmd.state.Messages); err != nil {

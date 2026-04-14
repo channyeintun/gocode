@@ -269,6 +269,20 @@ export interface EngineUIState {
 
 const MAX_RETAINED_BACKGROUND_AGENTS = 24;
 
+function emptyCostState(): EngineUIState["cost"] {
+  return {
+    totalUsd: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    memoryRecallUsd: 0,
+    memoryRecallInputTokens: 0,
+    memoryRecallOutputTokens: 0,
+    childAgentUsd: 0,
+    childAgentInputTokens: 0,
+    childAgentOutputTokens: 0,
+  };
+}
+
 const initialState = (model: string, mode: string): EngineUIState => ({
   ready: false,
   slashCommands: [],
@@ -284,17 +298,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   maxContextWindow: null,
   maxOutputTokens: null,
   currentContextUsage: null,
-  cost: {
-    totalUsd: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-    memoryRecallUsd: 0,
-    memoryRecallInputTokens: 0,
-    memoryRecallOutputTokens: 0,
-    childAgentUsd: 0,
-    childAgentInputTokens: 0,
-    childAgentOutputTokens: 0,
-  },
+  cost: emptyCostState(),
   memoryRecall: {
     source: null,
     entries: [],
@@ -1116,16 +1120,24 @@ export function useEvents(initialModel: string, initialMode: string) {
         const p = event.payload as SessionUpdatedPayload;
         setUIState((s) => {
           const normalizedTitle = p.title?.trim() ? p.title.trim() : null;
+          const hasSessionScopedState =
+            s.messages.length > 0 ||
+            s.transcript.length > 0 ||
+            s.liveAssistantBlocks.length > 0 ||
+            s.toolCalls.length > 0 ||
+            s.artifacts.length > 0 ||
+            s.pendingArtifactReview !== null ||
+            s.pendingPermission !== null ||
+            s.isStreaming;
           const sessionChanged =
             typeof p.session_id === "string" &&
             p.session_id.length > 0 &&
-            s.sessionId !== null &&
-            s.sessionId !== p.session_id;
+            p.session_id !== s.sessionId;
           if (normalizedTitle && sessionChanged) {
             return s;
           }
 
-          if (sessionChanged) {
+          if (sessionChanged && (s.sessionId !== null || hasSessionScopedState)) {
             return {
               ...s,
               messages: [],
@@ -1135,6 +1147,8 @@ export function useEvents(initialModel: string, initialMode: string) {
               showPlanPanel: false,
               sessionId: p.session_id,
               sessionTitle: normalizedTitle,
+              currentContextUsage: 0,
+              cost: emptyCostState(),
               memoryRecall: {
                 source: null,
                 entries: [],
@@ -1152,7 +1166,7 @@ export function useEvents(initialModel: string, initialMode: string) {
                 firstArtifactFocusMs: null,
                 totalMs: null,
               },
-              statusLine: null,
+              statusLine: `Started new session ${p.session_id}`,
               pendingPermission: null,
               error: null,
               isStreaming: false,

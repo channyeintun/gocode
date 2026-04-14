@@ -94,6 +94,28 @@ func (t *Tracker) RecordLineChanges(added, removed int) {
 	t.TotalLinesRemoved += removed
 }
 
+// Reset clears all accumulated session usage while preserving the tracker instance.
+func (t *Tracker) Reset() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.TotalCostUSD = 0
+	t.TotalInputTokens = 0
+	t.TotalOutputTokens = 0
+	t.TotalCacheReadTokens = 0
+	t.TotalCacheCreationTokens = 0
+	t.MemoryRecallCostUSD = 0
+	t.MemoryRecallInputTokens = 0
+	t.MemoryRecallOutputTokens = 0
+	t.ChildAgentCostUSD = 0
+	t.ChildAgentInputTokens = 0
+	t.ChildAgentOutputTokens = 0
+	t.TotalAPIDuration = 0
+	t.TotalToolDuration = 0
+	t.TotalLinesAdded = 0
+	t.TotalLinesRemoved = 0
+	t.ModelUsage = make(map[string]*ModelUsageEntry)
+}
+
 // Snapshot returns a snapshot of the current cost state.
 type TrackerSnapshot struct {
 	TotalCostUSD             float64
