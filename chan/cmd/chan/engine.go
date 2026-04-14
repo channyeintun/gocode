@@ -438,7 +438,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				// Plan review gate: after a successful plan-mode query that saved a final
 				// implementation plan, pause for explicit user review before execution.
 				if mode == agent.ModePlan {
-					reviewResult, reviewErr := handlePlanReviewGate(ctx, bridge, router, &mode, artifactManager, sessionID, messages, messagesBeforeQuery)
+					reviewResult, reviewErr := handlePlanReviewGate(ctx, bridge, router, &mode, artifactManager, sessionID, messages, messagesBeforeQuery, turnStopReason)
 					if reviewErr != nil && reviewErr != context.Canceled {
 						if emitErr := bridge.EmitError(fmt.Sprintf("plan review gate: %v", reviewErr), true); emitErr != nil {
 							return emitErr
@@ -1166,11 +1166,12 @@ func handlePlanReviewGate(
 	sessionID string,
 	messages []api.Message,
 	fromIndex int,
+	stopReason string,
 ) (planReviewGateResult, error) {
 	if *mode != agent.ModePlan {
 		return planReviewGateResult{}, nil
 	}
-	if !turnUsedToolName(messages, fromIndex, "save_implementation_plan") {
+	if !turnUsedToolName(messages, fromIndex, "save_implementation_plan") && stopReason != "plan_review_required" {
 		return planReviewGateResult{}, nil
 	}
 

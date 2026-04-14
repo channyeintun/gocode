@@ -502,7 +502,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             cursorOffset={prompt.cursorOffset}
             blockedReason={promptBlockedReason}
             queuedPromptCount={queuedPrompts.length}
-            thinkingShortcutLabel={THINKING_TOGGLE_SHORTCUT_LABEL}
           />
         </Box>
       )}

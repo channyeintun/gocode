@@ -21,6 +21,14 @@ type modelTurn struct {
 	outputTokens       int
 }
 
+// PauseForPlanReviewError tells the query loop to stop after recording current
+// tool results so the engine can surface the plan review gate immediately.
+type PauseForPlanReviewError struct{}
+
+func (e *PauseForPlanReviewError) Error() string {
+	return "pause for implementation plan review"
+}
+
 func runIteration(
 	ctx context.Context,
 	state *QueryState,
@@ -139,7 +147,8 @@ func runIteration(
 
 	if len(turn.toolCalls) > 0 {
 		results, err := deps.ExecuteToolBatch(ctx, turn.toolCalls)
-		if err != nil {
+		var pauseForPlanReview *PauseForPlanReviewError
+		if err != nil && !errors.As(err, &pauseForPlanReview) {
 			return err
 		}
 		for _, result := range results {
@@ -165,6 +174,12 @@ func runIteration(
 					Role:    api.RoleUser,
 					Content: nudge,
 				})
+			}
+		}
+		if pauseForPlanReview != nil {
+			state.StopRequested = true
+			if !yield(newEvent(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "plan_review_required"}), nil) {
+				return context.Canceled
 			}
 		}
 		return nil

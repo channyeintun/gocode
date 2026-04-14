@@ -36,6 +36,20 @@ type Planner struct {
 	artifactManager *artifactspkg.Manager
 }
 
+// PlanReviewRequiredError indicates a write was attempted while a final
+// implementation plan is already waiting for user review.
+type PlanReviewRequiredError struct {
+	ToolName  string
+	PlanTitle string
+}
+
+func (e *PlanReviewRequiredError) Error() string {
+	if e == nil {
+		return "implementation plan is awaiting user review"
+	}
+	return fmt.Sprintf("write tool %q blocked in plan mode: implementation plan %q is ready and awaiting user review — do not call write tools until the user approves the plan and the mode switches to fast", e.ToolName, e.PlanTitle)
+}
+
 // NewPlanner constructs a planner for the current session and mode.
 func NewPlanner(mode ExecutionMode, sessionID string, artifactManager *artifactspkg.Manager) *Planner {
 	return &Planner{
@@ -71,7 +85,7 @@ func (p *Planner) ValidateTool(ctx context.Context, toolName string, permission 
 	}
 
 	if status == planStatusFinal {
-		return fmt.Errorf("write tool %q blocked in plan mode: implementation plan %q is ready and awaiting user review — do not call write tools until the user approves the plan and the mode switches to fast", toolName, title)
+		return &PlanReviewRequiredError{ToolName: toolName, PlanTitle: title}
 	}
 
 	return fmt.Errorf("write tool %q blocked in plan mode: you must call save_implementation_plan with a complete implementation plan before modifying any files — write the plan, save it, and wait for the user to review and approve it", toolName)

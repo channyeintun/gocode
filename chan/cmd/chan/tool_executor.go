@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -82,16 +83,32 @@ func executeToolCalls(
 			continue
 		}
 
-		if err := bridge.Emit(ipc.EventToolStart, ipc.ToolStartPayload{
-			ToolID: call.ID,
-			Name:   call.Name,
-			Input:  call.Input,
-		}); err != nil {
-			return nil, err
-		}
-
 		pendingCall := toolpkg.PendingCall{Index: index, Tool: tool, Input: input}
 		if err := planner.ValidateTool(ctx, pendingCall.Tool.Name(), pendingCall.Tool.Permission()); err != nil {
+			var reviewRequired *agent.PlanReviewRequiredError
+			if errors.As(err, &reviewRequired) {
+				message := fmt.Sprintf(
+					"Skipped %s because the implementation plan %q is ready for review. Review the implementation-plan artifact to approve or request revisions before any write tools run.",
+					call.Name,
+					strings.TrimSpace(reviewRequired.PlanTitle),
+				)
+				results[index] = api.ToolResult{ToolCallID: call.ID, Output: message}
+				if turnMetrics != nil && turnMetrics.Mark("first_tool_result") {
+					if emitErr := emitTurnTimingCheckpoint(bridge, turnMetrics, "first_tool_result"); emitErr != nil {
+						return nil, emitErr
+					}
+				}
+				if emitErr := bridge.Emit(ipc.EventToolResult, ipc.ToolResultPayload{
+					ToolID: call.ID,
+					Output: message,
+					Name:   call.Name,
+					Input:  call.Input,
+				}); emitErr != nil {
+					return nil, emitErr
+				}
+				return compactToolResults(results), &agent.PauseForPlanReviewError{}
+			}
+
 			results[index] = api.ToolResult{ToolCallID: call.ID, Output: err.Error(), IsError: true}
 			if emitErr := emitToolError(bridge, call, err.Error(), toolpkg.ToolOutput{}, err); emitErr != nil {
 				return nil, emitErr
@@ -138,6 +155,14 @@ func executeToolCalls(
 		}
 		if hookDenied {
 			continue
+		}
+
+		if err := bridge.Emit(ipc.EventToolStart, ipc.ToolStartPayload{
+			ToolID: call.ID,
+			Name:   call.Name,
+			Input:  call.Input,
+		}); err != nil {
+			return nil, err
 		}
 
 		approved = append(approved, pendingCall)
@@ -258,6 +283,17 @@ func executeToolCalls(
 	}
 
 	return results, nil
+}
+
+func compactToolResults(results []api.ToolResult) []api.ToolResult {
+	filtered := make([]api.ToolResult, 0, len(results))
+	for _, result := range results {
+		if strings.TrimSpace(result.ToolCallID) == "" {
+			continue
+		}
+		filtered = append(filtered, result)
+	}
+	return filtered
 }
 
 func emitToolError(bridge *ipc.Bridge, call api.ToolCall, message string, output toolpkg.ToolOutput, err error) error {

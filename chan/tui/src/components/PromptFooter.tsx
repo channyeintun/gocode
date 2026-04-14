@@ -35,7 +35,6 @@ interface PromptFooterProps {
   cursorOffset?: number;
   blockedReason?: string | null;
   queuedPromptCount?: number;
-  thinkingShortcutLabel?: string;
 }
 
 const PromptFooter: FC<PromptFooterProps> = ({
@@ -56,7 +55,6 @@ const PromptFooter: FC<PromptFooterProps> = ({
   cursorOffset = 0,
   blockedReason,
   queuedPromptCount = 0,
-  thinkingShortcutLabel = "Opt+T",
 }) => {
   const [terminalColumns, setTerminalColumns] = useState(
     process.stdout.columns ?? 80,
@@ -105,10 +103,10 @@ const PromptFooter: FC<PromptFooterProps> = ({
     () => buildActivityDetails(blockedReason, queuedPromptCount),
     [blockedReason, queuedPromptCount],
   );
-  const hint = useMemo(
-    () => buildInputHint(disabled, thinkingShortcutLabel, terminalColumns),
-    [disabled, terminalColumns, thinkingShortcutLabel],
-  );
+  const hint = useMemo(() => buildInputHint(disabled, terminalColumns), [
+    disabled,
+    terminalColumns,
+  ]);
   const costWarningText = useMemo(
     () => buildCostWarningText(totalCostUsd),
     [totalCostUsd],
@@ -298,24 +296,22 @@ function buildActivityDetails(
 
 function buildInputHint(
   disabled: boolean | undefined,
-  shortcutLabel: string,
   terminalColumns: number,
 ) {
   if (terminalColumns < 72) {
-    const shared = `${shortcutLabel} think | Esc cancel`;
-    return disabled ? `Busy | ${shared}` : `Enter send | ${shared}`;
+    return disabled ? "Busy | Esc cancel" : "Enter send | Esc cancel";
   }
 
   if (terminalColumns < 96) {
-    const shared = `${shortcutLabel} think | Esc cancel`;
-    return disabled ? `Busy | ${shared}` : `Enter send | Ctrl+G search | ${shared}`;
+    return disabled
+      ? "Busy | Esc cancel"
+      : "Enter send | Ctrl+G search | Esc cancel";
   }
 
-  const shared = `${shortcutLabel} thinking | Esc cancel`;
   if (disabled) {
-    return `Engine busy | ${shared}`;
+    return "Engine busy | Esc cancel";
   }
-  return `Enter send | Ctrl+O newline | Ctrl+G transcript search | Tab mode | ${shared}`;
+  return "Enter send | Ctrl+O newline | Ctrl+G transcript search | Tab mode | Esc cancel";
 }
 
 function buildMemoryRecallText(
