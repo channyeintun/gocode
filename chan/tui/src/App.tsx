@@ -13,7 +13,6 @@ import {
   disableBracketedPaste,
   enableBracketedPaste,
   type ToastData,
-  type ToastVariant,
   useToast,
 } from "silvery";
 import { useEngine } from "./hooks/useEngine.js";
@@ -39,22 +38,6 @@ import type {
 
 const THINKING_TOGGLE_SHORTCUT_LABEL = "Opt+T";
 const ARTIFACTS_TOGGLE_SHORTCUT_LABEL = "Opt+A";
-
-const TOAST_VARIANT_COLORS: Record<ToastVariant, string> = {
-  default: "$fg",
-  success: "$success",
-  error: "$error",
-  warning: "$warning",
-  info: "$info",
-};
-
-const TOAST_VARIANT_ICONS: Record<ToastVariant, string> = {
-  default: "i",
-  success: "+",
-  error: "x",
-  warning: "!",
-  info: "i",
-};
 
 interface AppProps {
   enginePath: string;
@@ -155,10 +138,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     }
 
     toast({
-      title: "Chan is ready",
-      description: "You can type your next message.",
-      variant: "success",
-      duration: 4000,
+      title: "Complete",
+      duration: 2500,
     });
   }, [
     toast,
@@ -637,65 +618,38 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
 export default App;
 
-function SafeToastContainer({
-  toasts,
-  maxVisible = 5,
-}: {
-  toasts: ToastData[];
-  maxVisible?: number;
-}) {
-  const visibleToasts = toasts.slice(-maxVisible);
+function SafeToastContainer({ toasts }: { toasts: ToastData[] }) {
+  const latestToast = toasts.at(-1);
 
-  if (visibleToasts.length === 0) {
+  if (!latestToast) {
     return null;
   }
 
   return (
-    <Box flexDirection="column" marginTop={1}>
-      {visibleToasts.map((toast, index) => (
-        <SafeToastItem
-          key={toast.id}
-          toast={toast}
-          marginBottom={index === visibleToasts.length - 1 ? 0 : 1}
-        />
-      ))}
+    <Box
+      position="absolute"
+      width="100%"
+      height="100%"
+      justifyContent="center"
+      alignItems="center"
+    >
+      <SafeToastItem toast={latestToast} />
     </Box>
   );
 }
 
-function SafeToastItem({
-  toast,
-  marginBottom = 0,
-}: {
-  toast: ToastData;
-  marginBottom?: number;
-}) {
-  const color = TOAST_VARIANT_COLORS[toast.variant];
-  const icon = TOAST_VARIANT_ICONS[toast.variant];
-
+function SafeToastItem({ toast }: { toast: ToastData }) {
   return (
     <Box
-      alignSelf="flex-start"
-      backgroundColor="$popover-bg"
-      borderColor="$border"
-      borderStyle="single"
-      flexDirection="column"
+      backgroundColor="$surface-bg"
+      borderColor="$success"
+      borderStyle="round"
       flexShrink={0}
-      marginBottom={marginBottom}
-      maxWidth="100%"
-      paddingX={1}
+      paddingX={2}
     >
-      <Box flexDirection="row">
-        <Text color={color} bold>
-          [{icon}]
-        </Text>
-        <Text> {toast.title}</Text>
-      </Box>
-      {toast.description ? (
-        <Box paddingLeft={4}>
-          <Text color="$muted">{toast.description}</Text>
-        </Box>
-      ) : null}
+      <Text color="$success" bold>
+        {toast.title}
+      </Text>
     </Box>
   );
 }
