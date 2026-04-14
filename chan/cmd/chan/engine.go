@@ -531,6 +531,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 			slashState, err := handleSlashCommand(
 				ctx,
 				bridge,
+				router,
 				sessionStore,
 				timingLogger,
 				cfg,

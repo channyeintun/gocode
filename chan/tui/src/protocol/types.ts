@@ -8,6 +8,7 @@ export type EventType =
   | "tool_result"
   | "tool_error"
   | "permission_request"
+  | "resume_selection_requested"
   | "mode_changed"
   | "model_changed"
   | "context_window"
@@ -42,6 +43,7 @@ export type ClientMessageType =
   | "user_input"
   | "slash_command"
   | "permission_response"
+  | "resume_selection_response"
   | "cancel"
   | "mode_toggle"
   | "shutdown"
@@ -133,6 +135,25 @@ export interface PermissionResponsePayload {
   request_id: string;
   decision: PermissionResponseDecision;
   feedback?: string;
+}
+
+export interface ResumeSelectionSessionPayload {
+  session_id: string;
+  title?: string;
+  updated_at?: string;
+  model?: string;
+  total_cost_usd?: number;
+}
+
+export interface ResumeSelectionRequestedPayload {
+  request_id: string;
+  sessions: ResumeSelectionSessionPayload[];
+}
+
+export interface ResumeSelectionResponsePayload {
+  request_id: string;
+  session_id?: string;
+  cancel?: boolean;
 }
 
 export interface ModeChangedPayload {

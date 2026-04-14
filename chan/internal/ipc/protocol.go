@@ -26,18 +26,19 @@ const (
 	EventPermissionRequest EventType = "permission_request"
 
 	// Session state
-	EventModeChanged        EventType = "mode_changed"
-	EventModelChanged       EventType = "model_changed"
-	EventContextWindow      EventType = "context_window"
-	EventCostUpdate         EventType = "cost_update"
-	EventMemoryRecalled     EventType = "memory_recalled"
-	EventRetrievalUsed      EventType = "retrieval_used"
-	EventAttemptLogSurfaced EventType = "attempt_log_surfaced"
-	EventAttemptRepeated    EventType = "attempt_repeated"
-	EventRateLimitUpdate    EventType = "rate_limit_update"
-	EventTurnTiming         EventType = "turn_timing"
-	EventCompactStart       EventType = "compact_start"
-	EventCompactEnd         EventType = "compact_end"
+	EventModeChanged              EventType = "mode_changed"
+	EventModelChanged             EventType = "model_changed"
+	EventContextWindow            EventType = "context_window"
+	EventCostUpdate               EventType = "cost_update"
+	EventResumeSelectionRequested EventType = "resume_selection_requested"
+	EventMemoryRecalled           EventType = "memory_recalled"
+	EventRetrievalUsed            EventType = "retrieval_used"
+	EventAttemptLogSurfaced       EventType = "attempt_log_surfaced"
+	EventAttemptRepeated          EventType = "attempt_repeated"
+	EventRateLimitUpdate          EventType = "rate_limit_update"
+	EventTurnTiming               EventType = "turn_timing"
+	EventCompactStart             EventType = "compact_start"
+	EventCompactEnd               EventType = "compact_end"
 
 	// Artifacts
 	EventArtifactCreated         EventType = "artifact_created"
@@ -67,13 +68,14 @@ type StreamEvent struct {
 type ClientMessageType string
 
 const (
-	MsgUserInput              ClientMessageType = "user_input"
-	MsgSlashCommand           ClientMessageType = "slash_command"
-	MsgPermissionResponse     ClientMessageType = "permission_response"
-	MsgCancel                 ClientMessageType = "cancel"
-	MsgModeToggle             ClientMessageType = "mode_toggle"
-	MsgShutdown               ClientMessageType = "shutdown"
-	MsgArtifactReviewResponse ClientMessageType = "artifact_review_response"
+	MsgUserInput               ClientMessageType = "user_input"
+	MsgSlashCommand            ClientMessageType = "slash_command"
+	MsgPermissionResponse      ClientMessageType = "permission_response"
+	MsgResumeSelectionResponse ClientMessageType = "resume_selection_response"
+	MsgCancel                  ClientMessageType = "cancel"
+	MsgModeToggle              ClientMessageType = "mode_toggle"
+	MsgShutdown                ClientMessageType = "shutdown"
+	MsgArtifactReviewResponse  ClientMessageType = "artifact_review_response"
 )
 
 // ClientMessage is one NDJSON line from Ink frontend → Go engine.
@@ -170,6 +172,19 @@ type CostUpdatePayload struct {
 	ChildAgentUSD            float64 `json:"child_agent_usd,omitempty"`
 	ChildAgentInputTokens    int     `json:"child_agent_input_tokens,omitempty"`
 	ChildAgentOutputTokens   int     `json:"child_agent_output_tokens,omitempty"`
+}
+
+type ResumeSelectionSessionPayload struct {
+	SessionID    string  `json:"session_id"`
+	Title        string  `json:"title,omitempty"`
+	UpdatedAt    string  `json:"updated_at,omitempty"`
+	Model        string  `json:"model,omitempty"`
+	TotalCostUSD float64 `json:"total_cost_usd,omitempty"`
+}
+
+type ResumeSelectionRequestedPayload struct {
+	RequestID string                          `json:"request_id"`
+	Sessions  []ResumeSelectionSessionPayload `json:"sessions"`
 }
 
 type MemoryRecallEntryPayload struct {
@@ -297,6 +312,12 @@ type PermissionResponsePayload struct {
 	RequestID string `json:"request_id"`
 	Decision  string `json:"decision"` // "allow", "deny", "always_allow", "allow_all_session"
 	Feedback  string `json:"feedback,omitempty"`
+}
+
+type ResumeSelectionResponsePayload struct {
+	RequestID string `json:"request_id"`
+	SessionID string `json:"session_id,omitempty"`
+	Cancel    bool   `json:"cancel,omitempty"`
 }
 
 // ArtifactFocusedPayload is emitted when the primary artifact for the active turn changes.

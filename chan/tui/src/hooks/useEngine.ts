@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 import { useState, useEffect, useCallback, useRef } from "react";
 import type {
   PermissionResponseDecision,
+  ResumeSelectionResponsePayload,
   StreamEvent,
   UserInputImagePayload,
 } from "../protocol/types.js";
@@ -182,6 +183,12 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     [send],
   );
 
+  const sendResumeSelectionResponse = useCallback(
+    (payload: ResumeSelectionResponsePayload) =>
+      send(createMessage("resume_selection_response", payload)),
+    [send],
+  );
+
   return {
     ...state,
     sendInput,
@@ -191,5 +198,6 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     sendShutdown,
     sendPermissionResponse,
     sendArtifactReviewResponse,
+    sendResumeSelectionResponse,
   };
 }

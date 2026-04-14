@@ -19,6 +19,8 @@ import type {
   ModelChangedPayload,
   PermissionRequestPayload,
   RateLimitUpdatePayload,
+  ResumeSelectionRequestedPayload,
+  ResumeSelectionSessionPayload,
   RetrievalUsedPayload,
   ReadyPayload,
   SessionRestoredPayload,
@@ -50,6 +52,19 @@ export interface UIArtifactReview {
   kind: string;
   title: string;
   version: number;
+}
+
+export interface UIResumeSelectionSession {
+  sessionId: string;
+  title: string;
+  updatedAt: string | null;
+  model: string | null;
+  totalCostUsd: number;
+}
+
+export interface UIResumeSelection {
+  requestId: string;
+  sessions: UIResumeSelectionSession[];
 }
 
 export type UIArtifactReviewDecision = "approve" | "revise" | "cancel";
@@ -245,6 +260,7 @@ export interface EngineUIState {
   artifacts: UIArtifact[];
   focusedArtifactId: string | null;
   pendingArtifactReview: UIArtifactReview | null;
+  pendingResumeSelection: UIResumeSelection | null;
   submittingArtifactReviewRequestId: string | null;
   toolCalls: UIToolCall[];
   backgroundAgents: UIBackgroundAgent[];
@@ -308,6 +324,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   artifacts: [],
   focusedArtifactId: null,
   pendingArtifactReview: null,
+  pendingResumeSelection: null,
   submittingArtifactReviewRequestId: null,
   toolCalls: [],
   backgroundAgents: [],
@@ -770,6 +787,19 @@ export function useEvents(initialModel: string, initialMode: string) {
         }));
         break;
       }
+      case "resume_selection_requested": {
+        const p = event.payload as ResumeSelectionRequestedPayload;
+        setUIState((s) => ({
+          ...s,
+          pendingResumeSelection: {
+            requestId: p.request_id,
+            sessions: normalizeResumeSelectionSessions(p.sessions),
+          },
+          statusLine: "Select a session to resume.",
+          error: null,
+        }));
+        break;
+      }
       case "mode_changed": {
         const p = event.payload as ModeChangedPayload;
         setUIState((s) => ({
@@ -1112,6 +1142,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           artifacts: [],
           focusedArtifactId: null,
           pendingArtifactReview: null,
+          pendingResumeSelection: null,
           submittingArtifactReviewRequestId: null,
           pendingPermission: null,
           isStreaming: false,
@@ -1161,6 +1192,7 @@ export function useEvents(initialModel: string, initialMode: string) {
               artifacts: [],
               focusedArtifactId: null,
               pendingArtifactReview: null,
+              pendingResumeSelection: null,
               submittingArtifactReviewRequestId: null,
               toolCalls: [],
               backgroundAgents: [],
@@ -1210,6 +1242,7 @@ export function useEvents(initialModel: string, initialMode: string) {
       activeTurnStatus: "idle",
       isStreaming: false,
       compact: null,
+      pendingResumeSelection: null,
       submittingArtifactReviewRequestId: null,
       turnTiming: {
         firstTokenMs: null,
@@ -1335,6 +1368,24 @@ export function useEvents(initialModel: string, initialMode: string) {
     [],
   );
 
+  const submitResumeSelection = useCallback(
+    (requestId: string) => {
+      setUIState((s) => {
+        if (s.pendingResumeSelection?.requestId !== requestId) {
+          return s;
+        }
+
+        return {
+          ...s,
+          pendingResumeSelection: null,
+          statusLine: null,
+          error: null,
+        };
+      });
+    },
+    [],
+  );
+
   return {
     uiState,
     handleEvent,
@@ -1344,7 +1395,41 @@ export function useEvents(initialModel: string, initialMode: string) {
     appendUserMessage,
     beginAssistantTurn,
     submitArtifactReview,
+    submitResumeSelection,
   };
+}
+
+function normalizeResumeSelectionSessions(
+  payload: ResumeSelectionSessionPayload[] | undefined,
+): UIResumeSelectionSession[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload
+    .filter(
+      (session) =>
+        typeof session?.session_id === "string" &&
+        session.session_id.trim().length > 0,
+    )
+    .map((session) => ({
+      sessionId: session.session_id.trim(),
+      title:
+        typeof session.title === "string" && session.title.trim().length > 0
+          ? session.title.trim()
+          : "(untitled)",
+      updatedAt:
+        typeof session.updated_at === "string" &&
+        session.updated_at.trim().length > 0
+          ? session.updated_at.trim()
+          : null,
+      model:
+        typeof session.model === "string" && session.model.trim().length > 0
+          ? session.model.trim()
+          : null,
+      totalCostUsd:
+        typeof session.total_cost_usd === "number" ? session.total_cost_usd : 0,
+    }));
 }
 
 function normalizeSlashCommands(

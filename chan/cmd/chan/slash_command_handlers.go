@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,6 +33,7 @@ type slashCommandState struct {
 type slashCommandContext struct {
 	ctx             context.Context
 	bridge          *ipc.Bridge
+	router          *ipc.MessageRouter
 	store           *session.Store
 	timingLogger    *timing.Logger
 	cfg             config.Config
@@ -73,6 +75,7 @@ var slashCommandRegistry = map[string]slashCommandHandler{
 func newSlashCommandContext(
 	ctx context.Context,
 	bridge *ipc.Bridge,
+	router *ipc.MessageRouter,
 	store *session.Store,
 	timingLogger *timing.Logger,
 	cfg config.Config,
@@ -90,6 +93,7 @@ func newSlashCommandContext(
 	return &slashCommandContext{
 		ctx:             ctx,
 		bridge:          bridge,
+		router:          router,
 		store:           store,
 		timingLogger:    timingLogger,
 		cfg:             cfg,
@@ -405,13 +409,16 @@ func handleCompactSlashCommand(cmd *slashCommandContext) error {
 }
 
 func handleResumeSlashCommand(cmd *slashCommandContext) error {
-	targetID := cmd.args
+	targetID := strings.TrimSpace(cmd.args)
 	if targetID == "" {
-		meta, err := cmd.store.LatestResumeCandidate(cmd.state.SessionID)
+		targetIDs, err := promptResumeSelection(cmd)
 		if err != nil {
-			return cmd.bridge.EmitError(err.Error(), true)
+			return err
 		}
-		targetID = meta.SessionID
+		if targetIDs == "" {
+			return emitTextResponse(cmd.bridge, "Resume cancelled.")
+		}
+		targetID = targetIDs
 	}
 
 	restored, err := cmd.store.Restore(targetID)
@@ -476,6 +483,78 @@ func handleResumeSlashCommand(cmd *slashCommandContext) error {
 		return err
 	}
 	return emitTextResponse(cmd.bridge, fmt.Sprintf("Resumed session %s with %d messages.", cmd.state.SessionID, len(cmd.state.Messages)))
+}
+
+func promptResumeSelection(cmd *slashCommandContext) (string, error) {
+	sessions, err := cmd.store.ListSessions()
+	if err != nil {
+		return "", cmd.bridge.EmitError(fmt.Sprintf("list sessions: %v", err), true)
+	}
+
+	options := make([]ipc.ResumeSelectionSessionPayload, 0, 20)
+	for _, meta := range sessions {
+		if meta.SessionID == "" || meta.SessionID == cmd.state.SessionID {
+			continue
+		}
+		options = append(options, ipc.ResumeSelectionSessionPayload{
+			SessionID:    meta.SessionID,
+			Title:        meta.Title,
+			UpdatedAt:    meta.UpdatedAt.Format(time.RFC3339),
+			Model:        meta.Model,
+			TotalCostUSD: meta.TotalCostUSD,
+		})
+		if len(options) >= 20 {
+			break
+		}
+	}
+
+	if len(options) == 0 {
+		return "", cmd.bridge.EmitError("no resumable sessions found", true)
+	}
+
+	requestID := fmt.Sprintf("resume-%d", time.Now().UnixNano())
+	if err := cmd.bridge.Emit(ipc.EventResumeSelectionRequested, ipc.ResumeSelectionRequestedPayload{
+		RequestID: requestID,
+		Sessions:  options,
+	}); err != nil {
+		return "", err
+	}
+
+	deferred := make([]ipc.ClientMessage, 0, 4)
+	defer func() {
+		cmd.router.Requeue(deferred...)
+	}()
+
+	for {
+		msg, err := cmd.router.Next(cmd.ctx)
+		if err != nil {
+			return "", err
+		}
+
+		switch msg.Type {
+		case ipc.MsgResumeSelectionResponse:
+			var payload ipc.ResumeSelectionResponsePayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return "", fmt.Errorf("decode resume selection response: %w", err)
+			}
+			if payload.RequestID != requestID {
+				deferred = append(deferred, msg)
+				continue
+			}
+			if payload.Cancel {
+				return "", nil
+			}
+			selectedID := strings.TrimSpace(payload.SessionID)
+			if selectedID == "" {
+				return "", nil
+			}
+			return selectedID, nil
+		case ipc.MsgShutdown:
+			return "", context.Canceled
+		default:
+			deferred = append(deferred, msg)
+		}
+	}
 }
 
 func handleClearSlashCommand(cmd *slashCommandContext) error {

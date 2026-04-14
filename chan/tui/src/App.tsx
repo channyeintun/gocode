@@ -6,6 +6,7 @@ import { useEvents, type UIArtifact } from "./hooks/useEvents.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
 import Input from "./components/Input.js";
 import PromptFooter from "./components/PromptFooter.js";
+import ResumeSelectionPrompt from "./components/ResumeSelectionPrompt.js";
 import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
 import TranscriptSearchPrompt from "./components/TranscriptSearchPrompt.js";
@@ -73,6 +74,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     appendUserMessage,
     beginAssistantTurn,
     submitArtifactReview,
+    submitResumeSelection,
   } = useEvents(model, mode);
   const engine = useEngine(enginePath, { model, mode, onEvent: handleEvent });
   const visibleArtifacts = showArtifacts
@@ -113,7 +115,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       !isEngineReady ||
       uiState.isStreaming ||
       uiState.pendingPermission ||
-      uiState.pendingArtifactReview
+      uiState.pendingArtifactReview ||
+      uiState.pendingResumeSelection
     ) {
       return;
     }
@@ -134,6 +137,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     uiState.isStreaming,
     uiState.pendingPermission,
     uiState.pendingArtifactReview,
+    uiState.pendingResumeSelection,
   ]);
 
   const handleImagePaste = (images: PastedImageData[]) => {
@@ -173,6 +177,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       uiState.isStreaming ||
       uiState.pendingPermission ||
       uiState.pendingArtifactReview ||
+      uiState.pendingResumeSelection ||
       queuedPrompts.length
     ) {
       const queuedPrompt: QueuedPrompt = {
@@ -216,6 +221,19 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     }
   };
 
+  const handleResumeSelection = (sessionId?: string) => {
+    if (!uiState.pendingResumeSelection) {
+      return;
+    }
+
+    submitResumeSelection(uiState.pendingResumeSelection.requestId);
+    engine.sendResumeSelectionResponse({
+      request_id: uiState.pendingResumeSelection.requestId,
+      session_id: sessionId,
+      cancel: !sessionId,
+    });
+  };
+
   const handleCancel = () => {
     if (transcriptSearchActive) {
       setTranscriptSearchActive(false);
@@ -236,7 +254,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     !!engine.error ||
     transcriptSearchActive ||
     uiState.pendingPermission !== null ||
-    uiState.pendingArtifactReview !== null;
+    uiState.pendingArtifactReview !== null ||
+    uiState.pendingResumeSelection !== null;
   const promptBlockedReason = getPromptBlockedReason({
     isEngineReady,
     engineError: engine.error,
@@ -432,6 +451,19 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             workingDir={uiState.pendingPermission.working_dir}
             onRespond={handlePermissionResponse}
             onCancelTurn={handleCancel}
+          />
+        </Box>
+      ) : uiState.pendingResumeSelection ? (
+        <Box
+          flexDirection="column"
+          flexShrink={1}
+          minHeight={0}
+          marginTop={1}
+        >
+          <ResumeSelectionPrompt
+            selection={uiState.pendingResumeSelection}
+            onSelect={handleResumeSelection}
+            onCancel={() => handleResumeSelection()}
           />
         </Box>
       ) : uiState.pendingArtifactReview ? (

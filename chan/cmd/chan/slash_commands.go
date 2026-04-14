@@ -136,6 +136,7 @@ func sortedVisibleSlashCommands() []slashCommandDescriptor {
 func handleSlashCommand(
 	ctx context.Context,
 	bridge *ipc.Bridge,
+	router *ipc.MessageRouter,
 	store *session.Store,
 	timingLogger *timing.Logger,
 	cfg config.Config,
@@ -153,6 +154,7 @@ func handleSlashCommand(
 	cmd := newSlashCommandContext(
 		ctx,
 		bridge,
+		router,
 		store,
 		timingLogger,
 		cfg,
