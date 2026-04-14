@@ -1163,6 +1163,8 @@ export function useEvents(initialModel: string, initialMode: string) {
               pendingArtifactReview: null,
               submittingArtifactReviewRequestId: null,
               toolCalls: [],
+              backgroundAgents: [],
+              backgroundCommands: [],
               compact: null,
               turnTiming: {
                 firstTokenMs: null,
