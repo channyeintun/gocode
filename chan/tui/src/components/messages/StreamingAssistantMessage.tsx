@@ -28,14 +28,17 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
     statusLabel === "Thinking" && showThinking
       ? findLastBlockIndex(visibleBlocks, "thinking")
       : -1;
-  const showStatusRow = !(
-    statusLabel === "Thinking" && activeThinkingIndex >= 0
-  );
+  const showStatusRow =
+    statusLabel === "Thinking" && activeThinkingIndex < 0;
   const statusText = formatStatusLabel(
     statusLabel,
     showThinking,
     thinkingShortcutLabel,
   );
+
+  if (!showStatusRow && visibleBlocks.length === 0) {
+    return null;
+  }
 
   return (
     <MessageRow
@@ -48,7 +51,9 @@ const StreamingAssistantMessage: FC<StreamingAssistantMessageProps> = ({
       <Box flexDirection="column">
         {showStatusRow ? (
           <Text color="$muted">
-            <Spinner type="dots" /> {statusText}
+            <Spinner type="dots" />
+            {" "}
+            {statusText}
           </Text>
         ) : null}
         {visibleBlocks.map((block, index) => (

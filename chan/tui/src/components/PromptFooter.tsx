@@ -35,6 +35,8 @@ interface PromptFooterProps {
   cursorOffset?: number;
   blockedReason?: string | null;
   queuedPromptCount?: number;
+  showArtifacts?: boolean;
+  artifactsShortcutLabel?: string;
 }
 
 const PromptFooter: FC<PromptFooterProps> = ({
@@ -55,6 +57,8 @@ const PromptFooter: FC<PromptFooterProps> = ({
   cursorOffset = 0,
   blockedReason,
   queuedPromptCount = 0,
+  showArtifacts = true,
+  artifactsShortcutLabel = "Opt+A",
 }) => {
   const [terminalColumns, setTerminalColumns] = useState(
     process.stdout.columns ?? 80,
@@ -100,13 +104,13 @@ const PromptFooter: FC<PromptFooterProps> = ({
   );
   const activityLabel = isLoading ? "running" : disabled ? "blocked" : "ready";
   const activityDetails = useMemo(
-    () => buildActivityDetails(blockedReason, queuedPromptCount),
-    [blockedReason, queuedPromptCount],
+    () => buildActivityDetails(blockedReason, queuedPromptCount, showArtifacts),
+    [blockedReason, queuedPromptCount, showArtifacts],
   );
-  const hint = useMemo(() => buildInputHint(disabled, terminalColumns), [
-    disabled,
-    terminalColumns,
-  ]);
+  const hint = useMemo(
+    () => buildInputHint(disabled, terminalColumns, artifactsShortcutLabel),
+    [artifactsShortcutLabel, disabled, terminalColumns],
+  );
   const costWarningText = useMemo(
     () => buildCostWarningText(totalCostUsd),
     [totalCostUsd],
@@ -281,6 +285,7 @@ function buildPromptMetrics(
 function buildActivityDetails(
   blockedReason: string | null | undefined,
   queuedPromptCount: number,
+  showArtifacts: boolean,
 ): string | null {
   const parts: string[] = [];
   if (blockedReason) {
@@ -291,27 +296,33 @@ function buildActivityDetails(
       queuedPromptCount === 1 ? "1 queued" : `${queuedPromptCount} queued`,
     );
   }
+  if (!showArtifacts) {
+    parts.push("artifacts hidden");
+  }
   return parts.length > 0 ? parts.join("  ") : null;
 }
 
 function buildInputHint(
   disabled: boolean | undefined,
   terminalColumns: number,
+  artifactsShortcutLabel: string,
 ) {
   if (terminalColumns < 72) {
-    return disabled ? "Busy | Esc cancel" : "Enter send | Esc cancel";
+    return disabled
+      ? `Busy | ${artifactsShortcutLabel} artifacts | Esc cancel`
+      : `Enter send | ${artifactsShortcutLabel} artifacts | Esc cancel`;
   }
 
   if (terminalColumns < 96) {
     return disabled
-      ? "Busy | Esc cancel"
-      : "Enter send | Ctrl+G search | Esc cancel";
+      ? `Busy | ${artifactsShortcutLabel} artifacts | Esc cancel`
+      : `Enter send | ${artifactsShortcutLabel} artifacts | Ctrl+G search | Esc cancel`;
   }
 
   if (disabled) {
-    return "Engine busy | Esc cancel";
+    return `Engine busy | ${artifactsShortcutLabel} artifacts | Esc cancel`;
   }
-  return "Enter send | Ctrl+O newline | Ctrl+G transcript search | Tab mode | Esc cancel";
+  return `Enter send | Ctrl+O newline | Ctrl+G transcript search | ${artifactsShortcutLabel} artifacts | Tab mode | Esc cancel`;
 }
 
 function buildMemoryRecallText(

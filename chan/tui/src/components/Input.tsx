@@ -20,6 +20,7 @@ interface InputProps {
   onPasteWarning: (warnings: string[]) => void;
   onModeToggle: () => void;
   onThinkingVisibilityToggle: () => void;
+  onArtifactVisibilityToggle: () => void;
   onCancel: () => void;
   disabled?: boolean;
 }
@@ -103,6 +104,14 @@ function renderInputLines(
   return renderedLines.length > 0 ? renderedLines : ["█"];
 }
 
+function formatPromptStatusLabel(statusLabel?: string | null): string {
+  if (!statusLabel || statusLabel === "Thinking") {
+    return "Working";
+  }
+
+  return statusLabel;
+}
+
 const Input: FC<InputProps> = ({
   prompt,
   mode,
@@ -115,6 +124,7 @@ const Input: FC<InputProps> = ({
   onPasteWarning,
   onModeToggle,
   onThinkingVisibilityToggle,
+  onArtifactVisibilityToggle,
   onCancel,
   disabled,
 }) => {
@@ -160,6 +170,11 @@ const Input: FC<InputProps> = ({
 
     if ((key.meta && input?.toLowerCase() === "t") || text === "†") {
       onThinkingVisibilityToggle();
+      return;
+    }
+
+    if (key.meta && input?.toLowerCase() === "a") {
+      onArtifactVisibilityToggle();
       return;
     }
 
@@ -327,13 +342,17 @@ const Input: FC<InputProps> = ({
       renderInputLines(prompt.value, prompt.cursorOffset, promptTextColumns),
     [prompt.cursorOffset, prompt.value, promptTextColumns],
   );
+  const promptStatusLabel = useMemo(
+    () => formatPromptStatusLabel(statusLabel),
+    [statusLabel],
+  );
 
   return (
     <Box flexDirection="column" marginTop={1}>
       {isLoading ? (
         <Box paddingLeft={1} marginBottom={1}>
           <Text color="$muted">
-            <Spinner type="dots" /> {statusLabel ?? "Working"}
+            <Spinner type="arc" /> {promptStatusLabel}
           </Text>
         </Box>
       ) : null}

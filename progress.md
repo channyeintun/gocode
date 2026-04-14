@@ -2,6 +2,11 @@
 
 ## Active Task
 
+- Completed: added an `Opt+A` shortcut to toggle inline artifact visibility in the transcript, with footer discoverability and hidden-state feedback.
+- Completed: hid non-thinking streaming status from the chat transcript entirely, including the label, while keeping thinking visible when relevant.
+- Completed: limited the chat transcript spinner to thinking-only status rows while leaving non-thinking chat states as plain text.
+- Completed: added a project-specific Silvery integration guide under `docs/` covering the current TUI architecture, working patterns, and known gotchas.
+- Completed: refined the prompt-area activity indicator so it uses a non-dots Silvery spinner and shows `Working` instead of `Thinking` above the composer.
 - Completed: refreshed the Silvery TUI chat chrome with theme-based colors, hidden transcript overflow arrows, prompt-marker user labels, and a persistent spinner above the composer during active turns.
 - Completed: lean retrieval architecture implementation for the agent harness.
 - Completed: review-driven corrections for retrieval, preference recall, and telemetry wiring.

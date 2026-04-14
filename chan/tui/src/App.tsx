@@ -22,6 +22,7 @@ import type {
 } from "./protocol/types.js";
 
 const THINKING_TOGGLE_SHORTCUT_LABEL = "Opt+T";
+const ARTIFACTS_TOGGLE_SHORTCUT_LABEL = "Opt+A";
 
 interface AppProps {
   enginePath: string;
@@ -62,6 +63,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
   const [transcriptSearchMatchCount, setTranscriptSearchMatchCount] =
     useState(0);
   const [showThinking, setShowThinking] = useState(false);
+  const [showArtifacts, setShowArtifacts] = useState(true);
   const {
     uiState,
     handleEvent,
@@ -73,11 +75,13 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     submitArtifactReview,
   } = useEvents(model, mode);
   const engine = useEngine(enginePath, { model, mode, onEvent: handleEvent });
-  const visibleArtifacts = selectVisibleArtifacts(
-    uiState.artifacts,
-    uiState.focusedArtifactId,
-    uiState.showPlanPanel,
-  );
+  const visibleArtifacts = showArtifacts
+    ? selectVisibleArtifacts(
+        uiState.artifacts,
+        uiState.focusedArtifactId,
+        uiState.showPlanPanel,
+      )
+    : [];
   const isEngineReady = uiState.ready || engine.ready;
 
   const submitPrompt = useCallback(
@@ -291,6 +295,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     setShowThinking((current) => !current);
   }, []);
 
+  const handleArtifactVisibilityToggle = useCallback(() => {
+    setShowArtifacts((current) => !current);
+  }, []);
+
   return (
     <Screen>
       <Box flexShrink={0}>
@@ -483,6 +491,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
               onPasteWarning={handlePasteWarning}
               onModeToggle={engine.sendModeToggle}
               onThinkingVisibilityToggle={handleThinkingVisibilityToggle}
+              onArtifactVisibilityToggle={handleArtifactVisibilityToggle}
               onCancel={handleCancel}
               disabled={isPromptDisabled}
             />
@@ -510,6 +519,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             cursorOffset={prompt.cursorOffset}
             blockedReason={promptBlockedReason}
             queuedPromptCount={queuedPrompts.length}
+            showArtifacts={showArtifacts}
+            artifactsShortcutLabel={ARTIFACTS_TOGGLE_SHORTCUT_LABEL}
           />
         </Box>
       )}
