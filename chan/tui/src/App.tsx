@@ -132,8 +132,8 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     }
 
     toast({
-      title: "Turn complete",
-      description: "Ready for your next prompt.",
+      title: "Chan is ready",
+      description: "You can type your next message.",
       variant: "success",
       duration: 4000,
     });
