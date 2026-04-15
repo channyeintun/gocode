@@ -9,6 +9,7 @@
 - Made session memory incremental and freshness-aware by merging prior extracted state into each refresh, adding update metadata, deduplicating and capping working-memory sections, and requiring fresh session memory before earlier proactive compaction kicks in.
 - Added rollout controls for the new context features by introducing config and env flags for session-memory extraction and microcompaction, gating both code paths, and surfacing their runtime state in `/status`.
 - Extended compaction timing telemetry with session-memory availability and freshness metadata, token savings, and microcompaction details, and made manual `/compact` refresh the session-memory artifact immediately after compaction.
+- Reworked session-memory extraction to follow Claude Code more closely by gating initialization and refresh on token and tool-call thresholds, switching to a richer structured template with workflow and worklog sections, and deduplicating extracted notes against durable memory before prompt injection.
 - Added the enhancement planning and reference-comparison markdown documents to the repository so the implementation history, ratings, and rollout plan are tracked alongside the code changes.
 
 ## 2026-04-15

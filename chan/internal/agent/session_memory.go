@@ -9,11 +9,13 @@ const SessionMemoryFreshnessWindow = 20 * time.Minute
 
 // SessionMemorySnapshot holds the current extracted session working state.
 type SessionMemorySnapshot struct {
-	ArtifactID string
-	Title      string
-	Content    string
-	Version    int
-	UpdatedAt  time.Time
+	ArtifactID               string
+	Title                    string
+	Content                  string
+	Version                  int
+	UpdatedAt                time.Time
+	SourceConversationTokens int
+	SourceToolCallCount      int
 }
 
 func (s SessionMemorySnapshot) HasContent() bool {

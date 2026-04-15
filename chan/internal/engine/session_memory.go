@@ -15,24 +15,31 @@ import (
 )
 
 const (
-	sessionMemoryArtifactSlot         = "active"
-	sessionMemoryArtifactTitle        = "Session Memory"
-	sessionMemoryArtifactSource       = "session-memory"
-	sessionMemoryMinMessages          = 6
-	sessionMemoryPeriodicTurnInterval = 4
-	sessionMemoryMaxSectionItems      = 5
-	sessionMemoryMaxSnippetLen        = 240
-	sessionMemoryMaxFileCount         = 8
-	sessionMemoryMaxChars             = 3200
+	sessionMemoryArtifactSlot            = "active"
+	sessionMemoryArtifactTitle           = "Session Memory"
+	sessionMemoryArtifactSource          = "session-memory"
+	sessionMemoryMinMessages             = 6
+	sessionMemoryMinInitTokens           = 10000
+	sessionMemoryMinUpdateTokens         = 5000
+	sessionMemoryToolCallsBetweenUpdates = 3
+	sessionMemoryMaxSectionItems         = 5
+	sessionMemoryMaxSnippetLen           = 240
+	sessionMemoryMaxFileCount            = 8
+	sessionMemoryMaxSectionTokens        = 2000
+	sessionMemoryMaxTotalTokens          = 12000
 )
 
 type sessionMemoryDocument struct {
-	Objective string
-	State     string
-	Files     []string
-	Decisions []string
-	Errors    []string
-	NextSteps []string
+	SessionTitle          string
+	CurrentState          string
+	TaskSpecification     []string
+	FilesAndFunctions     []string
+	Workflow              []string
+	ErrorsAndCorrections  []string
+	CodebaseAndSystemDocs []string
+	Learnings             []string
+	KeyResults            []string
+	Worklog               []string
 }
 
 func loadSessionMemorySnapshot(ctx context.Context, artifactManager *artifactspkg.Manager, sessionID string) (agent.SessionMemorySnapshot, error) {
@@ -54,11 +61,13 @@ func loadSessionMemorySnapshot(ctx context.Context, artifactManager *artifactspk
 	}
 
 	return agent.SessionMemorySnapshot{
-		ArtifactID: loaded.ID,
-		Title:      loaded.Title,
-		Content:    content,
-		Version:    loaded.Version,
-		UpdatedAt:  loaded.UpdatedAt,
+		ArtifactID:               loaded.ID,
+		Title:                    loaded.Title,
+		Content:                  content,
+		Version:                  loaded.Version,
+		UpdatedAt:                loaded.UpdatedAt,
+		SourceConversationTokens: metadataInt(loaded.Metadata, "source_conversation_tokens"),
+		SourceToolCallCount:      metadataInt(loaded.Metadata, "source_tool_call_count"),
 	}, nil
 }
 
@@ -90,9 +99,11 @@ func maybeRefreshSessionMemory(ctx context.Context, bridge *ipc.Bridge, artifact
 		Source:  sessionMemoryArtifactSource,
 		Content: content,
 		Metadata: map[string]any{
-			"status":                "active",
-			"updated_turn":          turnID,
-			"updated_message_count": len(messages),
+			"status":                     "active",
+			"updated_turn":               turnID,
+			"updated_message_count":      len(messages),
+			"source_conversation_tokens": compact.EstimateConversationTokens(messages),
+			"source_tool_call_count":     totalToolCallCount(messages),
 		},
 	}, sessionID, sessionMemoryArtifactSlot)
 	if err != nil {
@@ -118,13 +129,24 @@ func shouldRefreshSessionMemory(ctx context.Context, artifactManager *artifactsp
 		return false
 	}
 	if turnHasCompactionSummary(messages, fromIndex) || turnHasToolActivity(messages, fromIndex) {
-		return true
+		currentTokens := compact.EstimateConversationTokens(messages)
+		if currentTokens >= sessionMemoryMinInitTokens {
+			return true
+		}
 	}
-	if turnID > 0 && turnID%sessionMemoryPeriodicTurnInterval == 0 {
-		return true
+	currentTokens := compact.EstimateConversationTokens(messages)
+	currentToolCalls := totalToolCallCount(messages)
+	current, err := loadSessionMemorySnapshot(ctx, artifactManager, sessionID)
+	if err == nil && current.HasContent() {
+		if currentTokens-current.SourceConversationTokens >= sessionMemoryMinUpdateTokens {
+			return true
+		}
+		if currentToolCalls-current.SourceToolCallCount >= sessionMemoryToolCallsBetweenUpdates {
+			return true
+		}
+		return false
 	}
-	_, found, err := artifactManager.FindSessionArtifact(ctx, artifactspkg.KindSessionMemory, artifactspkg.ScopeSession, sessionID, sessionMemoryArtifactSlot)
-	return err == nil && !found
+	return currentTokens >= sessionMemoryMinInitTokens
 }
 
 func turnHasToolActivity(messages []api.Message, fromIndex int) bool {
@@ -153,35 +175,45 @@ func turnHasCompactionSummary(messages []api.Message, fromIndex int) bool {
 }
 
 func buildSessionMemoryMarkdown(previous agent.SessionMemorySnapshot, messages []api.Message, fromIndex int) string {
+	durableMemoryCorpus := buildDurableMemoryCorpus()
 	current := sessionMemoryDocument{
-		Objective: firstNonEmptySnippet(recentUserSnippets(messages, 3)...),
-		State:     firstNonEmptySnippet(recentAssistantSnippets(messages, fromIndex, 3)...),
-		Files:     recentImportantFiles(messages, fromIndex),
-		Decisions: recentDecisionSnippets(messages, fromIndex),
-		Errors:    recentErrorSnippets(messages, fromIndex),
+		SessionTitle:          deriveSessionTitle(messages, previous),
+		CurrentState:          firstNonEmptySnippet(recentAssistantSnippets(messages, fromIndex, 3)...),
+		TaskSpecification:     recentUserBulletSnippets(messages, 4),
+		FilesAndFunctions:     recentImportantFiles(messages, fromIndex),
+		Workflow:              recentWorkflowSnippets(messages, fromIndex),
+		ErrorsAndCorrections:  recentErrorSnippets(messages, fromIndex),
+		CodebaseAndSystemDocs: recentDecisionSnippets(messages, fromIndex),
+		Learnings:             recentLearningSnippets(messages, fromIndex),
+		KeyResults:            recentAssistantBulletSnippets(messages, fromIndex, 2),
+		Worklog:               recentWorklogEntries(messages, fromIndex),
 	}
-	current.NextSteps = deriveNextSteps(current.Objective, current.Decisions, current.Errors)
 	merged := mergeSessionMemoryDocuments(parseSessionMemoryMarkdown(previous.Content), current)
+	merged = filterSessionMemoryDocument(merged, durableMemoryCorpus)
 
 	var b strings.Builder
 	b.WriteString("# Session Memory\n\n")
-	b.WriteString("## Current Objective\n\n")
-	b.WriteString(bulletOrFallback(merged.Objective, "Continue the current session objective."))
+	b.WriteString("## Session Title\n\n")
+	b.WriteString(fallbackText(merged.SessionTitle, "Active coding session"))
 	b.WriteString("\n\n## Current State\n\n")
-	b.WriteString(bulletOrFallback(merged.State, "Implementation work is active."))
-	b.WriteString("\n\n## Important Files\n\n")
-	b.WriteString(listOrFallback(merged.Files, "- No file focus captured yet."))
-	b.WriteString("\n\n## Recent Decisions And Findings\n\n")
-	b.WriteString(listOrFallback(merged.Decisions, "- No durable decisions captured yet."))
-	b.WriteString("\n\n## Recent Errors And Corrections\n\n")
-	b.WriteString(listOrFallback(merged.Errors, "- No recent errors captured."))
-	b.WriteString("\n\n## Next Steps\n\n")
-	b.WriteString(listOrFallback(merged.NextSteps, "- Continue from the latest user request and current file focus."))
-	rendered := strings.TrimSpace(b.String()) + "\n"
-	if len(rendered) > sessionMemoryMaxChars {
-		return strings.TrimSpace(rendered[:sessionMemoryMaxChars]) + "\n"
-	}
-	return rendered
+	b.WriteString(fallbackText(merged.CurrentState, "Implementation work is active."))
+	b.WriteString("\n\n## Task Specification\n\n")
+	b.WriteString(listOrFallback(limitBulletList(merged.TaskSpecification, sessionMemoryMaxSectionTokens), "- No task specification captured yet."))
+	b.WriteString("\n\n## Files And Functions\n\n")
+	b.WriteString(listOrFallback(limitBulletList(merged.FilesAndFunctions, sessionMemoryMaxSectionTokens), "- No file focus captured yet."))
+	b.WriteString("\n\n## Workflow\n\n")
+	b.WriteString(listOrFallback(limitBulletList(merged.Workflow, sessionMemoryMaxSectionTokens), "- No workflow captured yet."))
+	b.WriteString("\n\n## Errors & Corrections\n\n")
+	b.WriteString(listOrFallback(limitBulletList(merged.ErrorsAndCorrections, sessionMemoryMaxSectionTokens), "- No recent errors captured."))
+	b.WriteString("\n\n## Codebase And System Documentation\n\n")
+	b.WriteString(listOrFallback(limitBulletList(merged.CodebaseAndSystemDocs, sessionMemoryMaxSectionTokens), "- No codebase notes captured yet."))
+	b.WriteString("\n\n## Learnings\n\n")
+	b.WriteString(listOrFallback(limitBulletList(merged.Learnings, sessionMemoryMaxSectionTokens), "- No learnings captured yet."))
+	b.WriteString("\n\n## Key Results\n\n")
+	b.WriteString(listOrFallback(limitBulletList(merged.KeyResults, sessionMemoryMaxSectionTokens), "- No key results captured yet."))
+	b.WriteString("\n\n## Worklog\n\n")
+	b.WriteString(listOrFallback(limitBulletList(merged.Worklog, sessionMemoryMaxSectionTokens), "- No worklog entries captured yet."))
+	return limitRenderedSessionMemory(strings.TrimSpace(b.String()) + "\n")
 }
 
 func parseSessionMemoryMarkdown(content string) sessionMemoryDocument {
@@ -191,28 +223,40 @@ func parseSessionMemoryMarkdown(content string) sessionMemoryDocument {
 	}
 	sections := splitMarkdownSections(content)
 	return sessionMemoryDocument{
-		Objective: strings.TrimPrefix(firstListEntry(sections["Current Objective"]), "- "),
-		State:     strings.TrimPrefix(firstListEntry(sections["Current State"]), "- "),
-		Files:     parseBulletList(sections["Important Files"]),
-		Decisions: parseBulletList(sections["Recent Decisions And Findings"]),
-		Errors:    parseBulletList(sections["Recent Errors And Corrections"]),
-		NextSteps: parseBulletList(sections["Next Steps"]),
+		SessionTitle:          firstNonEmptySnippet(strings.TrimSpace(sections["Session Title"]), strings.TrimSpace(sections["Current Objective"])),
+		CurrentState:          firstNonEmptySnippet(strings.TrimSpace(sections["Current State"]), strings.TrimSpace(sections["Current state"])),
+		TaskSpecification:     parseBulletList(firstNonEmptySnippet(sections["Task Specification"], sections["Current Objective"])),
+		FilesAndFunctions:     parseBulletList(firstNonEmptySnippet(sections["Files And Functions"], sections["Important Files"])),
+		Workflow:              parseBulletList(sections["Workflow"]),
+		ErrorsAndCorrections:  parseBulletList(firstNonEmptySnippet(sections["Errors & Corrections"], sections["Recent Errors And Corrections"])),
+		CodebaseAndSystemDocs: parseBulletList(firstNonEmptySnippet(sections["Codebase And System Documentation"], sections["Recent Decisions And Findings"])),
+		Learnings:             parseBulletList(sections["Learnings"]),
+		KeyResults:            parseBulletList(firstNonEmptySnippet(sections["Key Results"], sections["Next Steps"])),
+		Worklog:               parseBulletList(sections["Worklog"]),
 	}
 }
 
 func mergeSessionMemoryDocuments(previous, current sessionMemoryDocument) sessionMemoryDocument {
 	merged := sessionMemoryDocument{
-		Objective: firstNonEmptySnippet(current.Objective, previous.Objective),
-		State:     firstNonEmptySnippet(current.State, previous.State),
-		Files:     mergeBulletLists(current.Files, previous.Files, sessionMemoryMaxFileCount),
-		Decisions: mergeBulletLists(current.Decisions, previous.Decisions, sessionMemoryMaxSectionItems),
-		Errors:    mergeBulletLists(current.Errors, previous.Errors, sessionMemoryMaxSectionItems),
-	}
-	merged.NextSteps = mergeBulletLists(current.NextSteps, previous.NextSteps, sessionMemoryMaxSectionItems)
-	if len(merged.NextSteps) == 0 {
-		merged.NextSteps = deriveNextSteps(merged.Objective, merged.Decisions, merged.Errors)
+		SessionTitle:          firstNonEmptySnippet(current.SessionTitle, previous.SessionTitle),
+		CurrentState:          firstNonEmptySnippet(current.CurrentState, previous.CurrentState),
+		TaskSpecification:     mergeBulletLists(current.TaskSpecification, previous.TaskSpecification, sessionMemoryMaxSectionItems),
+		FilesAndFunctions:     mergeBulletLists(current.FilesAndFunctions, previous.FilesAndFunctions, sessionMemoryMaxFileCount),
+		Workflow:              mergeBulletLists(current.Workflow, previous.Workflow, sessionMemoryMaxSectionItems),
+		ErrorsAndCorrections:  mergeBulletLists(current.ErrorsAndCorrections, previous.ErrorsAndCorrections, sessionMemoryMaxSectionItems),
+		CodebaseAndSystemDocs: mergeBulletLists(current.CodebaseAndSystemDocs, previous.CodebaseAndSystemDocs, sessionMemoryMaxSectionItems),
+		Learnings:             mergeBulletLists(current.Learnings, previous.Learnings, sessionMemoryMaxSectionItems),
+		KeyResults:            mergeBulletLists(current.KeyResults, previous.KeyResults, sessionMemoryMaxSectionItems),
+		Worklog:               mergeBulletLists(current.Worklog, previous.Worklog, sessionMemoryMaxSectionItems*2),
 	}
 	return merged
+}
+
+func filterSessionMemoryDocument(doc sessionMemoryDocument, durableMemoryCorpus string) sessionMemoryDocument {
+	doc.TaskSpecification = filterRedundantBullets(doc.TaskSpecification, durableMemoryCorpus)
+	doc.CodebaseAndSystemDocs = filterRedundantBullets(doc.CodebaseAndSystemDocs, durableMemoryCorpus)
+	doc.Learnings = filterRedundantBullets(doc.Learnings, durableMemoryCorpus)
+	return doc
 }
 
 func splitMarkdownSections(content string) map[string]string {
@@ -341,6 +385,22 @@ func recentDecisionSnippets(messages []api.Message, fromIndex int) []string {
 	return items
 }
 
+func recentUserBulletSnippets(messages []api.Message, limit int) []string {
+	items := recentUserSnippets(messages, limit)
+	for index := range items {
+		items[index] = "- " + items[index]
+	}
+	return items
+}
+
+func recentAssistantBulletSnippets(messages []api.Message, fromIndex int, limit int) []string {
+	items := recentAssistantSnippets(messages, fromIndex, limit)
+	for index := range items {
+		items[index] = "- " + items[index]
+	}
+	return items
+}
+
 func recentErrorSnippets(messages []api.Message, fromIndex int) []string {
 	if fromIndex < 0 {
 		fromIndex = 0
@@ -393,6 +453,185 @@ func recentImportantFiles(messages []api.Message, fromIndex int) []string {
 	return files
 }
 
+func recentWorkflowSnippets(messages []api.Message, fromIndex int) []string {
+	if fromIndex < 0 {
+		fromIndex = 0
+	}
+	items := make([]string, 0, sessionMemoryMaxSectionItems)
+	for index := len(messages) - 1; index >= fromIndex && len(items) < sessionMemoryMaxSectionItems; index-- {
+		message := messages[index]
+		for _, call := range message.ToolCalls {
+			if !looksLikeWorkflowTool(call.Name) {
+				continue
+			}
+			snippet := normalizeSnippet(call.Name + ": " + call.Input)
+			if snippet != "" {
+				items = append(items, "- "+snippet)
+			}
+		}
+	}
+	return items
+}
+
+func recentLearningSnippets(messages []api.Message, fromIndex int) []string {
+	items := recentDecisionSnippets(messages, fromIndex)
+	if len(items) > sessionMemoryMaxSectionItems {
+		return items[:sessionMemoryMaxSectionItems]
+	}
+	return items
+}
+
+func recentWorklogEntries(messages []api.Message, fromIndex int) []string {
+	if fromIndex < 0 {
+		fromIndex = 0
+	}
+	items := make([]string, 0, sessionMemoryMaxSectionItems*2)
+	for index := fromIndex; index < len(messages) && len(items) < sessionMemoryMaxSectionItems*2; index++ {
+		message := messages[index]
+		summary := summarizeMessageForWorklog(message)
+		if summary == "" {
+			continue
+		}
+		items = append(items, "- "+summary)
+	}
+	return items
+}
+
+func summarizeMessageForWorklog(message api.Message) string {
+	switch message.Role {
+	case api.RoleUser:
+		return "User: " + normalizeSnippet(message.Content)
+	case api.RoleAssistant:
+		if len(message.ToolCalls) > 0 {
+			return "Assistant issued tools: " + normalizeSnippet(joinToolNames(message.ToolCalls))
+		}
+		return "Assistant: " + normalizeSnippet(message.Content)
+	case api.RoleTool:
+		if message.ToolResult != nil {
+			return "Tool result: " + normalizeSnippet(message.ToolResult.Output)
+		}
+	}
+	return ""
+}
+
+func joinToolNames(calls []api.ToolCall) string {
+	names := make([]string, 0, len(calls))
+	for _, call := range calls {
+		if name := strings.TrimSpace(call.Name); name != "" {
+			names = append(names, name)
+		}
+	}
+	return strings.Join(names, ", ")
+}
+
+func totalToolCallCount(messages []api.Message) int {
+	total := 0
+	for _, message := range messages {
+		total += len(message.ToolCalls)
+	}
+	return total
+}
+
+func deriveSessionTitle(messages []api.Message, previous agent.SessionMemorySnapshot) string {
+	if title := strings.TrimSpace(previous.Title); title != "" {
+		return title
+	}
+	objective := firstNonEmptySnippet(recentUserSnippets(messages, 1)...)
+	if objective == "" {
+		return sessionMemoryArtifactTitle
+	}
+	if len(objective) > 72 {
+		return strings.TrimSpace(objective[:72])
+	}
+	return objective
+}
+
+func buildDurableMemoryCorpus() string {
+	files := agent.LoadMemoryFiles()
+	parts := make([]string, 0, len(files))
+	for _, file := range files {
+		content := normalizeMemoryText(file.Content)
+		if content != "" {
+			parts = append(parts, content)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func filterRedundantBullets(items []string, corpus string) []string {
+	if strings.TrimSpace(corpus) == "" {
+		return items
+	}
+	filtered := make([]string, 0, len(items))
+	for _, item := range items {
+		normalized := normalizeMemoryText(item)
+		if len(normalized) >= 24 && strings.Contains(corpus, normalized) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
+func normalizeMemoryText(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func metadataInt(metadata map[string]any, key string) int {
+	if metadata == nil {
+		return 0
+	}
+	switch value := metadata[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
+}
+
+func looksLikeWorkflowTool(name string) bool {
+	name = strings.TrimSpace(strings.ToLower(name))
+	switch name {
+	case "bash", "run_in_terminal", "command_status", "grep_search", "file_search":
+		return true
+	default:
+		return false
+	}
+}
+
+func limitBulletList(items []string, maxTokens int) []string {
+	if maxTokens <= 0 {
+		return items
+	}
+	limited := make([]string, 0, len(items))
+	used := 0
+	for _, item := range items {
+		tokens := compact.EstimateTokens(item)
+		if used > 0 && used+tokens > maxTokens {
+			break
+		}
+		limited = append(limited, item)
+		used += tokens
+	}
+	return limited
+}
+
+func limitRenderedSessionMemory(content string) string {
+	if compact.EstimateTokens(content) <= sessionMemoryMaxTotalTokens {
+		return content
+	}
+	maxChars := sessionMemoryMaxTotalTokens * 4
+	if len(content) <= maxChars {
+		return content
+	}
+	return strings.TrimSpace(content[:maxChars]) + "\n"
+}
+
 func extractPathsFromToolInput(raw string) []string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -418,26 +657,20 @@ func extractPathsFromToolInput(raw string) []string {
 	return paths
 }
 
-func deriveNextSteps(objective string, decisions []string, errors []string) []string {
-	steps := make([]string, 0, 3)
-	if objective != "" {
-		steps = append(steps, "- Continue the objective: "+objective)
-	}
-	if len(errors) > 0 {
-		steps = append(steps, "- Resolve the latest error or failed tool path before expanding scope.")
-	}
-	if len(decisions) > 0 {
-		steps = append(steps, "- Build on the recent decisions instead of re-reading the full transcript.")
-	}
-	return steps
-}
-
 func bulletOrFallback(value string, fallback string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return "- " + fallback
 	}
 	return "- " + value
+}
+
+func fallbackText(value string, fallback string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func listOrFallback(items []string, fallback string) string {
