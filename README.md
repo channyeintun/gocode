@@ -4,7 +4,7 @@ An agentic coding CLI powered by LLMs. Think, plan, and execute code changes fro
 
 Chan combines a terminal UI, a Go-based execution engine, first-class artifacts, and bounded child agents so you can inspect code, plan work, edit safely, and verify results without leaving the terminal.
 
-![Agentic Coding CLI Architecture](./docs/architecture.png)
+![Agentic Coding CLI Architecture](./docs/architecture.webp)
 
 ## Why Chan
 
