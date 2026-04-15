@@ -9,11 +9,11 @@ Add MCP client support to Chan so the agent can discover and call external MCP t
 Phase 1 should support external MCP tools only.
 
 - Support user-level and project-level MCP server configuration.
-- Support `stdio` and streamable HTTP transports.
+- Support explicit per-server `stdio`, `sse`, `http`, and `ws` transport choices.
 - Load configured MCP servers during engine startup and register discovered tools into the existing tool registry before the ready event is emitted.
 - Expose MCP tools to the model with stable, namespaced tool names.
 - Route MCP tool execution through the existing permission gate using a conservative mapping.
-- Keep the initial release startup-loaded only; require a new session or explicit reload command before changed MCP config is reflected in available tool definitions.
+- Keep the initial release startup-loaded only; changed MCP config is reflected on the next fresh session.
 
 Out of scope for Phase 1:
 
@@ -22,11 +22,16 @@ Out of scope for Phase 1:
 - Running Chan itself as an MCP server.
 - Full TUI management screens for MCP server lifecycle.
 
+Non-goal:
+
+- Chan stays an MCP client only. Do not add any follow-up phase for exposing Chan itself as an MCP server.
+
 ## Design Constraints
 
 - Chan currently builds its tool registry inside `RunStdioEngine` and emits tool definitions once via the ready event, so MCP tools must be available before that step in the first implementation.
 - The current permission system is based on existing tool permission levels, so MCP integration should map external tools onto that model instead of introducing a second approval framework.
 - The implementation should keep SDK-specific types behind a narrow internal wrapper so the rest of the engine deals with Chan-owned interfaces.
+- MCP server config should declare one transport explicitly. Phase 1 should not guess or auto-fallback between SSE, HTTP, and WS for a single server entry.
 
 ## Proposed Changes
 
@@ -39,7 +44,7 @@ Out of scope for Phase 1:
   - Add config-loading support for a project-level override file and merge it with the existing user config.
   - Keep secrets out of persisted config where possible by allowing env-backed values for tokens, headers, and command arguments.
 - [NEW] `chan/internal/config/mcp.go`
-  - Define the MCP config schema and merge rules.
+  - Define the MCP config schema and merge rules using a discriminated union keyed by `transport`.
 
 Recommended config shape:
 
@@ -56,7 +61,6 @@ Recommended config shape:
         },
         "enabled": true,
         "trust": false,
-        "include_tools": [],
         "exclude_tools": []
       },
       "docs": {
@@ -66,13 +70,23 @@ Recommended config shape:
           "Authorization": "$DOCS_MCP_TOKEN"
         },
         "enabled": true
+      },
+      "search": {
+        "transport": "sse",
+        "url": "http://127.0.0.1:8811/sse",
+        "enabled": true
+      },
+      "browser": {
+        "transport": "ws",
+        "url": "ws://127.0.0.1:9000/mcp",
+        "enabled": false
       }
     }
   }
 }
 ```
 
-Project config should override or augment user config for the current workspace. The simplest first version is a repo-local file such as `.chan/config.json` that only contains the MCP section and is merged on top of the global config.
+Project config should override or augment user config for the current workspace. The canonical first version should be a repo-local `.chan/mcp.json` file that contains only the MCP section and is merged on top of the global config.
 
 ### 2. MCP runtime wrapper
 
@@ -84,8 +98,12 @@ Project config should override or augment user config for the current workspace.
   - Own server startup, connection, tool discovery, and shutdown.
 - [NEW] `chan/internal/mcp/transports/stdio.go`
   - Start and supervise `stdio` servers.
+- [NEW] `chan/internal/mcp/transports/sse.go`
+  - Connect to SSE servers.
 - [NEW] `chan/internal/mcp/transports/http.go`
   - Connect to streamable HTTP servers.
+- [NEW] `chan/internal/mcp/transports/ws.go`
+  - Connect to WebSocket servers.
 
 Manager responsibilities:
 
@@ -94,6 +112,13 @@ Manager responsibilities:
 - Retain server metadata needed for execution, status reporting, and shutdown.
 - Return Chan-friendly tool descriptors without exposing SDK types outside the package.
 - Cleanly close sessions and child processes on engine shutdown.
+
+Transport rules:
+
+- `stdio` entries use `command`, `args`, `env`, and optional startup timeout.
+- `sse`, `http`, and `ws` entries use `url`, optional headers, and optional auth-related env expansion.
+- Each server entry chooses exactly one transport. Switching transport means changing config, not runtime probing.
+- Use a discriminated schema per transport instead of one loose shared struct. It is clearer, easier to validate, and avoids irrelevant keys on a server entry.
 
 ### 3. Tool registration and execution
 
@@ -111,6 +136,7 @@ Tool naming rules:
 - Use a stable namespace such as `mcp__<server>__<tool>`.
 - Preserve the original MCP tool name in adapter metadata for logs and status.
 - Sanitize invalid characters once during registration rather than at call time.
+- Export all discovered tools by default. Phase 1 filtering should stay simple: support `exclude_tools`, and add narrower allow-list behavior later only if needed.
 
 Execution rules:
 
@@ -128,14 +154,16 @@ Execution rules:
 Initial permission policy:
 
 - Default all MCP tools to ask-for-approval unless the server is explicitly marked trusted.
-- Allow a trusted server to downgrade known safe read-style MCP tools to read-only approval semantics.
-- Keep unknown or obviously mutating tools in ask mode even for trusted servers unless the mapping is explicit.
+- Allow a trusted server to downgrade explicitly configured read-style MCP tools to read-only approval semantics.
+- Keep unknown or obviously mutating tools in ask mode even for trusted servers unless the config mapping is explicit.
 
 The first release should prefer false positives over silent unsafe execution. A simple, defensible starting point is:
 
-- trusted + explicitly read-only mapping -> `PermissionReadOnly`
-- trusted + explicitly mutating mapping -> `PermissionWrite` or `PermissionExecute`
+- trusted + explicitly configured read-only mapping -> `PermissionReadOnly`
+- trusted + explicitly configured mutating mapping -> `PermissionWrite` or `PermissionExecute`
 - untrusted or unknown mapping -> `PermissionExecute`
+
+Permission mapping should live entirely in config for Phase 1. Do not infer read/write behavior from MCP annotations.
 
 ### 5. Provider-facing tool schema handling
 
@@ -152,6 +180,7 @@ This work matters because MCP tools are not static. The model-facing schema path
   - Emit enough information to explain which MCP servers loaded, which failed, and which tools were registered.
 
 Do not make command UX a blocker for Phase 1. Startup logs plus a simple status command are enough.
+Do not require reload support in Phase 1. Startup-time loading is sufficient for the first release.
 
 ## Delivery Phases
 
@@ -167,7 +196,9 @@ Do not make command UX a blocker for Phase 1. Startup logs plus a simple status 
 Exit criteria:
 
 - A configured `stdio` server exposes tools in a fresh session.
+- A configured `sse` server exposes tools in a fresh session.
 - A configured streamable HTTP server exposes tools in a fresh session.
+- A configured `ws` server exposes tools in a fresh session.
 - The model can call at least one MCP tool successfully.
 - Failed MCP servers degrade gracefully without breaking the rest of the session.
 
@@ -181,24 +212,28 @@ Exit criteria:
 
 - Evaluate MCP resources and prompts.
 - Evaluate OAuth flows where static tokens are insufficient.
-- Evaluate exposing Chan as an MCP server only after client support is stable.
 
-## Open Questions
+## Decisions
 
-1. What exact project-level config path should be canonical: `.chan/config.json`, a separate `.chan/mcp.json`, or reuse an existing workspace config mechanism if one is added soon?
-2. Should trusted-server permission mapping live entirely in config, or should the engine also infer read-only tools from MCP annotations when available?
-3. Is startup-time loading enough for the first release, or is a lightweight `/mcp reload` command required immediately for acceptable iteration speed?
-4. Do we want to expose all discovered tools by default, or require explicit opt-in via `include_tools` for untrusted servers?
+1. Use `.chan/mcp.json` as the canonical project-level MCP config file.
+2. Keep trusted-server permission mapping entirely in config.
+3. Startup-time loading is enough for Phase 1; reload can wait.
+4. Export all discovered tools by default.
+5. Use a discriminated union keyed by `transport` for the MCP config schema.
+6. Keep Phase 1 filtering simple with `exclude_tools`; only add allow-listing later if real usage justifies it.
 
 ## Verification Plan
 
-1. Manually verify config parsing and user/project MCP config merge behavior with a global config plus a repo-local override.
+1. Manually verify config parsing and user/project MCP config merge behavior with a global config plus a repo-local `.chan/mcp.json` override.
 2. Manually verify tool-name sanitization and schema normalization with representative MCP tools that include unusual names and nested JSON schemas.
 3. Manually verify permission behavior for trusted read-style tools, trusted mutating tools, and untrusted tools.
 4. Manually verify a small fixture MCP server over `stdio` end to end in a fresh session.
-5. Manually verify a fixture streamable HTTP server end to end in a fresh session.
-6. Manually verify that startup failure for one MCP server does not prevent built-in tools or other MCP servers from loading.
-7. Manually verify that oversized MCP responses still respect tool output budgeting and do not reintroduce transcript or TUI memory issues.
+5. Manually verify a fixture SSE server end to end in a fresh session.
+6. Manually verify a fixture streamable HTTP server end to end in a fresh session.
+7. Manually verify a fixture WebSocket server end to end in a fresh session.
+8. Manually verify that all discovered tools are exported by default and that `exclude_tools` hides configured tools correctly.
+9. Manually verify that startup failure for one MCP server does not prevent built-in tools or other MCP servers from loading.
+10. Manually verify that oversized MCP responses still respect tool output budgeting and do not reintroduce transcript or TUI memory issues.
 
 ## Recommended Implementation Order
 
@@ -208,9 +243,3 @@ Exit criteria:
 4. Wire startup loading into the engine before ready emission.
 5. Add conservative permission mapping.
 6. Add one status or reload command after the core flow is working.
-
-## User Review Required
-
-- Confirm the project-level MCP config file path.
-- Confirm whether untrusted servers should default to hidden tools unless explicitly included.
-- Confirm whether Phase 1 should include a `/mcp reload` command or defer it to Phase 2.
