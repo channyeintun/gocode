@@ -149,6 +149,15 @@
             <a href="#config" class="sidebar-link scroll-link"
               >Configuration Reference</a
             >
+            <a href="#mcp-config" class="sidebar-link scroll-link"
+              >MCP Configuration</a
+            >
+            <a href="#skills-system" class="sidebar-link scroll-link"
+              >Skills</a
+            >
+            <a href="#agents-md" class="sidebar-link scroll-link"
+              >AGENTS.md</a
+            >
             <a href="#debug" class="sidebar-link scroll-link">Diagnostics</a>
             <a href="#arch" class="sidebar-link scroll-link">Architecture</a>
             <a href="#build" class="sidebar-link scroll-link"
@@ -999,6 +1008,244 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code></pre>
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <section id="mcp-config" class="mt-12">
+              <h3 class="text-2xl font-bold mb-6">MCP Configuration</h3>
+              <p class="text-sm text-gray-400 mb-6 leading-relaxed">
+                Chan supports both a global user config and a repo-local MCP
+                override. Use the global file when you want the same server in
+                every workspace. Use <code>.chan/mcp.json</code> when you want
+                MCP setup scoped to the current repo. The workspace file is
+                merged on top of the global config for the current session.
+              </p>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-sm">
+                <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                  <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                    Global
+                  </p>
+                  <p class="text-gray-300">
+                    <code>~/.config/chan/config.json</code>
+                  </p>
+                </div>
+                <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                  <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                    Repo Local
+                  </p>
+                  <p class="text-gray-300">
+                    <code>.chan/mcp.json</code>
+                  </p>
+                </div>
+              </div>
+
+              <div class="space-y-8">
+                <div>
+                  <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                    Global Config Style
+                  </p>
+                  <pre
+                    class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto"
+                  ><code>{
+  "model": "anthropic/claude-sonnet-4-20250514",
+  "mcp": {
+    "servers": {
+      "chrome-devtools": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "chrome-devtools-mcp@latest"],
+        "enabled": true,
+        "trust": false
+      }
+    }
+  }
+}</code></pre>
+                </div>
+
+                <div>
+                  <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                    Repo-Local .chan/mcp.json Style
+                  </p>
+                  <pre
+                    class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto"
+                  ><code>{
+  "servers": {
+    "chrome-devtools": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"],
+      "enabled": true,
+      "trust": false
+    }
+  }
+}</code></pre>
+                </div>
+
+                <div>
+                  <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                    Chrome DevTools Example
+                  </p>
+                  <p class="text-sm text-gray-400 mb-4 leading-relaxed">
+                    This uses the upstream Chrome DevTools MCP server in Chan's
+                    config shape. Keep <code>trust</code> disabled by default
+                    because the server can inspect and modify a live browser
+                    session.
+                  </p>
+                  <pre
+                    class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto"
+                  ><code>{
+  "servers": {
+    "chrome-devtools": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--no-usage-statistics"
+      ],
+      "env": {
+        "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS": "1"
+      },
+      "enabled": true,
+      "trust": false
+    }
+  }
+}</code></pre>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section id="skills-system" class="mb-24">
+            <h2 class="subsection-title text-3xl font-bold mb-6">Skills</h2>
+            <p class="text-sm text-gray-400 mb-6 leading-relaxed">
+              Skills are task-specific instruction bundles that Chan can inject
+              automatically when they match the current request. They are not
+              always-on policy files. Use skills for reusable workflows,
+              domain-specific guidance, and lightweight task playbooks that
+              should only appear when relevant.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-sm">
+              <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                  User Global Skills
+                </p>
+                <p class="text-gray-300">
+                  <code>~/.config/chan/agents/*.md</code>
+                </p>
+              </div>
+              <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                  Project Skills
+                </p>
+                <p class="text-gray-300">
+                  <code>.agents/*.md</code>
+                </p>
+              </div>
+            </div>
+
+            <ul class="space-y-4 text-sm text-gray-400 mb-8">
+              <li>
+                &bull; Chan loads built-in skills first, then user-global
+                skills, then project-local skills.
+              </li>
+              <li>
+                &bull; If two skills share the same name, the later source wins,
+                so project-local skills can override a global one.
+              </li>
+              <li>
+                &bull; Chan auto-selects up to three relevant skills for a turn
+                based on the user prompt.
+              </li>
+              <li>
+                &bull; Skills are markdown files with optional frontmatter such
+                as <code>name</code>, <code>description</code>,
+                <code>keywords</code>, <code>allowed-tools</code>, and
+                <code>argument-hint</code>.
+              </li>
+            </ul>
+
+            <div>
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                Example Skill
+              </p>
+              <pre
+                class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto"
+              ><code>---
+name: go-review
+description: Review Go changes for correctness, error handling, and package boundaries
+keywords: go, golang, review, refactor
+allowed-tools: read_file, grep_search, go_definition
+argument-hint: repo path or changed files
+---
+
+Focus on obvious code, explicit error handling, and small package responsibilities.</code></pre>
+            </div>
+          </section>
+
+          <section id="agents-md" class="mb-24">
+            <h2 class="subsection-title text-3xl font-bold mb-6">AGENTS.md</h2>
+            <p class="text-sm text-gray-400 mb-6 leading-relaxed">
+              <code>AGENTS.md</code> is Chan's project-instructions file. It is
+              loaded automatically and treated as always-on guidance for the
+              current workspace. Use it for coding standards, repository
+              workflow rules, architecture constraints, and other durable team
+              instructions that should apply across tasks.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-sm">
+              <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                  Shared Project Instructions
+                </p>
+                <p class="text-gray-300"><code>AGENTS.md</code></p>
+              </div>
+              <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
+                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                  Local Private Override
+                </p>
+                <p class="text-gray-300"><code>AGENTS.local.md</code></p>
+              </div>
+            </div>
+
+            <ul class="space-y-4 text-sm text-gray-400 mb-8">
+              <li>
+                &bull; Chan walks upward from the current working directory and
+                loads <code>AGENTS.md</code> files it finds along the path.
+              </li>
+              <li>
+                &bull; Files closer to the current directory have higher
+                priority and are loaded later.
+              </li>
+              <li>
+                &bull; These project instructions override default behavior when
+                applicable.
+              </li>
+              <li>
+                &bull; Use <code>AGENTS.md</code> for broad workspace policy.
+                Use skills for task-specific workflows that should only be
+                injected when relevant.
+              </li>
+            </ul>
+
+            <div>
+              <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
+                Example AGENTS.md
+              </p>
+              <pre
+                class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto"
+              ><code>## Go Coding Philosophy
+
+- Write obvious code, not clever code.
+- Always check errors explicitly.
+- Keep packages focused and composable.
+
+## Workflow Rules
+
+- Run formatting after each completed task.
+- Build before proposing a commit.
+- Prefer repo-local conventions over generic defaults.</code></pre>
             </div>
           </section>
 
