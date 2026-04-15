@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"github.com/channyeintun/chan/internal/agent"
 	"github.com/channyeintun/chan/internal/api"
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
+	"github.com/channyeintun/chan/internal/clientdebug"
+	commandspkg "github.com/channyeintun/chan/internal/commands"
 	"github.com/channyeintun/chan/internal/compact"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
@@ -207,7 +209,7 @@ var connectProviderRegistry = map[string]connectProviderFunc{
 }
 
 func handleConnectSlashCommand(cmd *slashCommandContext) error {
-	providerName, extraArgs, err := parseConnectArgs(cmd.args)
+	providerName, extraArgs, err := commandspkg.ParseConnectArgs(cmd.args)
 	if err != nil {
 		return emitTextResponse(cmd.bridge, err.Error())
 	}
@@ -229,7 +231,7 @@ func handleConnectSlashCommand(cmd *slashCommandContext) error {
 	if err != nil {
 		return emitTextResponse(cmd.bridge, fmt.Sprintf("initialize %s client: %v", result.Provider, err))
 	}
-	nextClient = wrapClientWithDebug(nextClient)
+	nextClient = clientdebug.WrapClient(nextClient)
 	*cmd.client = nextClient
 	cmd.state.ActiveModelID = modelRef(result.Provider, nextClient.ModelID())
 	cmd.state.SubagentModelID = defaultSessionSubagentModel(result.Config, cmd.state.ActiveModelID)
@@ -285,7 +287,7 @@ func connectGitHubCopilot(cmd *slashCommandContext, enterpriseInput string) (*co
 		}
 
 		browserMessage := ""
-		if err := openBrowserURL(device.VerificationURI); err == nil {
+		if err := commandspkg.OpenBrowserURL(device.VerificationURI); err == nil {
 			browserMessage = "Opened the browser automatically.\n"
 		}
 		appendSlashResponse(cmd.bridge, fmt.Sprintf("%sVisit: %s\nEnter code: %s\n\nWaiting for GitHub authorization...\n\n", browserMessage, device.VerificationURI, device.UserCode))
@@ -317,7 +319,7 @@ func connectGitHubCopilot(cmd *slashCommandContext, enterpriseInput string) (*co
 		policyCtx, policyCancel := context.WithTimeout(cmd.ctx, 20*time.Second)
 		modelIDs := gitHubCopilotPolicyModels(persisted)
 		if discovered, discoverErr := api.ListGitHubCopilotModelIDs(policyCtx, copilotAuth.AccessToken, copilotAuth.EnterpriseDomain); discoverErr == nil {
-			modelIDs = mergeGitHubCopilotModelIDs(modelIDs, discovered)
+			modelIDs = commandspkg.MergeGitHubCopilotModelIDs(modelIDs, discovered)
 		}
 		failures := api.EnableGitHubCopilotModels(policyCtx, copilotAuth.AccessToken, copilotAuth.EnterpriseDomain, modelIDs)
 		policyCancel()
@@ -408,7 +410,7 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 		return cmd.bridge.EmitError(fmt.Sprintf("switch model %q: %v", selectedModel, err), true)
 	}
 
-	nextClient = wrapClientWithDebug(nextClient)
+	nextClient = clientdebug.WrapClient(nextClient)
 	*cmd.client = nextClient
 	cmd.state.ActiveModelID = modelRef(provider, nextClient.ModelID())
 	if err := emitToolUseCapabilityNotice(cmd.bridge, cmd.state.ActiveModelID, *cmd.client, nil); err != nil {
@@ -446,13 +448,13 @@ func handleSubagentSlashCommand(cmd *slashCommandContext) error {
 
 	switch {
 	case strings.EqualFold(selected.Model, "help"), strings.EqualFold(selected.Model, "status"), strings.EqualFold(selected.Model, "current"):
-		return emitTextResponse(cmd.bridge, formatSubagentHelpText(currentSelection))
+		return emitTextResponse(cmd.bridge, commandspkg.FormatSubagentHelpText(currentSelection))
 	case strings.EqualFold(selected.Model, "default"):
 		cmd.state.SubagentModelID = defaultSessionSubagentModel(config.Load(), cmd.state.ActiveModelID)
 		if err := cmd.persistState(); err != nil {
 			return err
 		}
-		return emitTextResponse(cmd.bridge, fmt.Sprintf("Reset subagent model to %s", formatModelSelectionLabel(cmd.state.SubagentModelID)))
+		return emitTextResponse(cmd.bridge, fmt.Sprintf("Reset subagent model to %s", commandspkg.FormatModelSelectionLabel(cmd.state.SubagentModelID)))
 	}
 
 	selectedModel, err := normalizeModelSlashInput(selected.Model)
@@ -472,7 +474,7 @@ func handleSubagentSlashCommand(cmd *slashCommandContext) error {
 	if err := cmd.persistState(); err != nil {
 		return err
 	}
-	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set subagent model to %s", formatModelSelectionLabel(cmd.state.SubagentModelID)))
+	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set subagent model to %s", commandspkg.FormatModelSelectionLabel(cmd.state.SubagentModelID)))
 }
 
 func normalizeModelSlashInput(input string) (string, error) {
@@ -577,12 +579,12 @@ func handleReasoningSlashCommand(cmd *slashCommandContext) error {
 	if cmd.client != nil && *cmd.client != nil {
 		currentModelID = strings.TrimSpace((*cmd.client).ModelID())
 	}
-	current := describeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
+	current := commandspkg.DescribeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
 	if strings.TrimSpace(cmd.args) == "" {
 		return emitTextResponse(cmd.bridge, fmt.Sprintf("Current reasoning effort: %s", current))
 	}
 
-	nextEffort, clearSetting, err := parseReasoningArgs(cmd.args)
+	nextEffort, clearSetting, err := commandspkg.ParseReasoningArgs(cmd.args)
 	if err != nil {
 		return emitTextResponse(cmd.bridge, err.Error())
 	}
@@ -596,7 +598,7 @@ func handleReasoningSlashCommand(cmd *slashCommandContext) error {
 		return emitTextResponse(cmd.bridge, fmt.Sprintf("save reasoning effort: %v", err))
 	}
 
-	updated := describeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
+	updated := commandspkg.DescribeReasoningEffort(strings.TrimSpace(persisted.ReasoningEffort), currentModelID)
 	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set reasoning effort to %s", updated))
 }
 
@@ -673,7 +675,7 @@ func handleResumeSlashCommand(cmd *slashCommandContext) error {
 			cmd.state.ActiveModelID = modelRef(provider, model)
 			return cmd.bridge.EmitError(fmt.Sprintf("restore model %q: %v", restored.Metadata.Model, err), true)
 		}
-		*cmd.client = wrapClientWithDebug(restoredClient)
+		*cmd.client = clientdebug.WrapClient(restoredClient)
 		cmd.state.ActiveModelID = modelRef(provider, restoredClient.ModelID())
 		if err := emitToolUseCapabilityNotice(cmd.bridge, cmd.state.ActiveModelID, *cmd.client, nil); err != nil {
 			return err
@@ -839,11 +841,11 @@ func handleClearSlashCommand(cmd *slashCommandContext) error {
 }
 
 func handleHelpSlashCommand(cmd *slashCommandContext) error {
-	return emitTextResponse(cmd.bridge, formatHelpText())
+	return emitTextResponse(cmd.bridge, commandspkg.FormatHelpText())
 }
 
 func handleStatusSlashCommand(cmd *slashCommandContext) error {
-	statusText := formatStatusText(cmd.state.SessionID, cmd.state.StartedAt, cmd.state.Mode, cmd.state.ActiveModelID, cmd.state.SubagentModelID, cmd.state.CWD, len(cmd.state.Messages), cmd.tracker)
+	statusText := commandspkg.FormatStatusText(cmd.state.SessionID, cmd.state.StartedAt, cmd.state.Mode, cmd.state.ActiveModelID, cmd.state.SubagentModelID, cmd.state.CWD, len(cmd.state.Messages), cmd.tracker)
 	return emitTextResponse(cmd.bridge, statusText)
 }
 
@@ -863,7 +865,7 @@ func handleDebugSlashCommand(cmd *slashCommandContext) error {
 		if err != nil {
 			return emitTextResponse(cmd.bridge, fmt.Sprintf("Enable debug logging failed: %v", err))
 		}
-		if err := openDebugMonitorPopup(path); err != nil {
+		if err := debuglog.OpenMonitorPopup(path); err != nil {
 			return emitTextResponse(cmd.bridge, fmt.Sprintf("Debug logging enabled at %s\n\nAutomatic monitor launch failed: %v\nRun manually: %s debug-view --file %s", path, err, os.Args[0], path))
 		}
 		return emitTextResponse(cmd.bridge, fmt.Sprintf("Debug logging enabled. Opened live monitor for %s", path))
@@ -909,11 +911,11 @@ func handleSessionsSlashCommand(cmd *slashCommandContext) error {
 	if err != nil {
 		return cmd.bridge.EmitError(fmt.Sprintf("list sessions: %v", err), true)
 	}
-	return emitTextResponse(cmd.bridge, formatSessionList(sessions, cmd.state.SessionID))
+	return emitTextResponse(cmd.bridge, commandspkg.FormatSessionList(sessions, cmd.state.SessionID))
 }
 
 func handleDiffSlashCommand(cmd *slashCommandContext) error {
-	diffOutput := gitDiff(cmd.args)
+	diffOutput := commandspkg.GitDiff(cmd.args)
 	if strings.TrimSpace(diffOutput) == "" {
 		diffOutput = "No changes detected."
 	}

@@ -2,7 +2,7 @@ BINARY_NAME := chan
 ENGINE_NAME := chan-engine
 VERSION     := 0.1.0
 BUILD_DIR   := release
-GO_SRC      := ../cmd/chan
+GO_SRC      := ../cmd/chan-engine
 PREFIX      ?= /usr/local/bin
 
 PLATFORMS := darwin-arm64 darwin-amd64 linux-amd64 linux-arm64

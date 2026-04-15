@@ -1,7 +1,6 @@
-package main
+package commands
 
 import (
-	"context"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -10,15 +9,13 @@ import (
 
 	"github.com/channyeintun/chan/internal/agent"
 	"github.com/channyeintun/chan/internal/api"
-	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
 	"github.com/channyeintun/chan/internal/ipc"
 	"github.com/channyeintun/chan/internal/session"
-	"github.com/channyeintun/chan/internal/timing"
 )
 
-type slashCommandDescriptor struct {
+type descriptor struct {
 	Name           string
 	Description    string
 	Usage          string
@@ -26,7 +23,7 @@ type slashCommandDescriptor struct {
 	Hidden         bool
 }
 
-var slashCommandCatalog = []slashCommandDescriptor{
+var catalog = []descriptor{
 	{
 		Name:           "connect",
 		Description:    "Connect GitHub Copilot with device login",
@@ -112,9 +109,9 @@ var slashCommandCatalog = []slashCommandDescriptor{
 	},
 }
 
-func slashCommandDescriptors() []ipc.SlashCommandDescriptorPayload {
-	descriptors := make([]ipc.SlashCommandDescriptorPayload, 0, len(slashCommandCatalog))
-	for _, descriptor := range slashCommandCatalog {
+func Descriptors() []ipc.SlashCommandDescriptorPayload {
+	descriptors := make([]ipc.SlashCommandDescriptorPayload, 0, len(catalog))
+	for _, descriptor := range catalog {
 		if descriptor.Hidden {
 			continue
 		}
@@ -128,104 +125,7 @@ func slashCommandDescriptors() []ipc.SlashCommandDescriptorPayload {
 	return descriptors
 }
 
-func sortedVisibleSlashCommands() []slashCommandDescriptor {
-	visible := make([]slashCommandDescriptor, 0, len(slashCommandCatalog))
-	for _, descriptor := range slashCommandCatalog {
-		if descriptor.Hidden {
-			continue
-		}
-		visible = append(visible, descriptor)
-	}
-	return visible
-}
-
-func handleSlashCommand(
-	ctx context.Context,
-	bridge *ipc.Bridge,
-	router *ipc.MessageRouter,
-	store *session.Store,
-	timingLogger *timing.Logger,
-	cfg config.Config,
-	artifactManager *artifactspkg.Manager,
-	tracker *costpkg.Tracker,
-	payload ipc.SlashCommandPayload,
-	sessionID string,
-	startedAt time.Time,
-	mode agent.ExecutionMode,
-	activeModelID string,
-	subagentModelID string,
-	cwd string,
-	messages []api.Message,
-	client *api.LLMClient,
-) (slashCommandState, error) {
-	cmd := newSlashCommandContext(
-		ctx,
-		bridge,
-		router,
-		store,
-		timingLogger,
-		cfg,
-		artifactManager,
-		tracker,
-		payload,
-		sessionID,
-		startedAt,
-		mode,
-		activeModelID,
-		subagentModelID,
-		cwd,
-		messages,
-		client,
-	)
-
-	handler, ok := lookupSlashCommandHandler(cmd.command)
-	if !ok {
-		if err := bridge.EmitError(fmt.Sprintf("unknown slash command: %s", payload.Command), true); err != nil {
-			return cmd.state, err
-		}
-		if err := bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "end_turn"}); err != nil {
-			return cmd.state, err
-		}
-		return cmd.state, nil
-	}
-
-	if err := handler.Handle(cmd); err != nil {
-		return cmd.state, err
-	}
-	return cmd.state, nil
-}
-
-func emitTextResponse(bridge *ipc.Bridge, text string) error {
-	if strings.TrimSpace(text) != "" {
-		if err := bridge.Emit(ipc.EventTokenDelta, ipc.TokenDeltaPayload{Text: text}); err != nil {
-			return err
-		}
-	}
-	return bridge.Emit(ipc.EventTurnComplete, ipc.TurnCompletePayload{StopReason: "end_turn"})
-}
-
-func appendSlashResponse(bridge *ipc.Bridge, text string) {
-	if bridge == nil || strings.TrimSpace(text) == "" {
-		return
-	}
-	_ = bridge.Emit(ipc.EventTokenDelta, ipc.TokenDeltaPayload{Text: text})
-}
-
-func gitHubCopilotPolicyModels(cfg config.Config) []string {
-	models := []string{
-		api.GitHubCopilotDefaultMainModel,
-		api.GitHubCopilotDefaultSubagentModel,
-	}
-	if provider, model := config.ParseModel(strings.TrimSpace(cfg.Model)); normalizeProvider(provider) == "github-copilot" && strings.TrimSpace(model) != "" {
-		models = append(models, model)
-	}
-	if provider, model := config.ParseModel(strings.TrimSpace(cfg.SubagentModel)); normalizeProvider(provider) == "github-copilot" && strings.TrimSpace(model) != "" {
-		models = append(models, model)
-	}
-	return mergeGitHubCopilotModelIDs(nil, models)
-}
-
-func mergeGitHubCopilotModelIDs(existing []string, extra []string) []string {
+func MergeGitHubCopilotModelIDs(existing []string, extra []string) []string {
 	merged := make([]string, 0, len(existing)+len(extra))
 	seen := make(map[string]struct{}, len(existing)+len(extra))
 	for _, model := range append(append([]string(nil), existing...), extra...) {
@@ -242,7 +142,7 @@ func mergeGitHubCopilotModelIDs(existing []string, extra []string) []string {
 	return merged
 }
 
-func parseConnectArgs(args string) (string, string, error) {
+func ParseConnectArgs(args string) (string, string, error) {
 	parts := strings.Fields(args)
 	switch len(parts) {
 	case 0:
@@ -262,7 +162,7 @@ func parseConnectArgs(args string) (string, string, error) {
 	}
 }
 
-func parseReasoningArgs(args string) (string, bool, error) {
+func ParseReasoningArgs(args string) (string, bool, error) {
 	selection := strings.ToLower(strings.TrimSpace(args))
 	if selection == "default" {
 		return "", true, nil
@@ -274,7 +174,7 @@ func parseReasoningArgs(args string) (string, bool, error) {
 	return normalized, false, nil
 }
 
-func describeReasoningEffort(configured string, modelID string) string {
+func DescribeReasoningEffort(configured string, modelID string) string {
 	effective := api.ClampReasoningEffort(modelID, configured)
 	if effective == "" {
 		effective = api.DefaultReasoningEffort(modelID)
@@ -294,7 +194,7 @@ func describeReasoningEffort(configured string, modelID string) string {
 	return effective
 }
 
-func openBrowserURL(target string) error {
+func OpenBrowserURL(target string) error {
 	if strings.TrimSpace(target) == "" {
 		return fmt.Errorf("empty browser URL")
 	}
@@ -311,44 +211,10 @@ func openBrowserURL(target string) error {
 	return cmd.Start()
 }
 
-func emitSessionArtifacts(ctx context.Context, bridge *ipc.Bridge, artifactManager *artifactspkg.Manager, sessionID string) error {
-	if artifactManager == nil || strings.TrimSpace(sessionID) == "" {
-		return nil
-	}
-
-	artifacts, err := artifactManager.LoadSessionArtifacts(ctx, sessionID)
-	if err != nil {
-		if warning, ok := err.(*artifactspkg.ArtifactLoadWarning); ok {
-			if emitErr := bridge.Emit(ipc.EventError, ipc.ErrorPayload{Message: warning.Error(), Recoverable: true}); emitErr != nil {
-				return emitErr
-			}
-		} else {
-			return err
-		}
-	}
-
-	for index := len(artifacts) - 1; index >= 0; index-- {
-		artifact := artifacts[index]
-		if err := emitArtifactCreated(bridge, artifact.Artifact); err != nil {
-			return err
-		}
-		if err := emitArtifactUpdated(bridge, artifact.Artifact, artifact.Content); err != nil {
-			return err
-		}
-	}
-
-	for _, artifact := range artifacts {
-		if artifact.Artifact.Kind == artifactspkg.KindImplementationPlan && strings.TrimSpace(artifact.Content) != "" {
-			return emitArtifactFocused(bridge, artifact.Artifact)
-		}
-	}
-
-	return nil
-}
-func formatHelpText() string {
+func FormatHelpText() string {
 	var b strings.Builder
 	b.WriteString("Available slash commands:\n\n")
-	for _, descriptor := range sortedVisibleSlashCommands() {
+	for _, descriptor := range visibleDescriptors() {
 		usage := descriptor.Usage
 		if strings.TrimSpace(usage) == "" {
 			usage = "/" + descriptor.Name
@@ -358,18 +224,18 @@ func formatHelpText() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func formatStatusText(sessionID string, startedAt time.Time, mode agent.ExecutionMode, model string, subagentModel string, cwd string, msgCount int, tracker *costpkg.Tracker) string {
+func FormatStatusText(sessionID string, startedAt time.Time, mode agent.ExecutionMode, model string, subagentModel string, cwd string, msgCount int, tracker *costpkg.Tracker) string {
 	elapsed := time.Since(startedAt).Round(time.Second)
 	snap := tracker.Snapshot()
-	reasoning := describeReasoningEffort(strings.TrimSpace(config.Load().ReasoningEffort), model)
+	reasoning := DescribeReasoningEffort(strings.TrimSpace(config.Load().ReasoningEffort), model)
 	return fmt.Sprintf(
 		"Session: %s\nStarted: %s (%s ago)\nMode: %s\nModel: %s\nSubagent: %s\nReasoning: %s\nCWD: %s\nMessages: %d\nCost: $%.4f\nTokens: %d in / %d out",
 		sessionID,
 		startedAt.Format(time.RFC3339),
 		elapsed,
 		string(mode),
-		formatModelSelectionLabel(model),
-		formatModelSelectionLabel(subagentModel),
+		FormatModelSelectionLabel(model),
+		FormatModelSelectionLabel(subagentModel),
 		reasoning,
 		cwd,
 		msgCount,
@@ -379,7 +245,7 @@ func formatStatusText(sessionID string, startedAt time.Time, mode agent.Executio
 	)
 }
 
-func formatModelSelectionLabel(selection string) string {
+func FormatModelSelectionLabel(selection string) string {
 	provider, model := config.ParseModel(strings.TrimSpace(selection))
 	if strings.TrimSpace(model) == "" {
 		model = provider
@@ -390,46 +256,14 @@ func formatModelSelectionLabel(selection string) string {
 	return model
 }
 
-func formatSubagentHelpText(currentSelection string) string {
+func FormatSubagentHelpText(currentSelection string) string {
 	return fmt.Sprintf(
 		"Current subagent model: %s\nUsage: /subagent [model|default|help]\nRun /subagent with no arguments to open the model picker.",
-		formatModelSelectionLabel(currentSelection),
+		FormatModelSelectionLabel(currentSelection),
 	)
 }
 
-func defaultSessionSubagentModel(cfg config.Config, activeModelID string) string {
-	selection := strings.TrimSpace(cfg.SubagentModel)
-	if selection != "" {
-		provider, model := config.ParseModel(selection)
-		if strings.TrimSpace(model) == "" && strings.TrimSpace(provider) != "" {
-			model = provider
-			provider = ""
-		}
-		if strings.TrimSpace(model) == "" {
-			return api.GitHubCopilotDefaultSubagentModel
-		}
-
-		activeProvider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
-		if strings.TrimSpace(provider) == "" && normalizeProvider(activeProvider) == "github-copilot" {
-			return modelRef("github-copilot", model)
-		}
-		if strings.TrimSpace(provider) != "" {
-			return modelRef(provider, model)
-		}
-		return model
-	}
-
-	activeProvider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
-	if normalizeProvider(activeProvider) == "github-copilot" {
-		return modelRef("github-copilot", api.GitHubCopilotDefaultSubagentModel)
-	}
-	if strings.TrimSpace(activeModelID) != "" {
-		return strings.TrimSpace(activeModelID)
-	}
-	return api.GitHubCopilotDefaultSubagentModel
-}
-
-func formatSessionList(sessions []session.Metadata, currentID string) string {
+func FormatSessionList(sessions []session.Metadata, currentID string) string {
 	if len(sessions) == 0 {
 		return "No sessions found."
 	}
@@ -461,7 +295,7 @@ func formatSessionList(sessions []session.Metadata, currentID string) string {
 	return strings.TrimSpace(b.String())
 }
 
-func gitDiff(args string) string {
+func GitDiff(args string) string {
 	parts := []string{"diff", "--stat"}
 	if strings.TrimSpace(args) != "" {
 		parts = strings.Fields("diff " + args)
@@ -476,4 +310,15 @@ func gitDiff(args string) string {
 		result = result[:5000] + "\n[truncated]"
 	}
 	return result
+}
+
+func visibleDescriptors() []descriptor {
+	visible := make([]descriptor, 0, len(catalog))
+	for _, descriptor := range catalog {
+		if descriptor.Hidden {
+			continue
+		}
+		visible = append(visible, descriptor)
+	}
+	return visible
 }

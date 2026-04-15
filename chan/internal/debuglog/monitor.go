@@ -1,4 +1,4 @@
-package main
+package debuglog
 
 import (
 	"bufio"
@@ -11,13 +11,9 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/spf13/cobra"
-
-	"github.com/channyeintun/chan/internal/debuglog"
 )
 
-type debugViewOptions struct {
+type MonitorOptions struct {
 	FilePath  string
 	Level     string
 	Component string
@@ -26,25 +22,7 @@ type debugViewOptions struct {
 	Lines     int
 }
 
-func newDebugViewCommand() *cobra.Command {
-	options := debugViewOptions{}
-	cmd := &cobra.Command{
-		Use:   "debug-view",
-		Short: "Tail a structured debug log with a live monitor view",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runDebugView(options)
-		},
-	}
-	cmd.Flags().StringVar(&options.FilePath, "file", "", "Path to the session debug log")
-	cmd.Flags().StringVar(&options.Level, "level", "", "Filter by log level")
-	cmd.Flags().StringVar(&options.Component, "component", "", "Filter by component")
-	cmd.Flags().StringVar(&options.Event, "event", "", "Filter by event name")
-	cmd.Flags().BoolVar(&options.Raw, "raw", false, "Print raw JSONL instead of the formatted monitor view")
-	cmd.Flags().IntVar(&options.Lines, "lines", 40, "Number of existing lines to print before following new events")
-	return cmd
-}
-
-func runDebugView(options debugViewOptions) error {
+func RunMonitor(options MonitorOptions) error {
 	path := strings.TrimSpace(options.FilePath)
 	if path == "" {
 		return fmt.Errorf("--file is required")
@@ -52,7 +30,7 @@ func runDebugView(options debugViewOptions) error {
 
 	if !options.Raw {
 		fmt.Printf("Debug monitor: %s\n", path)
-		fmt.Printf("Filters: level=%s component=%s event=%s\n\n", debugFilterValue(options.Level), debugFilterValue(options.Component), debugFilterValue(options.Event))
+		fmt.Printf("Filters: level=%s component=%s event=%s\n\n", filterValue(options.Level), filterValue(options.Component), filterValue(options.Event))
 	}
 
 	file, err := os.Open(path)
@@ -62,7 +40,7 @@ func runDebugView(options debugViewOptions) error {
 	defer file.Close()
 
 	if options.Lines > 0 {
-		if err := printRecentDebugLines(file, options); err != nil {
+		if err := printRecentLines(file, options); err != nil {
 			return err
 		}
 	}
@@ -75,7 +53,7 @@ func runDebugView(options debugViewOptions) error {
 	for {
 		line, err := reader.ReadString('\n')
 		if err == nil {
-			printDebugMonitorLine(line, options)
+			printMonitorLine(line, options)
 			continue
 		}
 		if err != io.EOF {
@@ -96,7 +74,29 @@ func runDebugView(options debugViewOptions) error {
 	}
 }
 
-func printRecentDebugLines(file *os.File, options debugViewOptions) error {
+func OpenMonitorPopup(filePath string) error {
+	if runtime.GOOS != "darwin" {
+		return fmt.Errorf("automatic debug monitor popup is currently supported on macOS only")
+	}
+
+	execPath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if resolved, resolveErr := filepath.EvalSymlinks(execPath); resolveErr == nil {
+		execPath = resolved
+	}
+	commandLine := debugViewCommandLine(execPath, filePath)
+	script := []string{
+		`tell application "Terminal"`,
+		`activate`,
+		fmt.Sprintf(`do script %q`, commandLine),
+		`end tell`,
+	}
+	return exec.Command("osascript", flattenAppleScript(script)...).Start()
+}
+
+func printRecentLines(file *os.File, options MonitorOptions) error {
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
@@ -117,23 +117,23 @@ func printRecentDebugLines(file *os.File, options debugViewOptions) error {
 	}
 
 	for _, line := range lines {
-		printDebugMonitorLine(line, options)
+		printMonitorLine(line, options)
 	}
 	return nil
 }
 
-func printDebugMonitorLine(line string, options debugViewOptions) {
+func printMonitorLine(line string, options MonitorOptions) {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {
 		return
 	}
 
-	var envelope debuglog.Envelope
+	var envelope Envelope
 	if err := json.Unmarshal([]byte(trimmed), &envelope); err != nil {
 		fmt.Println(trimmed)
 		return
 	}
-	if !matchesDebugFilters(envelope, options) {
+	if !matchesFilters(envelope, options) {
 		return
 	}
 
@@ -142,20 +142,20 @@ func printDebugMonitorLine(line string, options debugViewOptions) {
 		return
 	}
 
-	level := strings.ToUpper(debugFilterValue(envelope.Level))
+	level := strings.ToUpper(filterValue(envelope.Level))
 	stamp := envelope.TS
 	if len(stamp) >= 19 {
 		stamp = stamp[11:19]
 	}
-	summary := summarizeDebugEnvelope(envelope)
-	lineText := fmt.Sprintf("[%s] %-5s %-12s %-20s %s", stamp, level, debugFilterValue(envelope.Component), envelope.Event, summary)
+	summary := summarizeEnvelope(envelope)
+	lineText := fmt.Sprintf("[%s] %-5s %-12s %-20s %s", stamp, level, filterValue(envelope.Component), envelope.Event, summary)
 	if envelope.Error != nil && strings.TrimSpace(envelope.Error.Message) != "" {
 		lineText += " | error=" + envelope.Error.Message
 	}
 	fmt.Println(lineText)
 }
 
-func matchesDebugFilters(envelope debuglog.Envelope, options debugViewOptions) bool {
+func matchesFilters(envelope Envelope, options MonitorOptions) bool {
 	if options.Level != "" && !strings.EqualFold(envelope.Level, options.Level) {
 		return false
 	}
@@ -168,7 +168,7 @@ func matchesDebugFilters(envelope debuglog.Envelope, options debugViewOptions) b
 	return true
 }
 
-func summarizeDebugEnvelope(envelope debuglog.Envelope) string {
+func summarizeEnvelope(envelope Envelope) string {
 	parts := make([]string, 0, 6)
 	appendField := func(key string) {
 		if envelope.Data == nil {
@@ -217,28 +217,6 @@ func summarizeDebugEnvelope(envelope debuglog.Envelope) string {
 	return "-"
 }
 
-func openDebugMonitorPopup(filePath string) error {
-	if runtime.GOOS != "darwin" {
-		return fmt.Errorf("automatic debug monitor popup is currently supported on macOS only")
-	}
-
-	execPath, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	if resolved, resolveErr := filepath.EvalSymlinks(execPath); resolveErr == nil {
-		execPath = resolved
-	}
-	commandLine := debugViewCommandLine(execPath, filePath)
-	script := []string{
-		`tell application "Terminal"`,
-		`activate`,
-		fmt.Sprintf(`do script %q`, commandLine),
-		`end tell`,
-	}
-	return exec.Command("osascript", flattenAppleScript(script)...).Start()
-}
-
 func debugViewCommandLine(execPath string, filePath string) string {
 	return shellQuote(execPath) + " debug-view --file " + shellQuote(filePath)
 }
@@ -258,7 +236,7 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `"'"'"`) + "'"
 }
 
-func debugFilterValue(value string) string {
+func filterValue(value string) string {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return "*"

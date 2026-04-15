@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -15,20 +15,24 @@ import (
 	"github.com/channyeintun/chan/internal/agent"
 	"github.com/channyeintun/chan/internal/api"
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
+	"github.com/channyeintun/chan/internal/clientdebug"
+	commandspkg "github.com/channyeintun/chan/internal/commands"
 	"github.com/channyeintun/chan/internal/compact"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
 	"github.com/channyeintun/chan/internal/debuglog"
+	enginepkg "github.com/channyeintun/chan/internal/engine"
 	"github.com/channyeintun/chan/internal/hooks"
 	"github.com/channyeintun/chan/internal/ipc"
 	"github.com/channyeintun/chan/internal/localmodel"
+	memorypkg "github.com/channyeintun/chan/internal/memory"
 	"github.com/channyeintun/chan/internal/session"
 	skillspkg "github.com/channyeintun/chan/internal/skills"
 	"github.com/channyeintun/chan/internal/timing"
 	toolpkg "github.com/channyeintun/chan/internal/tools"
 )
 
-func runStdioEngine(ctx context.Context, cfg config.Config) error {
+func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	engineStartedAt := time.Now()
 
 	// Debug logging: activated by CHAN_DEBUG=1
@@ -55,10 +59,10 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	} else {
 		activeModelID = modelRef(provider, client.ModelID())
 	}
-	client = wrapClientWithDebug(client)
-	modelState := newActiveModelState(client, activeModelID)
+	client = clientdebug.WrapClient(client)
+	modelState := enginepkg.NewActiveModelState(client, activeModelID)
 	subagentModelID := defaultSessionSubagentModel(cfg, activeModelID)
-	subagentModelState := newActiveSubagentModelState(subagentModelID)
+	subagentModelState := enginepkg.NewActiveSubagentModelState(subagentModelID)
 	messages := make([]api.Message, 0, 32)
 	mode := parseExecutionMode(cfg.DefaultMode)
 	permissionCtx := newPermissionContext(cfg.PermissionMode)
@@ -120,7 +124,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 	startupMetrics.Mark("session_persisted")
 
 	// Emit ready event
-	if err := bridge.EmitReady(slashCommandDescriptors()); err != nil {
+	if err := bridge.EmitReady(commandspkg.Descriptors()); err != nil {
 		return fmt.Errorf("emit ready: %w", err)
 	}
 	startupMetrics.Mark("ready_emitted")
@@ -220,7 +224,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 				continue
 			}
 			if resolvedClient != client {
-				client = wrapClientWithDebug(resolvedClient)
+				client = clientdebug.WrapClient(resolvedClient)
 			}
 			activeModelID = nextModelID
 			modelState.Set(client, activeModelID)
@@ -307,7 +311,7 @@ func runStdioEngine(ctx context.Context, cfg config.Config) error {
 						return result.Messages, nil
 					},
 					RecallMemory: func(callCtx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
-						selector := memoryRecallSelector{}
+						selector := memorypkg.RecallSelector{}
 						return selector.Select(callCtx, files, userPrompt)
 					},
 					BeforeStop: func(callCtx context.Context, stopReq agent.StopRequest) (agent.StopDecision, error) {

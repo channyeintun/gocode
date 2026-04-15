@@ -1,4 +1,4 @@
-package main
+package clientdebug
 
 import (
 	"context"
@@ -9,26 +9,21 @@ import (
 	"github.com/channyeintun/chan/internal/debuglog"
 )
 
-// debugClientProxy wraps an api.LLMClient and logs every method call.
-type debugClientProxy struct {
+type proxy struct {
 	inner api.LLMClient
 }
 
-func newDebugClientProxy(inner api.LLMClient) *debugClientProxy {
-	return &debugClientProxy{inner: inner}
-}
-
-func wrapClientWithDebug(inner api.LLMClient) api.LLMClient {
+func WrapClient(inner api.LLMClient) api.LLMClient {
 	if inner == nil {
 		return nil
 	}
-	if _, ok := inner.(*debugClientProxy); ok {
+	if _, ok := inner.(*proxy); ok {
 		return inner
 	}
-	return newDebugClientProxy(inner)
+	return &proxy{inner: inner}
 }
 
-func (p *debugClientProxy) Stream(ctx context.Context, req api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
+func (p *proxy) Stream(ctx context.Context, req api.ModelRequest) (iter.Seq2[api.ModelEvent, error], error) {
 	debuglog.Log("client", "stream_request", map[string]any{
 		"model":            p.inner.ModelID(),
 		"system_len":       len(req.SystemPrompt),
@@ -52,7 +47,7 @@ func (p *debugClientProxy) Stream(ctx context.Context, req api.ModelRequest) (it
 		for ev, evErr := range it {
 			fields := map[string]any{
 				"index": eventIndex,
-				"type":  debugEventTypeName(ev.Type),
+				"type":  eventTypeName(ev.Type),
 			}
 			switch ev.Type {
 			case api.ModelEventToken:
@@ -88,15 +83,15 @@ func (p *debugClientProxy) Stream(ctx context.Context, req api.ModelRequest) (it
 	}, nil
 }
 
-func (p *debugClientProxy) ModelID() string {
+func (p *proxy) ModelID() string {
 	return p.inner.ModelID()
 }
 
-func (p *debugClientProxy) Capabilities() api.ModelCapabilities {
+func (p *proxy) Capabilities() api.ModelCapabilities {
 	return p.inner.Capabilities()
 }
 
-func (p *debugClientProxy) Warmup(ctx context.Context) error {
+func (p *proxy) Warmup(ctx context.Context) error {
 	warmable, ok := p.inner.(api.WarmupCapable)
 	if !ok || warmable == nil {
 		return nil
@@ -111,7 +106,7 @@ func (p *debugClientProxy) Warmup(ctx context.Context) error {
 	return err
 }
 
-func debugEventTypeName(t api.ModelEventType) string {
+func eventTypeName(t api.ModelEventType) string {
 	switch t {
 	case api.ModelEventToken:
 		return "token"

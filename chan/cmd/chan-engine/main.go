@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	internalapp "github.com/channyeintun/chan/internal/app"
 	"github.com/channyeintun/chan/internal/config"
 )
 
@@ -83,7 +84,7 @@ func runEngine(modelFlag, modeFlag string, stdioMode bool) error {
 	}()
 
 	if stdioMode {
-		return runStdioEngine(ctx, cfg)
+		return internalapp.RunStdioEngine(ctx, cfg)
 	}
 
 	return launchTUI(ctx, cfg)

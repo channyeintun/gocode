@@ -1,4 +1,4 @@
-package main
+package memory
 
 import (
 	"context"
@@ -20,9 +20,9 @@ const (
 
 var memoryRecallTermPattern = regexp.MustCompile(`[a-z0-9][a-z0-9_./\-]{1,}`)
 
-type memoryRecallSelector struct{}
+type RecallSelector struct{}
 
-type memoryRecallCandidate struct {
+type recallCandidate struct {
 	ID       string
 	Scope    string
 	FilePath string
@@ -34,7 +34,7 @@ type memoryRecallCandidate struct {
 	Index    int
 }
 
-func (s memoryRecallSelector) Select(ctx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
+func (s RecallSelector) Select(ctx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
 	_ = ctx
 	if strings.TrimSpace(userPrompt) == "" {
 		return nil, nil
@@ -53,8 +53,8 @@ func (s memoryRecallSelector) Select(ctx context.Context, files []agent.MemoryFi
 	return buildMemoryRecallResults(selected, "deterministic preference match"), nil
 }
 
-func buildMemoryRecallCandidates(files []agent.MemoryFile) []memoryRecallCandidate {
-	candidates := make([]memoryRecallCandidate, 0, memoryRecallMaxCandidates)
+func buildMemoryRecallCandidates(files []agent.MemoryFile) []recallCandidate {
+	candidates := make([]recallCandidate, 0, memoryRecallMaxCandidates)
 	for _, file := range files {
 		if file.Type != "project-index" && file.Type != "user-index" {
 			continue
@@ -65,13 +65,13 @@ func buildMemoryRecallCandidates(files []agent.MemoryFile) []memoryRecallCandida
 			if line == "" || strings.TrimSpace(entry.Issue) != "" {
 				continue
 			}
-			candidates = append(candidates, memoryRecallCandidate{
+			candidates = append(candidates, recallCandidate{
 				ID:       fmt.Sprintf("m%d", len(candidates)+1),
 				Scope:    file.Type,
 				FilePath: file.Path,
 				Line:     line,
 				Title:    entry.Title,
-				FileType: memoryRecallFirstNonEmpty(entry.NoteType, file.Type),
+				FileType: firstNonEmpty(entry.NoteType, file.Type),
 				NotePath: entry.NotePath,
 				Updated:  file.UpdatedAt,
 				Index:    entry.Order,
@@ -84,14 +84,14 @@ func buildMemoryRecallCandidates(files []agent.MemoryFile) []memoryRecallCandida
 	return candidates
 }
 
-func selectMemoryRecallCandidates(candidates []memoryRecallCandidate, userPrompt string) []memoryRecallCandidate {
+func selectMemoryRecallCandidates(candidates []recallCandidate, userPrompt string) []recallCandidate {
 	terms := extractMemoryRecallTerms(userPrompt)
 	if len(terms) == 0 {
 		return nil
 	}
 
 	type scoredCandidate struct {
-		candidate memoryRecallCandidate
+		candidate recallCandidate
 		score     int
 	}
 
@@ -111,8 +111,8 @@ func selectMemoryRecallCandidates(candidates []memoryRecallCandidate, userPrompt
 		if scored[i].score != scored[j].score {
 			return scored[i].score > scored[j].score
 		}
-		if memoryRecallScopeRank(scored[i].candidate.Scope) != memoryRecallScopeRank(scored[j].candidate.Scope) {
-			return memoryRecallScopeRank(scored[i].candidate.Scope) < memoryRecallScopeRank(scored[j].candidate.Scope)
+		if scopeRank(scored[i].candidate.Scope) != scopeRank(scored[j].candidate.Scope) {
+			return scopeRank(scored[i].candidate.Scope) < scopeRank(scored[j].candidate.Scope)
 		}
 		if !scored[i].candidate.Updated.Equal(scored[j].candidate.Updated) {
 			return scored[i].candidate.Updated.After(scored[j].candidate.Updated)
@@ -124,14 +124,14 @@ func selectMemoryRecallCandidates(candidates []memoryRecallCandidate, userPrompt
 	})
 
 	limit := min(memoryRecallMaxSelections, len(scored))
-	selected := make([]memoryRecallCandidate, 0, limit)
+	selected := make([]recallCandidate, 0, limit)
 	for _, candidate := range scored[:limit] {
 		selected = append(selected, candidate.candidate)
 	}
 	return selected
 }
 
-func scoreMemoryRecallCandidate(candidate memoryRecallCandidate, terms []string) int {
+func scoreMemoryRecallCandidate(candidate recallCandidate, terms []string) int {
 	line := strings.ToLower(candidate.Line)
 	title := strings.ToLower(candidate.Title)
 	noteType := strings.ToLower(candidate.FileType)
@@ -157,7 +157,7 @@ func scoreMemoryRecallCandidate(candidate memoryRecallCandidate, terms []string)
 	return score
 }
 
-func buildMemoryRecallResults(candidates []memoryRecallCandidate, source string) []agent.MemoryRecallResult {
+func buildMemoryRecallResults(candidates []recallCandidate, source string) []agent.MemoryRecallResult {
 	if len(candidates) == 0 {
 		return nil
 	}
@@ -200,7 +200,7 @@ func extractMemoryRecallTerms(prompt string) []string {
 	seen := make(map[string]struct{}, len(matches))
 	terms := make([]string, 0, min(memoryRecallMaxTerms, len(matches)))
 	for _, match := range matches {
-		if isLowSignalMemoryRecallTerm(match) {
+		if isLowSignalTerm(match) {
 			continue
 		}
 		if _, ok := seen[match]; ok {
@@ -215,7 +215,7 @@ func extractMemoryRecallTerms(prompt string) []string {
 	return terms
 }
 
-func isLowSignalMemoryRecallTerm(term string) bool {
+func isLowSignalTerm(term string) bool {
 	if len(term) < 3 {
 		return true
 	}
@@ -230,14 +230,14 @@ func isLowSignalMemoryRecallTerm(term string) bool {
 	}
 }
 
-func memoryRecallScopeRank(scope string) int {
+func scopeRank(scope string) int {
 	if scope == "project-index" {
 		return 0
 	}
 	return 1
 }
 
-func memoryRecallFirstNonEmpty(values ...string) string {
+func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
 			return value
