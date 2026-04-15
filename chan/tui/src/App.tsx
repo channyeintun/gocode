@@ -19,6 +19,7 @@ import { useEngine } from "./hooks/useEngine.js";
 import { useEvents, type UIArtifact } from "./hooks/useEvents.js";
 import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
 import Input from "./components/Input.js";
+import ModelSelectionPrompt from "./components/ModelSelectionPrompt.js";
 import PromptFooter from "./components/PromptFooter.js";
 import ResumeSelectionPrompt from "./components/ResumeSelectionPrompt.js";
 import StreamOutput from "./components/StreamOutput.js";
@@ -90,6 +91,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     appendUserMessage,
     beginAssistantTurn,
     submitArtifactReview,
+    submitModelSelection,
     submitResumeSelection,
   } = useEvents(model, mode);
   const engine = useEngine(enginePath, { model, mode, onEvent: handleEvent });
@@ -179,6 +181,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       uiState.isStreaming ||
       uiState.pendingPermission ||
       uiState.pendingArtifactReview ||
+      uiState.pendingModelSelection ||
       uiState.pendingResumeSelection
     ) {
       return;
@@ -200,6 +203,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     uiState.isStreaming,
     uiState.pendingPermission,
     uiState.pendingArtifactReview,
+    uiState.pendingModelSelection,
     uiState.pendingResumeSelection,
   ]);
 
@@ -240,6 +244,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       uiState.isStreaming ||
       uiState.pendingPermission ||
       uiState.pendingArtifactReview ||
+      uiState.pendingModelSelection ||
       uiState.pendingResumeSelection ||
       queuedPrompts.length
     ) {
@@ -297,6 +302,20 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     });
   };
 
+  const handleModelSelection = (modelId?: string, provider?: string) => {
+    if (!uiState.pendingModelSelection) {
+      return;
+    }
+
+    submitModelSelection(uiState.pendingModelSelection.requestId);
+    engine.sendModelSelectionResponse({
+      request_id: uiState.pendingModelSelection.requestId,
+      model: modelId,
+      provider,
+      cancel: !modelId,
+    });
+  };
+
   const handleCancel = () => {
     if (transcriptSearchActive) {
       setTranscriptSearchActive(false);
@@ -318,6 +337,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     transcriptSearchActive ||
     uiState.pendingPermission !== null ||
     uiState.pendingArtifactReview !== null ||
+    uiState.pendingModelSelection !== null ||
     uiState.pendingResumeSelection !== null;
   const promptBlockedReason = getPromptBlockedReason({
     isEngineReady,
@@ -520,6 +540,14 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             selection={uiState.pendingResumeSelection}
             onSelect={handleResumeSelection}
             onCancel={() => handleResumeSelection()}
+          />
+        </Box>
+      ) : uiState.pendingModelSelection ? (
+        <Box flexDirection="column" flexShrink={1} minHeight={0} marginTop={1}>
+          <ModelSelectionPrompt
+            selection={uiState.pendingModelSelection}
+            onSelect={handleModelSelection}
+            onCancel={() => handleModelSelection()}
           />
         </Box>
       ) : uiState.pendingArtifactReview ? (

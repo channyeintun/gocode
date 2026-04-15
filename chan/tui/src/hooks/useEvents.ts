@@ -14,6 +14,8 @@ import type {
   ContextWindowPayload,
   CostUpdatePayload,
   ErrorPayload,
+  ModelSelectionOptionPayload,
+  ModelSelectionRequestedPayload,
   MemoryRecalledPayload,
   ModeChangedPayload,
   ModelChangedPayload,
@@ -65,6 +67,21 @@ export interface UIResumeSelectionSession {
 export interface UIResumeSelection {
   requestId: string;
   sessions: UIResumeSelectionSession[];
+}
+
+export interface UIModelSelectionOption {
+  label: string;
+  model: string | null;
+  provider: string | null;
+  description: string | null;
+  isCustom: boolean;
+  active: boolean;
+}
+
+export interface UIModelSelection {
+  requestId: string;
+  currentModel: string | null;
+  options: UIModelSelectionOption[];
 }
 
 export type UIArtifactReviewDecision = "approve" | "revise" | "cancel";
@@ -260,6 +277,7 @@ export interface EngineUIState {
   artifacts: UIArtifact[];
   focusedArtifactId: string | null;
   pendingArtifactReview: UIArtifactReview | null;
+  pendingModelSelection: UIModelSelection | null;
   pendingResumeSelection: UIResumeSelection | null;
   submittingArtifactReviewRequestId: string | null;
   toolCalls: UIToolCall[];
@@ -324,6 +342,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   artifacts: [],
   focusedArtifactId: null,
   pendingArtifactReview: null,
+  pendingModelSelection: null,
   pendingResumeSelection: null,
   submittingArtifactReviewRequestId: null,
   toolCalls: [],
@@ -792,6 +811,24 @@ export function useEvents(initialModel: string, initialMode: string) {
         }));
         break;
       }
+      case "model_selection_requested": {
+        const p = event.payload as ModelSelectionRequestedPayload;
+        setUIState((s) => ({
+          ...s,
+          pendingModelSelection: {
+            requestId: p.request_id,
+            currentModel:
+              typeof p.current_model === "string" &&
+              p.current_model.trim().length > 0
+                ? p.current_model.trim()
+                : null,
+            options: normalizeModelSelectionOptions(p.options),
+          },
+          statusLine: "Select a model.",
+          error: null,
+        }));
+        break;
+      }
       case "resume_selection_requested": {
         const p = event.payload as ResumeSelectionRequestedPayload;
         setUIState((s) => ({
@@ -1147,6 +1184,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           artifacts: [],
           focusedArtifactId: null,
           pendingArtifactReview: null,
+          pendingModelSelection: null,
           pendingResumeSelection: null,
           submittingArtifactReviewRequestId: null,
           pendingPermission: null,
@@ -1167,6 +1205,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             s.toolCalls.length > 0 ||
             s.artifacts.length > 0 ||
             s.pendingArtifactReview !== null ||
+            s.pendingModelSelection !== null ||
             s.pendingPermission !== null ||
             s.isStreaming;
           const sessionChanged =
@@ -1177,7 +1216,10 @@ export function useEvents(initialModel: string, initialMode: string) {
             return s;
           }
 
-          if (sessionChanged && (s.sessionId !== null || hasSessionScopedState)) {
+          if (
+            sessionChanged &&
+            (s.sessionId !== null || hasSessionScopedState)
+          ) {
             return {
               ...s,
               messages: [],
@@ -1197,6 +1239,7 @@ export function useEvents(initialModel: string, initialMode: string) {
               artifacts: [],
               focusedArtifactId: null,
               pendingArtifactReview: null,
+              pendingModelSelection: null,
               pendingResumeSelection: null,
               submittingArtifactReviewRequestId: null,
               toolCalls: [],
@@ -1258,6 +1301,7 @@ export function useEvents(initialModel: string, initialMode: string) {
       activeTurnStatus: "idle",
       isStreaming: false,
       compact: null,
+      pendingModelSelection: null,
       pendingResumeSelection: null,
       submittingArtifactReviewRequestId: null,
       turnTiming: {
@@ -1384,23 +1428,35 @@ export function useEvents(initialModel: string, initialMode: string) {
     [],
   );
 
-  const submitResumeSelection = useCallback(
-    (requestId: string) => {
-      setUIState((s) => {
-        if (s.pendingResumeSelection?.requestId !== requestId) {
-          return s;
-        }
+  const submitResumeSelection = useCallback((requestId: string) => {
+    setUIState((s) => {
+      if (s.pendingResumeSelection?.requestId !== requestId) {
+        return s;
+      }
 
-        return {
-          ...s,
-          pendingResumeSelection: null,
-          statusLine: null,
-          error: null,
-        };
-      });
-    },
-    [],
-  );
+      return {
+        ...s,
+        pendingResumeSelection: null,
+        statusLine: null,
+        error: null,
+      };
+    });
+  }, []);
+
+  const submitModelSelection = useCallback((requestId: string) => {
+    setUIState((s) => {
+      if (s.pendingModelSelection?.requestId !== requestId) {
+        return s;
+      }
+
+      return {
+        ...s,
+        pendingModelSelection: null,
+        statusLine: null,
+        error: null,
+      };
+    });
+  }, []);
 
   return {
     uiState,
@@ -1411,8 +1467,41 @@ export function useEvents(initialModel: string, initialMode: string) {
     appendUserMessage,
     beginAssistantTurn,
     submitArtifactReview,
+    submitModelSelection,
     submitResumeSelection,
   };
+}
+
+function normalizeModelSelectionOptions(
+  payload: ModelSelectionOptionPayload[] | undefined,
+): UIModelSelectionOption[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload
+    .filter(
+      (option) =>
+        typeof option?.label === "string" && option.label.trim().length > 0,
+    )
+    .map((option) => ({
+      label: option.label.trim(),
+      model:
+        typeof option.model === "string" && option.model.trim().length > 0
+          ? option.model.trim()
+          : null,
+      provider:
+        typeof option.provider === "string" && option.provider.trim().length > 0
+          ? option.provider.trim()
+          : null,
+      description:
+        typeof option.description === "string" &&
+        option.description.trim().length > 0
+          ? option.description.trim()
+          : null,
+      isCustom: option.is_custom === true,
+      active: option.active === true,
+    }));
 }
 
 function normalizeResumeSelectionSessions(

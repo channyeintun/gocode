@@ -45,8 +45,8 @@ var slashCommandCatalog = []slashCommandDescriptor{
 	},
 	{
 		Name:           "model",
-		Description:    "Show or switch the active model",
-		Usage:          "/model [name]",
+		Description:    "Show the active model or open the model picker",
+		Usage:          "/model [model]",
 		TakesArguments: true,
 	},
 	{

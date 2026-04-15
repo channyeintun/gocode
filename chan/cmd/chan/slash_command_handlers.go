@@ -72,6 +72,68 @@ var slashCommandRegistry = map[string]slashCommandHandler{
 	"status":    slashCommandHandlerFunc(handleStatusSlashCommand),
 }
 
+type modelSelectionPreset struct {
+	Label       string
+	Model       string
+	Provider    string
+	Description string
+}
+
+type modelSelectionChoice struct {
+	Model    string
+	Provider string
+}
+
+var curatedModelSelectionPresets = []modelSelectionPreset{
+	{
+		Label:       "Claude Sonnet 4.6",
+		Model:       "claude-sonnet-4.6",
+		Provider:    "anthropic",
+		Description: "Sonnet preset",
+	},
+	{
+		Label:       "Claude Opus 4.6",
+		Model:       "claude-opus-4.6",
+		Provider:    "anthropic",
+		Description: "Opus preset",
+	},
+	{
+		Label:       "Claude Haiku 4.5",
+		Model:       "claude-haiku-4.5",
+		Provider:    "anthropic",
+		Description: "Haiku preset",
+	},
+	{
+		Label:       "GPT 5.4",
+		Model:       "gpt-5.4",
+		Provider:    "openai",
+		Description: "GPT preset",
+	},
+	{
+		Label:       "GPT 5.4 Mini",
+		Model:       "gpt-5.4-mini",
+		Provider:    "openai",
+		Description: "GPT mini preset",
+	},
+	{
+		Label:       "Gemini 3 Flash",
+		Model:       "gemini-3.0-flash",
+		Provider:    "gemini",
+		Description: "Gemini flash preset",
+	},
+	{
+		Label:       "Gemini 3.1 Pro",
+		Model:       "gemini-3.1-pro",
+		Provider:    "gemini",
+		Description: "Gemini pro preset",
+	},
+	{
+		Label:       "Composer 2.0",
+		Model:       "composer-2.0",
+		Description: "Composer preset",
+	},
+}
+
 func newSlashCommandContext(
 	ctx context.Context,
 	bridge *ipc.Bridge,
@@ -306,20 +368,43 @@ func handleFastSlashCommand(cmd *slashCommandContext) error {
 }
 
 func handleModelSlashCommand(cmd *slashCommandContext) error {
-	if cmd.args == "" {
-		return emitTextResponse(cmd.bridge, fmt.Sprintf("Current model: %s", cmd.state.ActiveModelID))
+	selected := modelSelectionChoice{Model: strings.TrimSpace(cmd.args)}
+	if selected.Model == "" {
+		var err error
+		selected, err = promptModelSelection(cmd)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(selected.Model) == "" {
+			return emitTextResponse(cmd.bridge, "Model selection cancelled.")
+		}
 	}
 
-	selectedModel := cmd.args
-	if strings.EqualFold(strings.TrimSpace(cmd.args), "default") {
-		selectedModel = cmd.cfg.Model
+	if strings.EqualFold(selected.Model, "default") {
+		_, configuredModel := config.ParseModel(strings.TrimSpace(cmd.cfg.Model))
+		if strings.TrimSpace(configuredModel) == "" {
+			selected.Model = strings.TrimSpace(cmd.cfg.Model)
+		} else {
+			selected.Model = configuredModel
+		}
+		selected.Provider = ""
+	}
+
+	selectedModel, err := normalizeModelSlashInput(selected.Model)
+	if err != nil {
+		return emitTextResponse(cmd.bridge, err.Error())
 	}
 
 	currentProvider, _ := config.ParseModel(cmd.state.ActiveModelID)
+	providerHint := strings.TrimSpace(selected.Provider)
 	provider, model := resolveModelSelection(selectedModel, currentProvider)
+	if normalizeProvider(currentProvider) != "github-copilot" && providerHint != "" {
+		provider = normalizeProvider(providerHint)
+		model = selectedModel
+	}
 	nextClient, err := newLLMClient(provider, model, cmd.cfg)
 	if err != nil {
-		return cmd.bridge.EmitError(fmt.Sprintf("switch model %q: %v", cmd.args, err), true)
+		return cmd.bridge.EmitError(fmt.Sprintf("switch model %q: %v", selectedModel, err), true)
 	}
 
 	nextClient = wrapClientWithDebug(nextClient)
@@ -338,6 +423,89 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 		return err
 	}
 	return emitTextResponse(cmd.bridge, fmt.Sprintf("Set model to %s", cmd.state.ActiveModelID))
+}
+
+func normalizeModelSlashInput(input string) (string, error) {
+	compact := strings.TrimSpace(input)
+	if compact == "" {
+		return "", fmt.Errorf("model cannot be empty")
+	}
+	if strings.Contains(compact, "/") {
+		return "", fmt.Errorf("/model only accepts a model name. Remove the provider prefix and try again")
+	}
+	return compact, nil
+}
+
+func promptModelSelection(cmd *slashCommandContext) (modelSelectionChoice, error) {
+	activeModelID := strings.TrimSpace(cmd.state.ActiveModelID)
+	_, activeModel := config.ParseModel(activeModelID)
+	if strings.TrimSpace(activeModel) == "" {
+		activeModel = activeModelID
+	}
+
+	options := make([]ipc.ModelSelectionOptionPayload, 0, len(curatedModelSelectionPresets)+1)
+	for _, preset := range curatedModelSelectionPresets {
+		options = append(options, ipc.ModelSelectionOptionPayload{
+			Label:       preset.Label,
+			Model:       preset.Model,
+			Provider:    preset.Provider,
+			Description: preset.Description,
+			Active:      strings.EqualFold(strings.TrimSpace(preset.Model), strings.TrimSpace(activeModel)),
+		})
+	}
+	options = append(options, ipc.ModelSelectionOptionPayload{
+		Label:       "Custom model",
+		Description: "Enter any model id",
+		IsCustom:    true,
+	})
+
+	requestID := fmt.Sprintf("model-%d", time.Now().UnixNano())
+	if err := cmd.bridge.Emit(ipc.EventModelSelectionRequested, ipc.ModelSelectionRequestedPayload{
+		RequestID:    requestID,
+		CurrentModel: cmd.state.ActiveModelID,
+		Options:      options,
+	}); err != nil {
+		return modelSelectionChoice{}, err
+	}
+
+	deferred := make([]ipc.ClientMessage, 0, 4)
+	defer func() {
+		cmd.router.Requeue(deferred...)
+	}()
+
+	for {
+		msg, err := cmd.router.Next(cmd.ctx)
+		if err != nil {
+			return modelSelectionChoice{}, err
+		}
+
+		switch msg.Type {
+		case ipc.MsgModelSelectionResponse:
+			var payload ipc.ModelSelectionResponsePayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return modelSelectionChoice{}, fmt.Errorf("decode model selection response: %w", err)
+			}
+			if payload.RequestID != requestID {
+				deferred = append(deferred, msg)
+				continue
+			}
+			if payload.Cancel {
+				return modelSelectionChoice{}, nil
+			}
+			selected := strings.TrimSpace(payload.Model)
+			if selected == "" {
+				return modelSelectionChoice{}, nil
+			}
+			return modelSelectionChoice{
+				Model:    selected,
+				Provider: strings.TrimSpace(payload.Provider),
+			}, nil
+		case ipc.MsgShutdown:
+			return modelSelectionChoice{}, context.Canceled
+		default:
+			deferred = append(deferred, msg)
+		}
+	}
 }
 
 func handleReasoningSlashCommand(cmd *slashCommandContext) error {

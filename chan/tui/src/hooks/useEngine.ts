@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import { useState, useEffect, useCallback, useRef } from "react";
 import type {
+  ModelSelectionResponsePayload,
   PermissionResponseDecision,
   ResumeSelectionResponsePayload,
   StreamEvent,
@@ -189,6 +190,12 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     [send],
   );
 
+  const sendModelSelectionResponse = useCallback(
+    (payload: ModelSelectionResponsePayload) =>
+      send(createMessage("model_selection_response", payload)),
+    [send],
+  );
+
   return {
     ...state,
     sendInput,
@@ -198,6 +205,7 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     sendShutdown,
     sendPermissionResponse,
     sendArtifactReviewResponse,
+    sendModelSelectionResponse,
     sendResumeSelectionResponse,
   };
 }

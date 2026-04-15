@@ -30,6 +30,7 @@ const (
 	EventModelChanged             EventType = "model_changed"
 	EventContextWindow            EventType = "context_window"
 	EventCostUpdate               EventType = "cost_update"
+	EventModelSelectionRequested  EventType = "model_selection_requested"
 	EventResumeSelectionRequested EventType = "resume_selection_requested"
 	EventMemoryRecalled           EventType = "memory_recalled"
 	EventRetrievalUsed            EventType = "retrieval_used"
@@ -71,6 +72,7 @@ const (
 	MsgUserInput               ClientMessageType = "user_input"
 	MsgSlashCommand            ClientMessageType = "slash_command"
 	MsgPermissionResponse      ClientMessageType = "permission_response"
+	MsgModelSelectionResponse  ClientMessageType = "model_selection_response"
 	MsgResumeSelectionResponse ClientMessageType = "resume_selection_response"
 	MsgCancel                  ClientMessageType = "cancel"
 	MsgModeToggle              ClientMessageType = "mode_toggle"
@@ -185,6 +187,21 @@ type ResumeSelectionSessionPayload struct {
 type ResumeSelectionRequestedPayload struct {
 	RequestID string                          `json:"request_id"`
 	Sessions  []ResumeSelectionSessionPayload `json:"sessions"`
+}
+
+type ModelSelectionOptionPayload struct {
+	Label       string `json:"label"`
+	Model       string `json:"model,omitempty"`
+	Provider    string `json:"provider,omitempty"`
+	Description string `json:"description,omitempty"`
+	IsCustom    bool   `json:"is_custom,omitempty"`
+	Active      bool   `json:"active,omitempty"`
+}
+
+type ModelSelectionRequestedPayload struct {
+	RequestID    string                        `json:"request_id"`
+	CurrentModel string                        `json:"current_model,omitempty"`
+	Options      []ModelSelectionOptionPayload `json:"options"`
 }
 
 type MemoryRecallEntryPayload struct {
@@ -317,6 +334,13 @@ type PermissionResponsePayload struct {
 type ResumeSelectionResponsePayload struct {
 	RequestID string `json:"request_id"`
 	SessionID string `json:"session_id,omitempty"`
+	Cancel    bool   `json:"cancel,omitempty"`
+}
+
+type ModelSelectionResponsePayload struct {
+	RequestID string `json:"request_id"`
+	Model     string `json:"model,omitempty"`
+	Provider  string `json:"provider,omitempty"`
 	Cancel    bool   `json:"cancel,omitempty"`
 }
 

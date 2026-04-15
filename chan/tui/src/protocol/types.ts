@@ -8,6 +8,7 @@ export type EventType =
   | "tool_result"
   | "tool_error"
   | "permission_request"
+  | "model_selection_requested"
   | "resume_selection_requested"
   | "mode_changed"
   | "model_changed"
@@ -43,6 +44,7 @@ export type ClientMessageType =
   | "user_input"
   | "slash_command"
   | "permission_response"
+  | "model_selection_response"
   | "resume_selection_response"
   | "cancel"
   | "mode_toggle"
@@ -148,6 +150,28 @@ export interface ResumeSelectionSessionPayload {
 export interface ResumeSelectionRequestedPayload {
   request_id: string;
   sessions: ResumeSelectionSessionPayload[];
+}
+
+export interface ModelSelectionOptionPayload {
+  label: string;
+  model?: string;
+  provider?: string;
+  description?: string;
+  is_custom?: boolean;
+  active?: boolean;
+}
+
+export interface ModelSelectionRequestedPayload {
+  request_id: string;
+  current_model?: string;
+  options: ModelSelectionOptionPayload[];
+}
+
+export interface ModelSelectionResponsePayload {
+  request_id: string;
+  model?: string;
+  provider?: string;
+  cancel?: boolean;
 }
 
 export interface ResumeSelectionResponsePayload {

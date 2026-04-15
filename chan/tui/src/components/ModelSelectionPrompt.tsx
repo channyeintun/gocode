@@ -8,7 +8,7 @@ import { stripProviderPrefix } from "../utils/formatModel.js";
 
 interface ModelSelectionPromptProps {
   selection: UIModelSelection;
-  onSelect: (modelId: string) => void;
+  onSelect: (modelId: string, provider?: string) => void;
   onCancel: () => void;
 }
 
@@ -123,7 +123,7 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
         return;
       }
       if (selectedOption.model) {
-        onSelect(selectedOption.model);
+        onSelect(selectedOption.model, selectedOption.provider ?? undefined);
       }
       return;
     }
