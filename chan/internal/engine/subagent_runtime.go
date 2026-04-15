@@ -1,4 +1,4 @@
-package app
+package engine
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
-	enginepkg "github.com/channyeintun/chan/internal/engine"
 	"github.com/channyeintun/chan/internal/hooks"
 	"github.com/channyeintun/chan/internal/ipc"
 	memorypkg "github.com/channyeintun/chan/internal/memory"
@@ -110,8 +109,8 @@ func makeSubagentRunner(
 	sessionStore *session.Store,
 	artifactManager *artifactspkg.Manager,
 	hookRunner *hooks.Runner,
-	modelState *enginepkg.ActiveModelState,
-	subagentModelState *enginepkg.ActiveSubagentModelState,
+	modelState *ActiveModelState,
+	subagentModelState *ActiveSubagentModelState,
 	cwd string,
 ) toolpkg.AgentRunner {
 	return func(ctx context.Context, req toolpkg.AgentRunRequest) (toolpkg.AgentRunResult, error) {
@@ -157,7 +156,7 @@ func makeSubagentRunner(
 	}
 }
 
-func resolveSubagentClient(parent api.LLMClient, activeModelID string, subagentModelState *enginepkg.ActiveSubagentModelState) (api.LLMClient, string, error) {
+func resolveSubagentClient(parent api.LLMClient, activeModelID string, subagentModelState *ActiveSubagentModelState) (api.LLMClient, string, error) {
 	provider, activeModel := config.ParseModel(strings.TrimSpace(activeModelID))
 	provider = normalizeProvider(provider)
 	if strings.TrimSpace(activeModel) == "" {

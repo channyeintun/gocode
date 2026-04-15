@@ -1,4 +1,4 @@
-package app
+package engine
 
 import (
 	"context"
@@ -14,7 +14,6 @@ import (
 	"github.com/channyeintun/chan/internal/clientdebug"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
-	enginepkg "github.com/channyeintun/chan/internal/engine"
 	"github.com/channyeintun/chan/internal/hooks"
 	"github.com/channyeintun/chan/internal/ipc"
 	"github.com/channyeintun/chan/internal/localmodel"
@@ -36,8 +35,8 @@ type engineLoopDeps struct {
 	sessionStore       *session.Store
 	artifactManager    *artifactspkg.Manager
 	timingLogger       *timing.Logger
-	modelState         *enginepkg.ActiveModelState
-	subagentModelState *enginepkg.ActiveSubagentModelState
+	modelState         *ActiveModelState
+	subagentModelState *ActiveSubagentModelState
 	cfg                config.Config
 }
 

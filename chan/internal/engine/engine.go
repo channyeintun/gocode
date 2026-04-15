@@ -1,4 +1,4 @@
-package app
+package engine
 
 import (
 	"context"
@@ -19,7 +19,6 @@ import (
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
 	"github.com/channyeintun/chan/internal/debuglog"
-	enginepkg "github.com/channyeintun/chan/internal/engine"
 	"github.com/channyeintun/chan/internal/hooks"
 	"github.com/channyeintun/chan/internal/ipc"
 	"github.com/channyeintun/chan/internal/session"
@@ -55,9 +54,9 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 		activeModelID = modelRef(provider, client.ModelID())
 	}
 	client = clientdebug.WrapClient(client)
-	modelState := enginepkg.NewActiveModelState(client, activeModelID)
+	modelState := NewActiveModelState(client, activeModelID)
 	subagentModelID := defaultSessionSubagentModel(cfg, activeModelID)
-	subagentModelState := enginepkg.NewActiveSubagentModelState(subagentModelID)
+	subagentModelState := NewActiveSubagentModelState(subagentModelID)
 	messages := make([]api.Message, 0, 32)
 	mode := parseExecutionMode(cfg.DefaultMode)
 	permissionCtx := newPermissionContext(cfg.PermissionMode)

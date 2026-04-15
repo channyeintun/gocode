@@ -1,4 +1,4 @@
-package app
+package engine
 
 import (
 	commandspkg "github.com/channyeintun/chan/internal/commands"
