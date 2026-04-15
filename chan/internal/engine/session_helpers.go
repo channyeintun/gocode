@@ -198,28 +198,40 @@ func compactWithMetrics(
 	sessionID string,
 	turnID int,
 	reason string,
+	sessionMemory agent.SessionMemorySnapshot,
 	messages []api.Message,
 ) (compact.CompactResult, error) {
 	metrics := timing.NewCheckpointRecorder(time.Now())
 	pipeline := newCompactionPipeline(bridge, tracker, client)
+	hasSessionMemory := sessionMemory.HasContent()
+	hasFreshSessionMemory := sessionMemory.IsFresh(time.Now())
 	result, err := pipeline.Compact(ctx, messages, reason)
 	if err != nil {
 		metrics.Mark("compact_failed")
 		_ = timingLogger.AppendSnapshot("compaction", "compaction_duration", sessionID, turnID, metrics, map[string]any{
-			"reason":        reason,
-			"status":        "failed",
-			"tokens_before": compact.EstimateConversationTokens(messages),
+			"reason":                   reason,
+			"status":                   "failed",
+			"tokens_before":            compact.EstimateConversationTokens(messages),
+			"has_session_memory":       hasSessionMemory,
+			"has_fresh_session_memory": hasFreshSessionMemory,
+			"microcompact_enabled":     config.Load().EnableMicrocompact,
 		})
 		return compact.CompactResult{}, err
 	}
 
 	metrics.Mark("compact_completed")
 	_ = timingLogger.AppendSnapshot("compaction", "compaction_duration", sessionID, turnID, metrics, map[string]any{
-		"reason":        reason,
-		"status":        "completed",
-		"strategy":      string(result.Strategy),
-		"tokens_after":  result.TokensAfter,
-		"tokens_before": result.TokensBefore,
+		"reason":                    reason,
+		"status":                    "completed",
+		"strategy":                  string(result.Strategy),
+		"tokens_after":              result.TokensAfter,
+		"tokens_before":             result.TokensBefore,
+		"tokens_saved":              result.TokensBefore - result.TokensAfter,
+		"microcompact_applied":      result.MicrocompactApplied,
+		"microcompact_tokens_saved": result.MicrocompactTokensSaved,
+		"has_session_memory":        hasSessionMemory,
+		"has_fresh_session_memory":  hasFreshSessionMemory,
+		"microcompact_enabled":      config.Load().EnableMicrocompact,
 	})
 	return result, nil
 }

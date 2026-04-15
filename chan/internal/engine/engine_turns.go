@@ -409,7 +409,8 @@ func (t *userTurnContext) newQueryDeps(planner *agent.Planner) agent.QueryDeps {
 			return executeToolCalls(callCtx, t.deps.bridge, t.deps.router, t.deps.registry, t.deps.permissionCtx, t.deps.tracker, planner, t.deps.artifactManager, t.deps.hookRunner, t.state.sessionID, t.state.client.Capabilities().MaxOutputTokens, t.turnMetrics, t.turnStats, calls)
 		},
 		CompactMessages: func(callCtx context.Context, current []api.Message, reason agent.CompactReason) (compact.CompactResult, error) {
-			return compactWithMetrics(callCtx, t.deps.bridge, t.deps.tracker, t.state.client, t.deps.timingLogger, t.state.sessionID, t.turnID, string(reason), current)
+			sessionMemory, _ := loadSessionMemorySnapshot(callCtx, t.deps.artifactManager, t.state.sessionID)
+			return compactWithMetrics(callCtx, t.deps.bridge, t.deps.tracker, t.state.client, t.deps.timingLogger, t.state.sessionID, t.turnID, string(reason), sessionMemory, current)
 		},
 		RecallMemory: func(callCtx context.Context, files []agent.MemoryFile, userPrompt string) ([]agent.MemoryRecallResult, error) {
 			selector := memorypkg.RecallSelector{}

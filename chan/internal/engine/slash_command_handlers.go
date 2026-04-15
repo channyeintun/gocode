@@ -614,7 +614,7 @@ func handleCompactSlashCommand(cmd *slashCommandContext) error {
 		return err
 	}
 
-	result, err := compactWithMetrics(cmd.ctx, cmd.bridge, cmd.tracker, *cmd.client, cmd.timingLogger, cmd.state.SessionID, 0, string(agent.CompactManual), cmd.state.Messages)
+	result, err := compactWithMetrics(cmd.ctx, cmd.bridge, cmd.tracker, *cmd.client, cmd.timingLogger, cmd.state.SessionID, 0, string(agent.CompactManual), sessionMemory, cmd.state.Messages)
 	if err != nil {
 		return cmd.bridge.EmitError(fmt.Sprintf("compact conversation: %v", err), true)
 	}
@@ -622,6 +622,9 @@ func handleCompactSlashCommand(cmd *slashCommandContext) error {
 	cmd.state.Messages = result.Messages
 	tokensAfter := compact.EstimateConversationTokens(cmd.state.Messages)
 	if err := cmd.persistState(); err != nil {
+		return err
+	}
+	if err := maybeRefreshSessionMemory(cmd.ctx, cmd.bridge, cmd.artifactManager, cmd.state.SessionID, 0, cmd.state.Messages, 0); err != nil {
 		return err
 	}
 	if err := cmd.bridge.Emit(ipc.EventCompactEnd, ipc.CompactEndPayload{
