@@ -562,7 +562,7 @@ func finalizeApplyPatchOperation(operation applyPatchFileOperation, body []strin
 			value := line
 			if line != "" {
 				switch line[0] {
-				case '+', '-':
+				case ' ', '+', '-':
 					kind = line[0]
 					value = line[1:]
 				}

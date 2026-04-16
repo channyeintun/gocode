@@ -673,7 +673,10 @@ func summarizePermissionTarget(call toolpkg.PendingCall) string {
 }
 
 func applyPatchPermissionTargets(call toolpkg.PendingCall) ([]string, string) {
-	patchText, ok := stringParamFromMap(call.Input.Params, "patch")
+	patchText, ok := stringParamFromMap(call.Input.Params, "input")
+	if !ok || strings.TrimSpace(patchText) == "" {
+		patchText, ok = stringParamFromMap(call.Input.Params, "patch")
+	}
 	if !ok || strings.TrimSpace(patchText) == "" {
 		return nil, ""
 	}
