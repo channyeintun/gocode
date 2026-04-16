@@ -14,10 +14,9 @@ const (
 	agentDisplayTruncationNote        = "\n\n[truncated for live transcript; full child-agent result is kept on disk]"
 )
 
-const subagentTypeExplore = "explore"
-const subagentTypeSearch = "search"
-const subagentTypeExecution = "execution"
+const subagentTypeExplore = "Explore"
 const subagentTypeGeneralPurpose = "general-purpose"
+const subagentTypeVerification = "verification"
 
 type AgentRunRequest struct {
 	Description  string
@@ -131,7 +130,7 @@ func (t *AgentTool) Name() string {
 }
 
 func (t *AgentTool) Description() string {
-	return "Spawn a bounded child agent in a fresh context. Prefer search for code discovery, execution for terminal-heavy tasks, explore for broad read-only research, and general-purpose for broader delegated work."
+	return "Spawn a bounded child agent in a fresh context. Use Explore for read-only codebase search, general-purpose for broader delegated work, and verification for build/test validation without file edits."
 }
 
 func (t *AgentTool) InputSchema() any {
@@ -148,8 +147,8 @@ func (t *AgentTool) InputSchema() any {
 			},
 			"subagent_type": map[string]any{
 				"type":        "string",
-				"description": "The child agent type: explore for broad read-only research, search for iterative code discovery that returns file and line references, execution for terminal-heavy tasks like builds, tests, and log inspection, and general-purpose for broader delegated work.",
-				"enum":        []string{subagentTypeExplore, subagentTypeSearch, subagentTypeExecution, subagentTypeGeneralPurpose},
+				"description": "The child agent type: Explore for read-only codebase search, general-purpose for broader delegated work, and verification for build/test validation without file edits.",
+				"enum":        []string{subagentTypeExplore, subagentTypeGeneralPurpose, subagentTypeVerification},
 			},
 			"run_in_background": map[string]any{
 				"type":        "boolean",
@@ -177,7 +176,7 @@ func (t *AgentTool) Validate(input ToolInput) error {
 	if !ok || strings.TrimSpace(prompt) == "" {
 		return fmt.Errorf("agent requires prompt")
 	}
-	if subagentType, ok := stringParam(input.Params, "subagent_type"); ok && strings.TrimSpace(subagentType) != "" && !IsSupportedSubagentType(strings.TrimSpace(subagentType)) {
+	if subagentType, ok := stringParam(input.Params, "subagent_type"); ok && strings.TrimSpace(subagentType) != "" && !IsSupportedSubagentType(subagentType) {
 		return fmt.Errorf("agent subagent_type %q is not supported", subagentType)
 	}
 	return nil
@@ -191,14 +190,12 @@ func (t *AgentTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, e
 	description, _ := stringParam(input.Params, "description")
 	prompt, _ := stringParam(input.Params, "prompt")
 	subagentType, _ := stringParam(input.Params, "subagent_type")
-	if strings.TrimSpace(subagentType) == "" {
-		subagentType = subagentTypeExplore
-	}
+	subagentType = NormalizeSubagentType(subagentType)
 
 	result, err := t.runner(ctx, AgentRunRequest{
 		Description:  strings.TrimSpace(description),
 		Prompt:       strings.TrimSpace(prompt),
-		SubagentType: strings.TrimSpace(subagentType),
+		SubagentType: subagentType,
 		Background:   boolOrDefault(input.Params, "run_in_background", false),
 	})
 	if err != nil {
@@ -212,10 +209,23 @@ func (t *AgentTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, e
 	return ToolOutput{Output: encoded}, nil
 }
 
+func NormalizeSubagentType(subagentType string) string {
+	switch strings.ToLower(strings.TrimSpace(subagentType)) {
+	case "", "explore":
+		return subagentTypeExplore
+	case "general-purpose":
+		return subagentTypeGeneralPurpose
+	case "verification":
+		return subagentTypeVerification
+	default:
+		return strings.TrimSpace(subagentType)
+	}
+}
+
 // IsSupportedSubagentType reports whether subagentType is a recognized subagent mode.
 func IsSupportedSubagentType(subagentType string) bool {
-	switch subagentType {
-	case subagentTypeExplore, subagentTypeSearch, subagentTypeExecution, subagentTypeGeneralPurpose:
+	switch NormalizeSubagentType(subagentType) {
+	case subagentTypeExplore, subagentTypeGeneralPurpose, subagentTypeVerification:
 		return true
 	default:
 		return false

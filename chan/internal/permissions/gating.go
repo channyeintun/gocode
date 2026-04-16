@@ -260,11 +260,11 @@ func isReadOnlySubagentLaunch(toolName string, input tools.ToolInput) bool {
 	}
 	subagentType, ok := firstStringParam(input.Params, "subagent_type")
 	if !ok {
-		subagentType = "explore"
+		subagentType = "Explore"
 	}
-	subagentType = strings.TrimSpace(subagentType)
+	subagentType = tools.NormalizeSubagentType(subagentType)
 	switch subagentType {
-	case "", "explore", "search":
+	case "Explore":
 		return true
 	default:
 		return false

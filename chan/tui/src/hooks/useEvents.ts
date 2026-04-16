@@ -2528,12 +2528,11 @@ function backgroundAgentSubject(agent: UIBackgroundAgent): string {
 
 function friendlySubagentLabel(subagentType: string): string {
   switch (subagentType) {
-    case "search":
-      return "search agent";
-    case "execution":
-      return "execution agent";
+    case "verification":
+      return "verification agent";
     case "general-purpose":
       return "general-purpose agent";
+    case "Explore":
     case "explore":
       return "explore agent";
     default:
@@ -2558,7 +2557,10 @@ function summarizeNoticeWithDetail(prefix: string, detail: string): string {
   return `${prefix} ${truncated}`;
 }
 
-function parseJSONObject<T>(value: string | undefined, maxChars?: number): T | null {
+function parseJSONObject<T>(
+  value: string | undefined,
+  maxChars?: number,
+): T | null {
   if (!value) {
     return null;
   }
@@ -2572,7 +2574,10 @@ function parseJSONObject<T>(value: string | undefined, maxChars?: number): T | n
   }
 }
 
-function parseJSONArray<T>(value: string | undefined, maxChars?: number): T[] | null {
+function parseJSONArray<T>(
+  value: string | undefined,
+  maxChars?: number,
+): T[] | null {
   if (!value) {
     return null;
   }
@@ -2587,14 +2592,19 @@ function parseJSONArray<T>(value: string | undefined, maxChars?: number): T[] | 
   }
 }
 
-function sanitizeToolCallInput(name: string | undefined, input: string): string {
+function sanitizeToolCallInput(
+  name: string | undefined,
+  input: string,
+): string {
   if (!isAgentToolName(name)) {
     return input;
   }
   return sanitizeAgentToolInput(input) ?? "";
 }
 
-function sanitizeToolResultPayload(payload: ToolResultPayload): ToolResultPayload {
+function sanitizeToolResultPayload(
+  payload: ToolResultPayload,
+): ToolResultPayload {
   if (!isAgentToolName(payload.name)) {
     return payload;
   }
@@ -2619,7 +2629,10 @@ function sanitizeAgentToolInput(input: string | undefined): string | undefined {
     return input;
   }
 
-  const parsed = parseJSONObject<AgentToolInput>(input, MAX_AGENT_TOOL_JSON_CHARS);
+  const parsed = parseJSONObject<AgentToolInput>(
+    input,
+    MAX_AGENT_TOOL_JSON_CHARS,
+  );
   if (!parsed) {
     return sanitizeAgentDisplayText(input, MAX_AGENT_TOOL_DISPLAY_CHARS);
   }

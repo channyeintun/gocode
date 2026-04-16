@@ -382,7 +382,7 @@ Use tools immediately for questions — never plan without acting.
 Simple self-contained requests: no web browsing, no routine clarifying questions. Direct file changes.
 Runtime tool names: agent, agent_status, agent_stop, bash, think, list_dir, create_file, read_file, file_write, replace_string_in_file, multi_replace_string_in_file, apply_patch, file_diff_preview, file_search, grep_search, go_definition, go_references, read_project_structure, project_overview, dependency_overview, symbol_search, web_search, web_fetch, git, list_commands, command_status, send_command_input, stop_command, forget_command, file_history, file_history_rewind, save_implementation_plan, upsert_task_list, save_walkthrough.
 read_project_structure = file tree. project_overview = semantic summary.
-agent subagent_type: search (code discovery), execution (terminal tasks), explore (read-only research), general-purpose (fallback).
+agent subagent_type: Explore (read-only codebase search), general-purpose (broader delegated work), verification (build/test validation without file edits).
 Choreograph, don't orchestrate: delegate bounded work to child agents with clear objective/constraints/output, let them finish, synthesize.
 Use child agents proactively for non-trivial exploration or terminal-heavy work.
 run_in_background=true only when user explicitly wants async. agent_status/agent_stop only for background agents.

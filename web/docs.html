@@ -914,24 +914,20 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code></pre>
               Child Agent Modes
             </h2>
             <p class="text-sm text-gray-400 mb-6 leading-relaxed">
-              The <code>agent</code> tool exposes four bounded modes.
-              <code>explore</code> remains the default,
-              <code>search</code> stays workspace-focused, and
-              <code>execution</code> avoids nested interactive approvals inside
-              the child session.
+              The <code>agent</code> tool exposes three bounded modes.
+              <code>Explore</code> is the default read-only search agent,
+              <code>general-purpose</code> handles broader delegated work, and
+              <code>verification</code> validates builds and tests without file edits.
             </p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div class="p-6 border border-[#1a1a1a] rounded">
-                <strong>Explore:</strong> Read-only architect research.
+                <strong>Explore:</strong> Read-only codebase search and architecture research.
               </div>
               <div class="p-6 border border-[#1a1a1a] rounded">
-                <strong>Search:</strong> Discovery with local references.
+                <strong>General Purpose:</strong> Broader delegated work.
               </div>
               <div class="p-6 border border-[#1a1a1a] rounded">
-                <strong>Execution:</strong> Terminal-heavy, non-writing work.
-              </div>
-              <div class="p-6 border border-[#1a1a1a] rounded">
-                <strong>General:</strong> Broader unspecialized tasking.
+                <strong>Verification:</strong> Builds, tests, and validation without file edits.
               </div>
             </div>
           </section>

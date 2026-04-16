@@ -249,14 +249,13 @@ Chan exposes a broad local-tool runtime, including:
 
 ### Child agent modes
 
-The `agent` tool supports four bounded modes:
+The `agent` tool supports three bounded modes:
 
 | Mode              | Best for                                                   |
 | ----------------- | ---------------------------------------------------------- |
-| `explore`         | Broad read-only repo research                              |
-| `search`          | Focused code discovery with file/line references           |
-| `execution`       | Terminal-heavy tasks such as builds, tests, and log review |
+| `Explore`         | Broad read-only codebase search and architecture research  |
 | `general-purpose` | Delegated work that doesn't fit a specialized mode         |
+| `verification`    | Builds, tests, and validation without file edits           |
 
 ## Configuration
 

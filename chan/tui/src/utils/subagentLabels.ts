@@ -1,11 +1,10 @@
 export function formatSubagentType(subagentType: string): string {
   switch (subagentType) {
-    case "search":
-      return "Search";
-    case "execution":
-      return "Execution";
+    case "verification":
+      return "Verification";
     case "general-purpose":
       return "General Purpose";
+    case "Explore":
     case "explore":
       return "Explore";
     default:

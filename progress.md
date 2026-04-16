@@ -2,6 +2,7 @@
 
 ## 2026-04-16
 
+- Replaced the old `search` and `execution` child-agent modes with Claude Code-style built-ins only: `Explore`, `general-purpose`, and `verification`, and rewrote the subtype prompts to stay terse, role-specific, and evidence-first.
 - Tightened child-agent prompting so delegated search runs make best-effort assumptions instead of bouncing clarification questions back to the parent session, and compacted inline subagent result cards to show status plus a short summary rather than dumping invocation/session/file metadata into chat.
 - Changed the footer shortcut help to stay collapsed as `(?)` by default and reveal the full shortcut list for 2.5 seconds after pressing `?`, so the prompt chrome stays quieter until the user asks for help.
 - Added extra top spacing before inline queued prompt rows so pending messages do not sit cramped against the content immediately above them.

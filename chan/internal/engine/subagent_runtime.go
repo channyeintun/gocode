@@ -25,10 +25,9 @@ import (
 	toolpkg "github.com/channyeintun/chan/internal/tools"
 )
 
-const exploreSubagentType = "explore"
-const searchSubagentType = "search"
-const executionSubagentType = "execution"
+const exploreSubagentType = "Explore"
 const generalPurposeSubagentType = "general-purpose"
+const verificationSubagentType = "verification"
 
 var exploreSubagentTools = []string{
 	"think",
@@ -48,8 +47,13 @@ var exploreSubagentTools = []string{
 	"git",
 }
 
-var searchSubagentTools = []string{
-	"think",
+var verificationSubagentTools = []string{
+	"bash",
+	"list_commands",
+	"command_status",
+	"send_command_input",
+	"stop_command",
+	"forget_command",
 	"list_dir",
 	"read_file",
 	"file_diff_preview",
@@ -61,19 +65,8 @@ var searchSubagentTools = []string{
 	"project_overview",
 	"dependency_overview",
 	"symbol_search",
+	"web_fetch",
 	"git",
-}
-
-var executionSubagentTools = []string{
-	"bash",
-	"list_commands",
-	"command_status",
-	"send_command_input",
-	"stop_command",
-	"forget_command",
-	"list_dir",
-	"read_file",
-	"file_diff_preview",
 	"think",
 }
 
@@ -125,7 +118,7 @@ func makeSubagentRunner(
 			return toolpkg.AgentRunResult{}, err
 		}
 
-		subagentType := strings.TrimSpace(req.SubagentType)
+		subagentType := toolpkg.NormalizeSubagentType(req.SubagentType)
 		if subagentType == "" {
 			subagentType = exploreSubagentType
 		}
@@ -633,53 +626,88 @@ func childStatusMessage(result toolpkg.AgentRunResult) string {
 }
 
 func subagentSystemPrompt(subagentType string, defs []api.ToolDefinition) string {
+	subagentType = toolpkg.NormalizeSubagentType(subagentType)
 	names := toolDefinitionNames(defs)
 	toolList := strings.Join(names, ", ")
 	common := fmt.Sprintf(`You are Go CLI %s, bounded subagent in fresh context.
-Extremely concise. Sacrifice grammar for concision.
-Use tools promptly. Minimal reasoning/status text. Report key evidence, result, next step only.
+Use tools early. Keep transcript terse. Final answer concise, concrete, evidence-first.
 Always absolute paths. Working directory in environment context below.
-No follow-up questions to the parent/user. If details are missing, make the best reasonable assumptions, inspect available context, and continue. State assumptions briefly in the final answer instead of asking for clarification.
+No follow-up questions to the parent/user. If context is thin, inspect workspace, make best reasonable assumptions, continue. State assumptions briefly in final answer.
 Available tools: %s.`, subagentDisplayName(subagentType), toolList)
 
 	switch subagentType {
-	case searchSubagentType:
+	case exploreSubagentType:
 		return strings.TrimSpace(fmt.Sprintf(`%s
 
-Search assistant. Workspace-focused: search repo, inspect files, return compact references.
-Read-only, artifact-safe: no file modifications, no artifact writes, no background process control.
-Search iteratively until sufficient evidence. Concise findings with concrete paths.
-Never ask what to implement, which files to edit, or what constraints to follow. Infer the target from the delegated task and workspace context, then report best-effort findings.
+Read-only codebase explorer.
+Search broad first. Narrow after evidence.
+If first pass is weak, run another pass with different anchors.
+Prefer file_search, grep_search, read_file, project_overview, read_project_structure, go_definition, go_references.
+No file writes. No artifact writes. No background control.
 
-Return ONLY <final_answer> with absolute file paths and line ranges.
+Return ONLY <final_answer>.
+
+Format:
+Scope: <one sentence>
+Findings:
+- <fact>
+Evidence:
+- /absolute/path/to/file:10-40
+Open questions:
+- <only if needed>
 
 Example:
 <final_answer>
-/absolute/path/to/file.go:10-40
-/absolute/path/to/other.go:88-130
+Scope: trace auth token refresh path
+Findings:
+- Token refresh starts in /absolute/path/to/auth.go:44-91 and retries once in /absolute/path/to/client.go:120-168.
+Evidence:
+- /absolute/path/to/auth.go:44-91
+- /absolute/path/to/client.go:120-168
 </final_answer>`, common))
-	case executionSubagentType:
+	case verificationSubagentType:
 		return strings.TrimSpace(fmt.Sprintf(`%s
 
-Terminal-focused execution. Run commands, adapt as needed.
-Artifact-safe, non-writing default: no file modifications, no artifact writes, no background process control beyond provided command tools.
-No interactive approval. Unapproved actions denied. If denied, report clearly and do safe read-only inspection.
+Verification specialist. Try to break the work.
+Reading code is not verification. Run commands. Check output.
+Do not modify project files. Do not install deps. Do not run git write commands.
+No artifact writes. No background control beyond provided command tools.
+If environment blocks verification, say exactly why.
 
-Return ONLY <final_answer> with compact command summaries.
+Return ONLY <final_answer>.
+
+Format:
+Checks:
+- <command> -> <result>
+Findings:
+- <fact>
+VERDICT: PASS|FAIL|PARTIAL
 
 Example:
 <final_answer>
-Command: go test ./...
-Summary: 2 packages failed. Key error: ...
-
-Command: go test ./internal/api
-Summary: passes after isolating failure.
+Checks:
+- go test ./... -> FAIL: ./internal/api timeout in TestStream
+Findings:
+- Reproduced failure. No evidence of fix.
+VERDICT: FAIL
 </final_answer>`, common))
 	case generalPurposeSubagentType:
 		return strings.TrimSpace(fmt.Sprintf(`%s
 
-Artifact-safe: no artifact writes. Broader tools available but no interactive approval. Unapproved writes/executes denied. No background process control.
-Delegated task only. Concise response with concrete outcomes, files, next steps.`, common))
+General-purpose subagent.
+Complete delegated task fully. Research first when needed. Edit only when task requires it.
+No artifact writes. No interactive approval. If denied, explain constraint, then continue with safe inspection.
+
+Return ONLY <final_answer>.
+
+Format:
+Scope: <one sentence>
+Done:
+- <completed work>
+Evidence:
+- /absolute/path/to/file:10-40
+Next:
+- <only if needed>`, common))
 	default:
 		return strings.TrimSpace(fmt.Sprintf(`%s
 
@@ -689,13 +717,11 @@ Delegated task only. Parallel read-only exploration when helpful. Concise findin
 }
 
 func subagentToolNames(subagentType string) []string {
-	switch subagentType {
-	case searchSubagentType:
-		return searchSubagentTools
-	case executionSubagentType:
-		return executionSubagentTools
+	switch toolpkg.NormalizeSubagentType(subagentType) {
 	case generalPurposeSubagentType:
 		return generalPurposeSubagentTools
+	case verificationSubagentType:
+		return verificationSubagentTools
 	default:
 		return exploreSubagentTools
 	}
@@ -803,23 +829,21 @@ func executeToolCallsForSubagent(
 }
 
 func subagentDisplayName(subagentType string) string {
-	switch strings.TrimSpace(subagentType) {
-	case searchSubagentType:
-		return "Search"
-	case executionSubagentType:
-		return "Execution"
+	switch toolpkg.NormalizeSubagentType(subagentType) {
 	case generalPurposeSubagentType:
 		return "General Purpose"
+	case verificationSubagentType:
+		return "Verification"
 	default:
 		return "Explore"
 	}
 }
 
 func subagentAllowsTool(subagentType string, permission toolpkg.PermissionLevel) bool {
-	switch strings.TrimSpace(subagentType) {
-	case exploreSubagentType, searchSubagentType:
+	switch toolpkg.NormalizeSubagentType(subagentType) {
+	case exploreSubagentType:
 		return permission == toolpkg.PermissionReadOnly
-	case executionSubagentType:
+	case verificationSubagentType:
 		return permission != toolpkg.PermissionWrite
 	default:
 		return true
