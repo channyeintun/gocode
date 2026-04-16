@@ -2,6 +2,7 @@
 
 ## 2026-04-17
 
+- Rebuilt the latest local release artifacts with `make release-local` in `chan/tui` and installed the updated `chan` and `chan-engine` binaries into `~/.local/bin` with `install -m 755`, completing the `ui-enhance-plan.md` task list.
 - Hidden search result bodies from the TUI transcript for `grep`/`grep_search` and `glob`/`file_search` tool rows: successful search rows now keep concise counts or clean no-result messages without dumping matched paths or grep lines into chat, and the change was validated with `bun run build`.
 - Updated Chan's TUI entrypoints to build the Silvery theme from `createTheme().preset("sonokai").build()` and validated the change with `bun run build`; for the requested mouse work, I verified against the vendored Silvery source that Chan's supported `createApp.run()` path already wires the same DOM mouse dispatch, focus integration, and selection capability plumbing that `withDomEvents()` exposes in Silvery's separate composition API, so the existing explicit `mouse`, `focusReporting`, and `selection` options remain the correct Chan-side integration without modifying read-only Silvery code.
 - Created `ui-enhance-plan.md` to drive the requested TUI enhancement work as explicit task slices: plan/tracking, Sonokai theme plus DOM mouse wiring, hidden search-tool outputs, and final rebuild/install of the local `chan` and `chan-engine` binaries; this plan explicitly keeps test work out of scope.
