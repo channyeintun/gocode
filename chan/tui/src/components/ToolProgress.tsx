@@ -339,7 +339,9 @@ function renderError(toolCall: UIToolCall) {
   }
 
   return (
-    <Text color="red">{summarizeOutput(toolCall.error ?? "Tool failed")}</Text>
+    <Text color="$error">
+      {summarizeOutput(toolCall.error ?? "Tool failed")}
+    </Text>
   );
 }
 
@@ -399,7 +401,7 @@ function renderSuccess(toolCall: UIToolCall) {
       );
     default:
       if (!toolCall.output) {
-        return <Text color="green">Completed.</Text>;
+        return <Text color="$success">Completed.</Text>;
       }
       return (
         <MarkdownText
@@ -416,11 +418,11 @@ function renderFileMutationError(toolCall: UIToolCall) {
     : null;
   return (
     <Box flexDirection="column">
-      <Text color="red">
+      <Text color="$error">
         File update failed{kindLabel ? ` (${kindLabel})` : ""}: {summary}
       </Text>
       {toolCall.errorHint ? (
-        <Text color="yellow">Recovery: {toolCall.errorHint}</Text>
+        <Text color="$warning">Recovery: {toolCall.errorHint}</Text>
       ) : null}
     </Box>
   );

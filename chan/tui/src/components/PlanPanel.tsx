@@ -27,25 +27,29 @@ const PlanPanel: FC<PlanPanelProps> = ({
   const meta = metaParts.join("  ·  ");
 
   const statusColor =
-    status === "final" ? "green" : status === "draft" ? "yellow" : "gray";
+    status === "final"
+      ? "$success"
+      : status === "draft"
+        ? "$warning"
+        : "$muted";
 
   return (
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor="blue"
+      borderColor="$border"
       paddingX={1}
       marginBottom={1}
       minWidth={0}
     >
       <Box flexDirection="column" minWidth={0}>
-        <Text bold color="blue">
+        <Text bold color="$primary">
           {title}
         </Text>
         {meta ? (
           <Text color={statusColor}>{meta}</Text>
         ) : (
-          <Text color="gray">{"Implementation Plan"}</Text>
+          <Text color="$muted">{"Implementation Plan"}</Text>
         )}
       </Box>
       <Box marginTop={1} minWidth={0}>

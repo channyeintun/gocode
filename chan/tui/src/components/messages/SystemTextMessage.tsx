@@ -47,16 +47,16 @@ function renderMetadata(timestamp: string) {
 
 function toneColor(
   tone: UISystemMessage["tone"],
-): "cyan" | "green" | "yellow" | "red" {
+): "$info" | "$success" | "$warning" | "$error" {
   switch (tone) {
     case "success":
-      return "green";
+      return "$success";
     case "warning":
-      return "yellow";
+      return "$warning";
     case "error":
-      return "red";
+      return "$error";
     case "info":
     default:
-      return "cyan";
+      return "$info";
   }
 }

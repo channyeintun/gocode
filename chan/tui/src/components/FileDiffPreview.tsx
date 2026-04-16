@@ -16,7 +16,7 @@ const FileDiffPreview: FC<FileDiffPreviewProps> = ({
   const statLine = formatMutationStats(insertions, deletions);
   const summary = buildSummary(filePath, statLine);
 
-  return <Text color="green">{summary}</Text>;
+  return <Text color="$success">{summary}</Text>;
 };
 
 export default FileDiffPreview;

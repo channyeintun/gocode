@@ -78,16 +78,16 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
       minHeight={0}
       backgroundColor="$surface-bg"
       borderStyle="round"
-      borderColor="cyan"
+      borderColor="$border"
       overflow="scroll"
       paddingX={1}
     >
-      <Text bold color="cyan">
+      <Text bold color="$primary">
         Resume Session
       </Text>
       <Box marginTop={1} flexDirection="column">
         <Text>Choose a session to resume.</Text>
-        <Text color="gray">
+        <Text color="$muted">
           {selection.sessions.length} available session
           {selection.sessions.length === 1 ? "" : "s"}
         </Text>
@@ -104,11 +104,11 @@ const ResumeSelectionPrompt: FC<ResumeSelectionPromptProps> = ({
               flexDirection="column"
               marginBottom={1}
             >
-              <Text color={isSelected ? "cyan" : "white"} bold={isSelected}>
+              <Text color={isSelected ? "$primary" : "$fg"} bold={isSelected}>
                 {isSelected ? "›" : " "} {session.sessionId.slice(0, 8)}{" "}
                 {timestamp}
               </Text>
-              <Text color="gray">
+              <Text color="$muted">
                 {session.title}
                 {session.model
                   ? `  ·  ${stripProviderPrefix(session.model) ?? session.model}`

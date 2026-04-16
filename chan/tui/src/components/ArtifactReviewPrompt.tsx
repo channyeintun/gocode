@@ -11,9 +11,14 @@ interface ArtifactReviewPromptProps {
 }
 
 const ACTIONS = [
-  { key: "a", label: "Approve", decision: "approve" as const, color: "green" },
-  { key: "r", label: "Revise", decision: "revise" as const, color: "yellow" },
-  { key: "c", label: "Cancel", decision: "cancel" as const, color: "gray" },
+  {
+    key: "a",
+    label: "Approve",
+    decision: "approve" as const,
+    color: "$success",
+  },
+  { key: "r", label: "Revise", decision: "revise" as const, color: "$warning" },
+  { key: "c", label: "Cancel", decision: "cancel" as const, color: "$muted" },
 ];
 
 const ArtifactReviewPrompt: FC<ArtifactReviewPromptProps> = ({
@@ -64,13 +69,13 @@ const ArtifactReviewPrompt: FC<ArtifactReviewPromptProps> = ({
       flexShrink={1}
       minHeight={0}
       borderStyle="round"
-      borderColor="blue"
+      borderColor="$border"
       paddingX={1}
       marginTop={1}
       userSelect="contain"
     >
       <Box flexDirection="row" gap={1}>
-        <Text bold color="blue">
+        <Text bold color="$primary">
           Review Plan:
         </Text>
         <Text>
@@ -81,13 +86,13 @@ const ArtifactReviewPrompt: FC<ArtifactReviewPromptProps> = ({
 
       {reviseFeedbackMode ? (
         <Box flexDirection="column" marginTop={1}>
-          <Text color="yellow">
+          <Text color="$warning">
             Revision notes (Enter to submit, Esc to cancel):
           </Text>
           <Box marginTop={0}>
-            <Text color="yellow">{">"} </Text>
+            <Text color="$warning">{">"} </Text>
             <Text>{feedback}</Text>
-            <Text color="gray">█</Text>
+            <Text color="$muted">█</Text>
           </Box>
         </Box>
       ) : (

@@ -78,16 +78,18 @@ const RewindSelectionPrompt: FC<RewindSelectionPromptProps> = ({
       flexShrink={1}
       minHeight={0}
       borderStyle="round"
-      borderColor="yellow"
+      borderColor="$border"
       overflow="scroll"
       paddingX={1}
     >
-      <Text bold color="yellow">
+      <Text bold color="$warning">
         Rewind Conversation
       </Text>
       <Box marginTop={1} flexDirection="column">
-        <Text>Choose the user turn to keep. Later messages will be dropped.</Text>
-        <Text color="gray">
+        <Text>
+          Choose the user turn to keep. Later messages will be dropped.
+        </Text>
+        <Text color="$muted">
           {selection.turns.length} available turn
           {selection.turns.length === 1 ? "" : "s"}
         </Text>
@@ -98,17 +100,22 @@ const RewindSelectionPrompt: FC<RewindSelectionPromptProps> = ({
           const isSelected = actualIndex === selectedIndex;
 
           return (
-            <Box key={`${turn.turnNumber}-${turn.messageIndex}`} marginBottom={1}>
-              <Text color={isSelected ? "yellow" : "white"} bold={isSelected}>
+            <Box
+              key={`${turn.turnNumber}-${turn.messageIndex}`}
+              marginBottom={1}
+            >
+              <Text color={isSelected ? "$warning" : "$fg"} bold={isSelected}>
                 {isSelected ? "›" : " "} Turn {turn.turnNumber}
               </Text>
-              <Text color="gray">{turn.preview}</Text>
+              <Text color="$muted">{turn.preview}</Text>
             </Box>
           );
         })}
       </Box>
       <Box marginTop={1} flexDirection="column">
-        <Text dimColor>Enter rewind · Up/Down change selection · Esc or Q cancel</Text>
+        <Text dimColor>
+          Enter rewind · Up/Down change selection · Esc or Q cancel
+        </Text>
       </Box>
     </Box>
   );

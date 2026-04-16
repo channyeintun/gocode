@@ -42,11 +42,11 @@ function artifactMeta(artifact: UIArtifact): string {
 function statusColor(status: string): string {
   switch (status) {
     case "final":
-      return "green";
+      return "$success";
     case "draft":
-      return "yellow";
+      return "$warning";
     default:
-      return "gray";
+      return "$muted";
   }
 }
 
@@ -60,7 +60,7 @@ const ArtifactView: FC<ArtifactViewProps> = ({ artifacts }) => {
           key={artifact.id}
           flexDirection="column"
           borderStyle="round"
-          borderColor="gray"
+          borderColor="$border"
           paddingX={1}
           marginTop={index === 0 ? 0 : 1}
           minWidth={0}
@@ -75,7 +75,7 @@ const ArtifactView: FC<ArtifactViewProps> = ({ artifacts }) => {
             {artifact.content.trim() ? (
               <MarkdownText text={artifact.content} />
             ) : (
-              <Text color="gray">(loading…)</Text>
+              <Text color="$muted">(loading…)</Text>
             )}
           </Box>
         </Box>

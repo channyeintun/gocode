@@ -10,7 +10,7 @@ interface PermissionOption {
   label: string;
   description: string;
   shortcut: string;
-  color: "green" | "red" | "blue" | "magenta";
+  color: "$success" | "$error" | "$primary" | "$accent";
 }
 
 interface PermissionPromptProps {
@@ -32,21 +32,21 @@ const OPTIONS: PermissionOption[] = [
     label: "Allow Once",
     description: "Run this request and ask again next time.",
     shortcut: "Y",
-    color: "green",
+    color: "$success",
   },
   {
     decision: "deny",
     label: "Deny",
     description: "Block this request and return control to the agent.",
     shortcut: "N",
-    color: "red",
+    color: "$error",
   },
   {
     decision: "always_allow",
     label: "Always Allow",
     description: "Persist approval for matching requests outside this session.",
     shortcut: "A",
-    color: "blue",
+    color: "$primary",
   },
   {
     decision: "allow_all_session",
@@ -54,20 +54,20 @@ const OPTIONS: PermissionOption[] = [
     description:
       "Auto-approve future non-destructive, non-sensitive requests in this session.",
     shortcut: "S",
-    color: "magenta",
+    color: "$accent",
   },
 ];
 
-function getRiskColor(risk: string): "red" | "yellow" | "cyan" {
+function getRiskColor(risk: string): "$error" | "$warning" | "$info" {
   if (risk === "destructive") {
-    return "red";
+    return "$error";
   }
 
   if (risk === "high") {
-    return "yellow";
+    return "$warning";
   }
 
-  return "cyan";
+  return "$info";
 }
 
 const PermissionPrompt: FC<PermissionPromptProps> = ({
@@ -240,21 +240,21 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
       </Text>
       <Box marginTop={1} flexDirection="column">
         <Text>{question}</Text>
-        <Text color="gray">
-          Tool: <Text color="white">{toolLabel}</Text>
+        <Text color="$muted">
+          Tool: <Text color="$fg">{toolLabel}</Text>
         </Text>
-        <Text color="gray">
-          Access: <Text color="white">{accessLabel}</Text>
+        <Text color="$muted">
+          Access: <Text color="$fg">{accessLabel}</Text>
         </Text>
-        <Text color="gray">
+        <Text color="$muted">
           Risk: <Text color={riskColor}>{risk || "normal"}</Text>
         </Text>
         {riskReason?.trim() ? (
-          <Text color="yellow">Policy: {riskReason}</Text>
+          <Text color="$warning">Policy: {riskReason}</Text>
         ) : null}
         {workingDir ? (
-          <Text color="gray">
-            Cwd: <Text color="white">{workingDir}</Text>
+          <Text color="$muted">
+            Cwd: <Text color="$fg">{workingDir}</Text>
           </Text>
         ) : null}
       </Box>
@@ -262,22 +262,22 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
         marginTop={1}
         paddingX={1}
         borderStyle="round"
-        borderColor="gray"
+        borderColor="$border"
         flexDirection="column"
       >
-        <Text color="gray">{detailLabel}</Text>
+        <Text color="$muted">{detailLabel}</Text>
         <Text>{detailValue}</Text>
       </Box>
       <Box
         marginTop={1}
         paddingX={1}
         borderStyle="round"
-        borderColor={isEditingFeedback ? "cyan" : "gray"}
+        borderColor={isEditingFeedback ? "$focusborder" : "$border"}
         flexDirection="column"
       >
-        <Text color="gray">Note (optional)</Text>
+        <Text color="$muted">Note (optional)</Text>
         {feedback.length === 0 && !isEditingFeedback ? (
-          <Text color="gray">
+          <Text color="$muted">
             Add context for the agent before this decision is applied.
           </Text>
         ) : (
@@ -297,13 +297,13 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
           return (
             <Box key={option.decision} flexDirection="column" marginBottom={1}>
               <Text
-                color={isSelected ? option.color : "gray"}
+                color={isSelected ? option.color : "$muted"}
                 bold={isSelected}
               >
                 {isSelected ? "›" : " "} {option.label}{" "}
                 <Text dimColor>[{option.shortcut}]</Text>
               </Text>
-              <Text color="gray"> {option.description}</Text>
+              <Text color="$muted"> {option.description}</Text>
             </Box>
           );
         })}

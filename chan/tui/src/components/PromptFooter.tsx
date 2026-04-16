@@ -147,12 +147,12 @@ const PromptFooter: FC<PromptFooterProps> = ({
     <Box flexDirection="column" userSelect="none">
       {costWarningText ? (
         <Box paddingX={2} paddingTop={1}>
-          <Text color="yellow">{costWarningText}</Text>
+          <Text color="$warning">{costWarningText}</Text>
         </Box>
       ) : null}
       {warningText ? (
         <Box paddingX={2} paddingTop={costWarningText ? 0 : 1}>
-          <Text color={tokenWarning.isError ? "red" : "yellow"}>
+          <Text color={tokenWarning.isError ? "$error" : "$warning"}>
             {warningText}
           </Text>
         </Box>

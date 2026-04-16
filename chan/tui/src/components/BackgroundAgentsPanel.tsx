@@ -25,18 +25,18 @@ const BackgroundAgentsPanel: FC<BackgroundAgentsPanelProps> = ({ agents }) => {
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor="cyan"
+      borderColor="$primary"
       paddingX={1}
       marginTop={1}
     >
-      <Text color="cyan">
+      <Text color="$primary">
         Background Agents
         {renderCounts(activeAgents.length, recentAgents.length)}
       </Text>
 
       {activeAgents.length > 0 ? (
         <Box flexDirection="column" marginTop={1}>
-          <Text color="cyan">Active</Text>
+          <Text color="$primary">Active</Text>
           {activeAgents.map((agent, index) => (
             <AgentRow
               key={agent.agentId}
@@ -49,7 +49,7 @@ const BackgroundAgentsPanel: FC<BackgroundAgentsPanelProps> = ({ agents }) => {
 
       {recentAgents.length > 0 ? (
         <Box flexDirection="column" marginTop={activeAgents.length > 0 ? 1 : 0}>
-          <Text color="gray">Recent</Text>
+          <Text color="$muted">Recent</Text>
           {recentAgents.map((agent, index) => (
             <AgentRow
               key={agent.agentId}
@@ -109,19 +109,21 @@ function statusLabel(status: string): string {
   }
 }
 
-function statusColor(status: string): "cyan" | "yellow" | "green" | "red" {
+function statusColor(
+  status: string,
+): "$info" | "$warning" | "$success" | "$error" | "$primary" {
   switch (status) {
     case "running":
-      return "cyan";
+      return "$info";
     case "cancelling":
-      return "yellow";
+      return "$warning";
     case "completed":
-      return "green";
+      return "$success";
     case "failed":
     case "cancelled":
-      return "red";
+      return "$error";
     default:
-      return "cyan";
+      return "$primary";
   }
 }
 

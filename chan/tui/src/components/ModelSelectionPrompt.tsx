@@ -55,7 +55,9 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
     }
   }, [customMode, focusManager]);
 
-  const updateSelectedIndex = (updater: number | ((current: number) => number)) => {
+  const updateSelectedIndex = (
+    updater: number | ((current: number) => number),
+  ) => {
     const next =
       typeof updater === "function"
         ? updater(selectedIndexRef.current)
@@ -73,9 +75,7 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
     updater: string | ((current: string) => string),
   ) => {
     const next =
-      typeof updater === "function"
-        ? updater(customValueRef.current)
-        : updater;
+      typeof updater === "function" ? updater(customValueRef.current) : updater;
     customValueRef.current = next;
     setCustomValue(next);
   };
@@ -236,16 +236,16 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
       minHeight={0}
       backgroundColor="$surface-bg"
       borderStyle="round"
-      borderColor="cyan"
+      borderColor="$border"
       overflow="scroll"
       paddingX={1}
     >
-      <Text bold color="cyan">
+      <Text bold color="$primary">
         Select Model
       </Text>
       <Box marginTop={1} flexDirection="column">
         <Text>Choose the active model for the session.</Text>
-        <Text color="gray">
+        <Text color="$muted">
           Current: {formatCurrentModel(selection.currentModel)}
         </Text>
       </Box>
@@ -260,11 +260,11 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
               flexDirection="column"
               marginBottom={1}
             >
-              <Text color={isSelected ? "cyan" : "white"} bold={isSelected}>
+              <Text color={isSelected ? "$primary" : "$fg"} bold={isSelected}>
                 {isSelected ? "›" : " "} {option.label}
-                {option.active ? <Text color="green"> current</Text> : null}
+                {option.active ? <Text color="$success"> current</Text> : null}
               </Text>
-              <Text color="gray">
+              <Text color="$muted">
                 {formatModelLine(option)}
                 {option.description ? `  ·  ${option.description}` : ""}
               </Text>
@@ -276,11 +276,11 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
         marginTop={1}
         paddingX={1}
         borderStyle="round"
-        borderColor={customMode ? "cyan" : "gray"}
+        borderColor={customMode ? "$focusborder" : "$border"}
         flexDirection="column"
       >
-        <Text color={customMode ? "cyan" : "gray"}>Custom model</Text>
-        <Text color="gray">
+        <Text color={customMode ? "$primary" : "$muted"}>Custom model</Text>
+        <Text color="$muted">
           {customMode
             ? "Enter a model id only. Provider prefixes are not accepted."
             : "Choose Custom model and press Enter to edit."}

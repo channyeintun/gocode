@@ -27,18 +27,18 @@ const BackgroundCommandsPanel: FC<BackgroundCommandsPanelProps> = ({
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor="yellow"
+      borderColor="$accent"
       paddingX={1}
       marginTop={1}
     >
-      <Text color="yellow">
+      <Text color="$accent">
         Background Commands
         {renderCounts(activeCommands.length, recentCommands.length)}
       </Text>
 
       {activeCommands.length > 0 ? (
         <Box flexDirection="column" marginTop={1}>
-          <Text color="yellow">Active</Text>
+          <Text color="$accent">Active</Text>
           {activeCommands.map((command, index) => (
             <CommandRow
               key={command.commandId}
@@ -54,7 +54,7 @@ const BackgroundCommandsPanel: FC<BackgroundCommandsPanelProps> = ({
           flexDirection="column"
           marginTop={activeCommands.length > 0 ? 1 : 0}
         >
-          <Text color="gray">Recent</Text>
+          <Text color="$muted">Recent</Text>
           {recentCommands.map((command, index) => (
             <CommandRow
               key={command.commandId}
@@ -116,18 +116,20 @@ function statusLabel(status: string): string {
   }
 }
 
-function statusColor(status: string): "yellow" | "green" | "red" {
+function statusColor(
+  status: string,
+): "$info" | "$error" | "$warning" | "$success" | "$accent" {
   switch (status) {
     case "running":
-      return "yellow";
+      return "$info";
     case "failed":
-      return "red";
+      return "$error";
     case "stopped":
-      return "yellow";
+      return "$warning";
     case "completed":
-      return "green";
+      return "$success";
     default:
-      return "yellow";
+      return "$accent";
   }
 }
 
