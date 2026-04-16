@@ -5,7 +5,9 @@
  */
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
-import { render } from "silvery";
+import { detectTerminalCaps, ThemeProvider } from "silvery";
+import { createApp } from "silvery/runtime";
+import { createTheme } from "silvery/theme";
 import React from "react";
 import App from "./App.js";
 
@@ -23,6 +25,8 @@ const enginePath =
 
 let model = "anthropic/claude-sonnet-4-20250514";
 let mode = "plan";
+const theme = createTheme().preset("sonokai").build();
+const caps = detectTerminalCaps();
 
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i++) {
@@ -41,6 +45,20 @@ Options:
   }
 }
 
-await render(
-  React.createElement(App, { enginePath, model, mode }),
-).run();
+const app = createApp(() => () => ({}));
+const handle = await app.run(
+  <ThemeProvider theme={theme}>
+    <App enginePath={enginePath} model={model} mode={mode} />
+  </ThemeProvider>,
+  {
+    caps,
+    alternateScreen: true,
+    kitty: caps.kittyKeyboard,
+    mouse: true,
+    focusReporting: true,
+    selection: true,
+    textSizing: "auto",
+    widthDetection: "auto",
+  },
+);
+await handle.waitUntilExit();
