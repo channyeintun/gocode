@@ -35,6 +35,7 @@ interface PromptFooterProps {
   cursorOffset?: number;
   blockedReason?: string | null;
   queuedPromptCount?: number;
+  showExpandedHint?: boolean;
   showArtifacts?: boolean;
   artifactsShortcutLabel?: string;
 }
@@ -57,6 +58,7 @@ const PromptFooter: FC<PromptFooterProps> = ({
   cursorOffset = 0,
   blockedReason,
   queuedPromptCount = 0,
+  showExpandedHint = false,
   showArtifacts = true,
   artifactsShortcutLabel = "Opt+A",
 }) => {
@@ -104,8 +106,8 @@ const PromptFooter: FC<PromptFooterProps> = ({
   );
   const activityLabel = isLoading ? "running" : disabled ? "blocked" : "ready";
   const activityDetails = useMemo(
-    () => buildActivityDetails(blockedReason, queuedPromptCount, showArtifacts),
-    [blockedReason, queuedPromptCount, showArtifacts],
+    () => buildActivityDetails(blockedReason, showArtifacts),
+    [blockedReason, showArtifacts],
   );
   const hint = useMemo(
     () =>
@@ -114,8 +116,15 @@ const PromptFooter: FC<PromptFooterProps> = ({
         terminalColumns,
         artifactsShortcutLabel,
         queuedPromptCount,
+        showExpandedHint,
       ),
-    [artifactsShortcutLabel, disabled, queuedPromptCount, terminalColumns],
+    [
+      artifactsShortcutLabel,
+      disabled,
+      queuedPromptCount,
+      showExpandedHint,
+      terminalColumns,
+    ],
   );
   const costWarningText = useMemo(
     () => buildCostWarningText(totalCostUsd),
@@ -290,7 +299,6 @@ function buildPromptMetrics(
 
 function buildActivityDetails(
   blockedReason: string | null | undefined,
-  queuedPromptCount: number,
   showArtifacts: boolean,
 ): string | null {
   const parts: string[] = [];
@@ -308,7 +316,12 @@ function buildInputHint(
   terminalColumns: number,
   artifactsShortcutLabel: string,
   queuedPromptCount: number,
+  showExpandedHint: boolean,
 ) {
+  if (!showExpandedHint) {
+    return "(?)";
+  }
+
   const queueHint =
     queuedPromptCount > 0 ? " | Ctrl+Y send queued | Ctrl+K drop queued" : "";
 

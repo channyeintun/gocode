@@ -21,6 +21,7 @@ interface InputProps {
   onModeToggle: () => void;
   onThinkingVisibilityToggle: () => void;
   onArtifactVisibilityToggle: () => void;
+  onRevealFooterHints: () => void;
   onSendQueuedPromptNow: () => void;
   onRemoveQueuedPrompt: () => void;
   onCancel: () => void;
@@ -127,6 +128,7 @@ const Input: FC<InputProps> = ({
   onModeToggle,
   onThinkingVisibilityToggle,
   onArtifactVisibilityToggle,
+  onRevealFooterHints,
   onSendQueuedPromptNow,
   onRemoveQueuedPrompt,
   onCancel,
@@ -191,6 +193,13 @@ const Input: FC<InputProps> = ({
       if (key.ctrl && input === "k") {
         onRemoveQueuedPrompt();
         return;
+      }
+
+      if (!key.ctrl && !key.meta && text === "?") {
+        onRevealFooterHints();
+        if (prompt.value.length === 0 && !slashPreview.visible) {
+          return;
+        }
       }
 
       if (disabled) return;

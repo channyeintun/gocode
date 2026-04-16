@@ -40,6 +40,7 @@ import type {
 
 const THINKING_TOGGLE_SHORTCUT_LABEL = "Opt+T";
 const ARTIFACTS_TOGGLE_SHORTCUT_LABEL = "Opt+A";
+const FOOTER_HINT_REVEAL_MS = 2500;
 
 interface AppProps {
   enginePath: string;
@@ -81,7 +82,11 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     useState(0);
   const [showThinking, setShowThinking] = useState(false);
   const [showArtifacts, setShowArtifacts] = useState(true);
+  const [showFooterHints, setShowFooterHints] = useState(false);
   const previousStreamingRef = useRef(false);
+  const footerHintTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const focusManager = useFocusManager();
   const { toast, toasts, dismissAll } = useToast();
   const {
@@ -110,6 +115,14 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     enableBracketedPaste(process.stdout);
     return () => {
       disableBracketedPaste(process.stdout);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (footerHintTimeoutRef.current !== null) {
+        clearTimeout(footerHintTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -237,6 +250,18 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
 
   const handleRemoveNextQueuedPrompt = useCallback(() => {
     setQueuedPrompts((current) => current.slice(1));
+  }, []);
+
+  const handleRevealFooterHints = useCallback(() => {
+    if (footerHintTimeoutRef.current !== null) {
+      clearTimeout(footerHintTimeoutRef.current);
+    }
+
+    setShowFooterHints(true);
+    footerHintTimeoutRef.current = setTimeout(() => {
+      setShowFooterHints(false);
+      footerHintTimeoutRef.current = null;
+    }, FOOTER_HINT_REVEAL_MS);
   }, []);
 
   const handleImagePaste = (images: PastedImageData[]) => {
@@ -639,6 +664,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
               onModeToggle={engine.sendModeToggle}
               onThinkingVisibilityToggle={handleThinkingVisibilityToggle}
               onArtifactVisibilityToggle={handleArtifactVisibilityToggle}
+              onRevealFooterHints={handleRevealFooterHints}
               onSendQueuedPromptNow={handleSendNextQueuedPrompt}
               onRemoveQueuedPrompt={handleRemoveNextQueuedPrompt}
               onCancel={handleCancel}
@@ -668,6 +694,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             cursorOffset={prompt.cursorOffset}
             blockedReason={promptBlockedReason}
             queuedPromptCount={queuedPrompts.length}
+            showExpandedHint={showFooterHints}
             showArtifacts={showArtifacts}
             artifactsShortcutLabel={ARTIFACTS_TOGGLE_SHORTCUT_LABEL}
           />

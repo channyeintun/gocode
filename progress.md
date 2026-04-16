@@ -2,6 +2,7 @@
 
 ## 2026-04-16
 
+- Changed the footer shortcut help to stay collapsed as `(?)` by default and reveal the full shortcut list for 2.5 seconds after pressing `?`, so the prompt chrome stays quieter until the user asks for help.
 - Added extra top spacing before inline queued prompt rows so pending messages do not sit cramped against the content immediately above them.
 - Restored a visible `Queued` title on inline pending prompt rows after the previous cleanup hid it entirely; the lighter conversation-first styling stays in place, but the status is now readable at a glance again.
 - Simplified queued prompt UX after restoring inline conversation rendering: queued rows now use the normal user-message visual language with a small pending meta tag, while the redundant queue count was removed from the status bar and footer activity text.
