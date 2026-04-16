@@ -725,6 +725,68 @@ func handleResumeSlashCommand(cmd *slashCommandContext) error {
 	return emitTextResponse(cmd.bridge, fmt.Sprintf("Resumed session %s with %d messages.", cmd.state.SessionID, len(cmd.state.Messages)))
 }
 
+func handleRewindSlashCommand(cmd *slashCommandContext) error {
+	turns := buildRewindSelectionTurns(cmd.state.Messages)
+	if len(turns) == 0 {
+		return cmd.bridge.EmitError("no user turns available to rewind", true)
+	}
+
+	selectedIndex, err := promptRewindSelection(cmd, turns)
+	if err != nil {
+		return err
+	}
+	if selectedIndex < 0 {
+		return emitTextResponse(cmd.bridge, "Rewind cancelled.")
+	}
+	if selectedIndex >= len(cmd.state.Messages) {
+		return cmd.bridge.EmitError("invalid rewind target", true)
+	}
+	if selectedIndex == len(cmd.state.Messages)-1 {
+		return emitTextResponse(cmd.bridge, "Conversation is already at the selected turn.")
+	}
+
+	cmd.state.Messages = append(cmd.state.Messages[:0], cmd.state.Messages[:selectedIndex+1]...)
+	if err := cmd.persistState(); err != nil {
+		return err
+	}
+	if err := syncSessionMemoryAfterRewind(cmd.ctx, cmd.bridge, cmd.artifactManager, cmd.state.SessionID, cmd.state.Messages); err != nil {
+		return err
+	}
+
+	title := ""
+	if meta, err := cmd.store.LoadMetadata(cmd.state.SessionID); err == nil {
+		title = strings.TrimSpace(meta.Title)
+	}
+
+	if err := cmd.bridge.Emit(ipc.EventSessionRewound, ipc.SessionRewoundPayload{
+		SessionID:    cmd.state.SessionID,
+		MessageCount: len(cmd.state.Messages),
+	}); err != nil {
+		return err
+	}
+	if err := emitSessionUpdated(cmd.bridge, cmd.state.SessionID, title); err != nil {
+		return err
+	}
+	if err := emitContextWindowUsage(cmd.bridge, *cmd.client, cmd.state.Messages); err != nil {
+		return err
+	}
+	if err := emitSessionArtifacts(cmd.ctx, cmd.bridge, cmd.artifactManager, cmd.state.SessionID); err != nil {
+		return err
+	}
+
+	targetTurn := 0
+	for _, turn := range turns {
+		if turn.MessageIndex == selectedIndex {
+			targetTurn = turn.TurnNumber
+			break
+		}
+	}
+	if targetTurn <= 0 {
+		targetTurn = 1
+	}
+	return emitTextResponse(cmd.bridge, fmt.Sprintf("Rewound conversation to user turn %d. Later messages were removed from context.", targetTurn))
+}
+
 func promptResumeSelection(cmd *slashCommandContext) (string, error) {
 	sessions, err := cmd.store.ListSessions()
 	if err != nil {
@@ -795,6 +857,98 @@ func promptResumeSelection(cmd *slashCommandContext) (string, error) {
 			deferred = append(deferred, msg)
 		}
 	}
+}
+
+func promptRewindSelection(cmd *slashCommandContext, turns []ipc.RewindSelectionTurnPayload) (int, error) {
+	requestID := fmt.Sprintf("rewind-%d", time.Now().UnixNano())
+	if err := cmd.bridge.Emit(ipc.EventRewindSelectionRequested, ipc.RewindSelectionRequestedPayload{
+		RequestID: requestID,
+		Turns:     turns,
+	}); err != nil {
+		return -1, err
+	}
+
+	deferred := make([]ipc.ClientMessage, 0, 4)
+	defer func() {
+		cmd.router.Requeue(deferred...)
+	}()
+
+	for {
+		msg, err := cmd.router.Next(cmd.ctx)
+		if err != nil {
+			return -1, err
+		}
+
+		switch msg.Type {
+		case ipc.MsgRewindSelectionResponse:
+			var payload ipc.RewindSelectionResponsePayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				return -1, fmt.Errorf("decode rewind selection response: %w", err)
+			}
+			if payload.RequestID != requestID {
+				deferred = append(deferred, msg)
+				continue
+			}
+			if payload.Cancel {
+				return -1, nil
+			}
+			return payload.MessageIndex, nil
+		case ipc.MsgShutdown:
+			return -1, context.Canceled
+		default:
+			deferred = append(deferred, msg)
+		}
+	}
+}
+
+func buildRewindSelectionTurns(messages []api.Message) []ipc.RewindSelectionTurnPayload {
+	turns := make([]ipc.RewindSelectionTurnPayload, 0, 16)
+	turnNumber := 0
+	for index, message := range messages {
+		if message.Role != api.RoleUser {
+			continue
+		}
+		if strings.TrimSpace(message.Content) == "" && len(message.Images) == 0 {
+			continue
+		}
+		turnNumber++
+		turns = append(turns, ipc.RewindSelectionTurnPayload{
+			MessageIndex: index,
+			TurnNumber:   turnNumber,
+			Preview:      rewindPreview(message),
+		})
+	}
+	return turns
+}
+
+func rewindPreview(message api.Message) string {
+	content := strings.TrimSpace(message.Content)
+	if content == "" {
+		if len(message.Images) == 1 {
+			return "[image attachment]"
+		}
+		if len(message.Images) > 1 {
+			return fmt.Sprintf("[%d image attachments]", len(message.Images))
+		}
+		return "[empty prompt]"
+	}
+	content = strings.ReplaceAll(content, "\n", " ")
+	content = strings.Join(strings.Fields(content), " ")
+	return truncateRewindPreview(content, 96)
+}
+
+func truncateRewindPreview(value string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(strings.TrimSpace(value))
+	if len(runes) <= maxRunes {
+		return string(runes)
+	}
+	if maxRunes == 1 {
+		return string(runes[:1])
+	}
+	return string(runes[:maxRunes-1]) + "…"
 }
 
 func handleClearSlashCommand(cmd *slashCommandContext) error {

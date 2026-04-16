@@ -22,10 +22,13 @@ import type {
   ModelChangedPayload,
   PermissionRequestPayload,
   RateLimitUpdatePayload,
+  RewindSelectionRequestedPayload,
+  RewindSelectionTurnPayload,
   ResumeSelectionRequestedPayload,
   ResumeSelectionSessionPayload,
   RetrievalUsedPayload,
   ReadyPayload,
+  SessionRewoundPayload,
   SessionRestoredPayload,
   SlashCommandDescriptorPayload,
   SessionUpdatedPayload,
@@ -73,6 +76,17 @@ export interface UIResumeSelectionSession {
 export interface UIResumeSelection {
   requestId: string;
   sessions: UIResumeSelectionSession[];
+}
+
+export interface UIRewindSelectionTurn {
+  messageIndex: number;
+  turnNumber: number;
+  preview: string;
+}
+
+export interface UIRewindSelection {
+  requestId: string;
+  turns: UIRewindSelectionTurn[];
 }
 
 export interface UIModelSelectionOption {
@@ -284,6 +298,7 @@ export interface EngineUIState {
   focusedArtifactId: string | null;
   pendingArtifactReview: UIArtifactReview | null;
   pendingModelSelection: UIModelSelection | null;
+  pendingRewindSelection: UIRewindSelection | null;
   pendingResumeSelection: UIResumeSelection | null;
   submittingArtifactReviewRequestId: string | null;
   toolCalls: UIToolCall[];
@@ -349,6 +364,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   focusedArtifactId: null,
   pendingArtifactReview: null,
   pendingModelSelection: null,
+  pendingRewindSelection: null,
   pendingResumeSelection: null,
   submittingArtifactReviewRequestId: null,
   toolCalls: [],
@@ -846,6 +862,19 @@ export function useEvents(initialModel: string, initialMode: string) {
         }));
         break;
       }
+      case "rewind_selection_requested": {
+        const p = event.payload as RewindSelectionRequestedPayload;
+        setUIState((s) => ({
+          ...s,
+          pendingRewindSelection: {
+            requestId: p.request_id,
+            turns: normalizeRewindSelectionTurns(p.turns),
+          },
+          statusLine: "Select a turn to rewind to.",
+          error: null,
+        }));
+        break;
+      }
       case "resume_selection_requested": {
         const p = event.payload as ResumeSelectionRequestedPayload;
         setUIState((s) => ({
@@ -1211,12 +1240,55 @@ export function useEvents(initialModel: string, initialMode: string) {
           focusedArtifactId: null,
           pendingArtifactReview: null,
           pendingModelSelection: null,
+          pendingRewindSelection: null,
           pendingResumeSelection: null,
           submittingArtifactReviewRequestId: null,
           pendingPermission: null,
           isStreaming: false,
           error: null,
           statusLine: `Resumed session ${p.session_id}`,
+        }));
+        break;
+      }
+      case "session_rewound": {
+        const p = event.payload as SessionRewoundPayload;
+        setUIState((s) => ({
+          ...s,
+          messages: [],
+          transcript: [],
+          liveAssistantBlocks: [],
+          activeTurnStatus: "idle",
+          showPlanPanel: false,
+          sessionId: p.session_id,
+          memoryRecall: {
+            source: null,
+            entries: [],
+          },
+          retrieval: null,
+          artifacts: [],
+          focusedArtifactId: null,
+          pendingArtifactReview: null,
+          pendingModelSelection: null,
+          pendingRewindSelection: null,
+          pendingResumeSelection: null,
+          submittingArtifactReviewRequestId: null,
+          pendingPermission: null,
+          toolCalls: [],
+          backgroundAgents: [],
+          backgroundCommands: [],
+          compact: null,
+          turnTiming: {
+            firstTokenMs: null,
+            firstToolResultMs: null,
+            firstArtifactFocusMs: null,
+            totalMs: null,
+          },
+          isStreaming: false,
+          error: null,
+          statusLine:
+            typeof p.message_count === "number" && p.message_count >= 0
+              ? `Rewound session ${p.session_id} to ${p.message_count} messages`
+              : `Rewound session ${p.session_id}`,
         }));
         break;
       }
@@ -1232,6 +1304,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             s.artifacts.length > 0 ||
             s.pendingArtifactReview !== null ||
             s.pendingModelSelection !== null ||
+            s.pendingRewindSelection !== null ||
             s.pendingPermission !== null ||
             s.isStreaming;
           const sessionChanged =
@@ -1266,6 +1339,7 @@ export function useEvents(initialModel: string, initialMode: string) {
               focusedArtifactId: null,
               pendingArtifactReview: null,
               pendingModelSelection: null,
+              pendingRewindSelection: null,
               pendingResumeSelection: null,
               submittingArtifactReviewRequestId: null,
               toolCalls: [],
@@ -1336,6 +1410,7 @@ export function useEvents(initialModel: string, initialMode: string) {
       isStreaming: false,
       compact: null,
       pendingModelSelection: null,
+      pendingRewindSelection: null,
       pendingResumeSelection: null,
       submittingArtifactReviewRequestId: null,
       turnTiming: {
@@ -1477,6 +1552,21 @@ export function useEvents(initialModel: string, initialMode: string) {
     });
   }, []);
 
+  const submitRewindSelection = useCallback((requestId: string) => {
+    setUIState((s) => {
+      if (s.pendingRewindSelection?.requestId !== requestId) {
+        return s;
+      }
+
+      return {
+        ...s,
+        pendingRewindSelection: null,
+        statusLine: null,
+        error: null,
+      };
+    });
+  }, []);
+
   const submitModelSelection = useCallback((requestId: string) => {
     setUIState((s) => {
       if (s.pendingModelSelection?.requestId !== requestId) {
@@ -1502,8 +1592,34 @@ export function useEvents(initialModel: string, initialMode: string) {
     beginAssistantTurn,
     submitArtifactReview,
     submitModelSelection,
+    submitRewindSelection,
     submitResumeSelection,
   };
+}
+
+function normalizeRewindSelectionTurns(
+  payload: RewindSelectionTurnPayload[] | undefined,
+): UIRewindSelectionTurn[] {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload
+    .filter(
+      (turn) =>
+        typeof turn?.message_index === "number" && turn.message_index >= 0,
+    )
+    .map((turn, index) => ({
+      messageIndex: turn.message_index,
+      turnNumber:
+        typeof turn.turn_number === "number" && turn.turn_number > 0
+          ? turn.turn_number
+          : index + 1,
+      preview:
+        typeof turn.preview === "string" && turn.preview.trim().length > 0
+          ? turn.preview.trim()
+          : "(no prompt text)",
+    }));
 }
 
 function normalizeModelSelectionOptions(

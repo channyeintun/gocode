@@ -162,6 +162,65 @@ func maybeRefreshSessionMemory(ctx context.Context, bridge *ipc.Bridge, artifact
 	return emitArtifactUpdated(bridge, artifact, content)
 }
 
+func syncSessionMemoryAfterRewind(ctx context.Context, bridge *ipc.Bridge, artifactManager *artifactspkg.Manager, sessionID string, messages []api.Message) error {
+	if !config.Load().EnableSessionMemory {
+		return nil
+	}
+	if artifactManager == nil || strings.TrimSpace(sessionID) == "" {
+		return nil
+	}
+
+	previous, err := loadSessionMemorySnapshot(ctx, artifactManager, sessionID)
+	if err != nil {
+		previous = agent.SessionMemorySnapshot{}
+	}
+
+	hasMeaningfulState := len(messages) >= sessionMemoryMinMessages && (turnHasCompactionSummary(messages, 0) ||
+		turnHasToolActivity(messages, 0) ||
+		compact.EstimateConversationTokens(messages) >= sessionMemoryMinInitTokens)
+
+	content := ""
+	if hasMeaningfulState {
+		content = buildSessionMemoryMarkdown(agent.SessionMemorySnapshot{}, messages, 0)
+	}
+	if strings.TrimSpace(content) == "" && !previous.HasContent() {
+		return nil
+	}
+
+	parsed := parseSessionMemoryMarkdown(content)
+	artifact, _, created, err := artifactManager.UpsertSessionMarkdown(ctx, artifactspkg.MarkdownRequest{
+		Kind:    artifactspkg.KindSessionMemory,
+		Scope:   artifactspkg.ScopeSession,
+		Title:   sessionMemoryArtifactTitle,
+		Source:  sessionMemoryArtifactSource,
+		Content: content,
+		Metadata: map[string]any{
+			"status":                     "active",
+			"session_title":              parsed.SessionTitle,
+			"updated_turn":               0,
+			"updated_message_count":      len(messages),
+			"source_conversation_tokens": compact.EstimateConversationTokens(messages),
+			"source_tool_call_count":     totalToolCallCount(messages),
+		},
+	}, sessionID, sessionMemoryArtifactSlot)
+	if err != nil {
+		if bridge == nil {
+			return nil
+		}
+		return bridge.Emit(ipc.EventNotice, ipc.NoticePayload{Message: "session memory rewind sync skipped: " + err.Error()})
+	}
+
+	if bridge == nil {
+		return nil
+	}
+	if created {
+		if err := emitArtifactCreated(bridge, artifact); err != nil {
+			return err
+		}
+	}
+	return emitArtifactUpdated(bridge, artifact, content)
+}
+
 func shouldRefreshSessionMemory(ctx context.Context, artifactManager *artifactspkg.Manager, sessionID string, turnID int, messages []api.Message, fromIndex int) bool {
 	if len(messages) < sessionMemoryMinMessages {
 		return false

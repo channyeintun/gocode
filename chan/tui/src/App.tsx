@@ -22,6 +22,7 @@ import ArtifactReviewPrompt from "./components/ArtifactReviewPrompt.js";
 import Input from "./components/Input.js";
 import ModelSelectionPrompt from "./components/ModelSelectionPrompt.js";
 import PromptFooter from "./components/PromptFooter.js";
+import RewindSelectionPrompt from "./components/RewindSelectionPrompt.js";
 import ResumeSelectionPrompt from "./components/ResumeSelectionPrompt.js";
 import StreamOutput from "./components/StreamOutput.js";
 import StatusBar from "./components/StatusBar.js";
@@ -99,6 +100,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     beginAssistantTurn,
     submitArtifactReview,
     submitModelSelection,
+    submitRewindSelection,
     submitResumeSelection,
   } = useEvents(model, mode);
   const engine = useEngine(enginePath, { model, mode, onEvent: handleEvent });
@@ -136,6 +138,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     if (
       uiState.pendingPermission ||
       uiState.pendingResumeSelection ||
+      uiState.pendingRewindSelection ||
       uiState.pendingModelSelection ||
       uiState.pendingArtifactReview
     ) {
@@ -146,6 +149,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     uiState.pendingArtifactReview,
     uiState.pendingModelSelection,
     uiState.pendingPermission,
+    uiState.pendingRewindSelection,
     uiState.pendingResumeSelection,
   ]);
 
@@ -230,6 +234,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     uiState.pendingPermission,
     uiState.pendingArtifactReview,
     uiState.pendingModelSelection,
+    uiState.pendingRewindSelection,
     uiState.pendingResumeSelection,
   ]);
 
@@ -302,6 +307,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       uiState.pendingPermission ||
       uiState.pendingArtifactReview ||
       uiState.pendingModelSelection ||
+      uiState.pendingRewindSelection ||
       uiState.pendingResumeSelection ||
       queuedPrompts.length
     ) {
@@ -388,6 +394,19 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     });
   };
 
+  const handleRewindSelection = (messageIndex?: number) => {
+    if (!uiState.pendingRewindSelection) {
+      return;
+    }
+
+    submitRewindSelection(uiState.pendingRewindSelection.requestId);
+    engine.sendRewindSelectionResponse({
+      request_id: uiState.pendingRewindSelection.requestId,
+      message_index: messageIndex,
+      cancel: typeof messageIndex !== "number",
+    });
+  };
+
   const handleCancel = () => {
     if (transcriptSearchActive) {
       setTranscriptSearchActive(false);
@@ -410,6 +429,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     uiState.pendingPermission !== null ||
     uiState.pendingArtifactReview !== null ||
     uiState.pendingModelSelection !== null ||
+    uiState.pendingRewindSelection !== null ||
     uiState.pendingResumeSelection !== null;
   const promptBlockedReason = getPromptBlockedReason({
     isEngineReady,
@@ -616,6 +636,14 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             selection={uiState.pendingResumeSelection}
             onSelect={handleResumeSelection}
             onCancel={() => handleResumeSelection()}
+          />
+        </CenteredViewportOverlay>
+      ) : uiState.pendingRewindSelection ? (
+        <CenteredViewportOverlay>
+          <RewindSelectionPrompt
+            selection={uiState.pendingRewindSelection}
+            onSelect={handleRewindSelection}
+            onCancel={() => handleRewindSelection()}
           />
         </CenteredViewportOverlay>
       ) : uiState.pendingModelSelection ? (
@@ -849,6 +877,7 @@ function isQueuedPromptDispatchBlocked(
     uiState.pendingPermission !== null ||
     uiState.pendingArtifactReview !== null ||
     uiState.pendingModelSelection !== null ||
+    uiState.pendingRewindSelection !== null ||
     uiState.pendingResumeSelection !== null
   );
 }

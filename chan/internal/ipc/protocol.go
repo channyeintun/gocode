@@ -31,6 +31,7 @@ const (
 	EventContextWindow            EventType = "context_window"
 	EventCostUpdate               EventType = "cost_update"
 	EventModelSelectionRequested  EventType = "model_selection_requested"
+	EventRewindSelectionRequested EventType = "rewind_selection_requested"
 	EventResumeSelectionRequested EventType = "resume_selection_requested"
 	EventMemoryRecalled           EventType = "memory_recalled"
 	EventRetrievalUsed            EventType = "retrieval_used"
@@ -54,6 +55,7 @@ const (
 	EventReady           EventType = "ready"
 	EventError           EventType = "error"
 	EventNotice          EventType = "notice"
+	EventSessionRewound  EventType = "session_rewound"
 	EventSessionUpdated  EventType = "session_updated"
 	EventSessionRestored EventType = "session_restored"
 )
@@ -74,6 +76,7 @@ const (
 	MsgSlashCommand            ClientMessageType = "slash_command"
 	MsgPermissionResponse      ClientMessageType = "permission_response"
 	MsgModelSelectionResponse  ClientMessageType = "model_selection_response"
+	MsgRewindSelectionResponse ClientMessageType = "rewind_selection_response"
 	MsgResumeSelectionResponse ClientMessageType = "resume_selection_response"
 	MsgCancel                  ClientMessageType = "cancel"
 	MsgModeToggle              ClientMessageType = "mode_toggle"
@@ -188,6 +191,17 @@ type ResumeSelectionSessionPayload struct {
 type ResumeSelectionRequestedPayload struct {
 	RequestID string                          `json:"request_id"`
 	Sessions  []ResumeSelectionSessionPayload `json:"sessions"`
+}
+
+type RewindSelectionTurnPayload struct {
+	MessageIndex int    `json:"message_index"`
+	TurnNumber   int    `json:"turn_number"`
+	Preview      string `json:"preview,omitempty"`
+}
+
+type RewindSelectionRequestedPayload struct {
+	RequestID string                       `json:"request_id"`
+	Turns     []RewindSelectionTurnPayload `json:"turns"`
 }
 
 type ModelSelectionOptionPayload struct {
@@ -312,6 +326,11 @@ type SessionRestoredPayload struct {
 	Mode      string `json:"mode"`
 }
 
+type SessionRewoundPayload struct {
+	SessionID    string `json:"session_id"`
+	MessageCount int    `json:"message_count,omitempty"`
+}
+
 type SessionUpdatedPayload struct {
 	SessionID string `json:"session_id"`
 	Title     string `json:"title,omitempty"`
@@ -354,6 +373,12 @@ type ModelSelectionResponsePayload struct {
 	Model     string `json:"model,omitempty"`
 	Provider  string `json:"provider,omitempty"`
 	Cancel    bool   `json:"cancel,omitempty"`
+}
+
+type RewindSelectionResponsePayload struct {
+	RequestID    string `json:"request_id"`
+	MessageIndex int    `json:"message_index,omitempty"`
+	Cancel       bool   `json:"cancel,omitempty"`
 }
 
 // ArtifactFocusedPayload is emitted when the primary artifact for the active turn changes.

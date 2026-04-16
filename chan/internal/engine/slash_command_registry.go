@@ -114,6 +114,15 @@ func slashCommandSpecs() []slashCommandSpec {
 		},
 		{
 			Descriptor: commandspkg.Descriptor{
+				Name:           "rewind",
+				Description:    "Jump back to an earlier user turn and drop later context",
+				Usage:          "/rewind",
+				TakesArguments: false,
+			},
+			Handler: slashCommandHandlerFunc(handleRewindSlashCommand),
+		},
+		{
+			Descriptor: commandspkg.Descriptor{
 				Name:           "resume",
 				Description:    "Resume a previous session",
 				Usage:          "/resume [id]",

@@ -9,6 +9,7 @@ export type EventType =
   | "tool_error"
   | "permission_request"
   | "model_selection_requested"
+  | "rewind_selection_requested"
   | "resume_selection_requested"
   | "mode_changed"
   | "model_changed"
@@ -32,6 +33,7 @@ export type EventType =
   | "ready"
   | "error"
   | "notice"
+  | "session_rewound"
   | "session_updated"
   | "session_restored";
 
@@ -46,6 +48,7 @@ export type ClientMessageType =
   | "slash_command"
   | "permission_response"
   | "model_selection_response"
+  | "rewind_selection_response"
   | "resume_selection_response"
   | "cancel"
   | "mode_toggle"
@@ -153,6 +156,17 @@ export interface ResumeSelectionRequestedPayload {
   sessions: ResumeSelectionSessionPayload[];
 }
 
+export interface RewindSelectionTurnPayload {
+  message_index: number;
+  turn_number: number;
+  preview?: string;
+}
+
+export interface RewindSelectionRequestedPayload {
+  request_id: string;
+  turns: RewindSelectionTurnPayload[];
+}
+
 export interface ModelSelectionOptionPayload {
   label: string;
   model?: string;
@@ -172,6 +186,12 @@ export interface ModelSelectionResponsePayload {
   request_id: string;
   model?: string;
   provider?: string;
+  cancel?: boolean;
+}
+
+export interface RewindSelectionResponsePayload {
+  request_id: string;
+  message_index?: number;
   cancel?: boolean;
 }
 
@@ -284,6 +304,11 @@ export interface ArtifactUpdatedPayload {
 export interface SessionRestoredPayload {
   session_id: string;
   mode: string;
+}
+
+export interface SessionRewoundPayload {
+  session_id: string;
+  message_count?: number;
 }
 
 export interface SessionUpdatedPayload {

@@ -2,6 +2,7 @@
 
 ## 2026-04-16
 
+- Added a Claude Code-style `/rewind` flow to Chan: the engine now offers an interactive picker of prior user turns, trims later conversation history in-place, rewrites persisted session state, resets the TUI transcript view, and resynchronizes session-memory artifacts so rewound sessions do not retain future context.
 - Replaced the old `search` and `execution` child-agent modes with Claude Code-style built-ins only: `Explore`, `general-purpose`, and `verification`, and rewrote the subtype prompts to stay terse, role-specific, and evidence-first.
 - Tightened child-agent prompting so delegated search runs make best-effort assumptions instead of bouncing clarification questions back to the parent session, and compacted inline subagent result cards to show status plus a short summary rather than dumping invocation/session/file metadata into chat.
 - Changed the footer shortcut help to stay collapsed as `(?)` by default and reveal the full shortcut list for 2.5 seconds after pressing `?`, so the prompt chrome stays quieter until the user asks for help.

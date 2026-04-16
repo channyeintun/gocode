@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type {
   ModelSelectionResponsePayload,
   PermissionResponseDecision,
+  RewindSelectionResponsePayload,
   ResumeSelectionResponsePayload,
   StreamEvent,
   UserInputImagePayload,
@@ -190,6 +191,12 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     [send],
   );
 
+  const sendRewindSelectionResponse = useCallback(
+    (payload: RewindSelectionResponsePayload) =>
+      send(createMessage("rewind_selection_response", payload)),
+    [send],
+  );
+
   const sendModelSelectionResponse = useCallback(
     (payload: ModelSelectionResponsePayload) =>
       send(createMessage("model_selection_response", payload)),
@@ -206,6 +213,7 @@ export function useEngine(enginePath: string, options: EngineOptions = {}) {
     sendPermissionResponse,
     sendArtifactReviewResponse,
     sendModelSelectionResponse,
+    sendRewindSelectionResponse,
     sendResumeSelectionResponse,
   };
 }
