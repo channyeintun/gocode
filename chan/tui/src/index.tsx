@@ -3,6 +3,9 @@ import { detectTerminalCaps, ThemeProvider } from "silvery";
 import { createApp } from "silvery/runtime";
 import { createTheme } from "silvery/theme";
 import App from "./App.js";
+import { installClipboardBridge } from "./utils/clipboardBridge.js";
+
+installClipboardBridge();
 
 const enginePath = process.env["CHAN_ENGINE_PATH"] ?? "chan-engine";
 const model = process.env["CHAN_MODEL"] ?? "anthropic/claude-sonnet-4-20250514";

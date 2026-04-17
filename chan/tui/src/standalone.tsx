@@ -10,6 +10,9 @@ import { createApp } from "silvery/runtime";
 import { createTheme } from "silvery/theme";
 import React from "react";
 import App from "./App.js";
+import { installClipboardBridge } from "./utils/clipboardBridge.js";
+
+installClipboardBridge();
 
 // Resolve engine: same directory as this binary, then PATH
 const selfDir = dirname(process.execPath);

@@ -261,6 +261,11 @@ func emitIterationProgress(
 	if yield == nil {
 		return nil
 	}
+	// Only show iteration progress on the first iteration to avoid
+	// noisy duplicate status messages in the TUI chat output.
+	if state.TurnCount > 1 {
+		return nil
+	}
 	trimmedStageID := strings.TrimSpace(stageID)
 	trimmedMessage := strings.TrimSpace(message)
 	if trimmedStageID == "" || trimmedMessage == "" {

@@ -72,7 +72,14 @@ type TranscriptBlock =
     }
   | { kind: "progress"; key: string; progress: UIProgressEntry }
   | { kind: "artifact"; key: string; artifact: UIArtifact }
-  | { kind: "tool_call"; key: string; toolCall: UIToolCall };
+  | { kind: "tool_call"; key: string; toolCall: UIToolCall }
+  | {
+      kind: "round";
+      key: string;
+      message: UIAssistantMessage;
+      toolCalls: UIToolCall[];
+      progressEntries: UIProgressEntry[];
+    };
 
 type DisplayBlock =
   | {
@@ -349,6 +356,21 @@ function renderTranscriptBlock(
     );
   }
 
+  if (block.kind === "round") {
+    return (
+      <Box key={block.key} flexDirection="column">
+        {searchLabel}
+        <AssistantTextMessage message={block.message} continuation={false} />
+        {block.progressEntries.map((progress) => (
+          <ProgressMessage key={`rp-${progress.id}`} progress={progress} />
+        ))}
+        {block.toolCalls.map((toolCall) => (
+          <ToolProgress key={`rt-${toolCall.id}`} toolCall={toolCall} />
+        ))}
+      </Box>
+    );
+  }
+
   if (block.kind === "queued_prompt") {
     return (
       <Box key={block.key} flexDirection="column">
@@ -426,6 +448,12 @@ function estimateDisplayBlockHeight(block: DisplayBlock | undefined): number {
       return 3;
     case "tool_call":
       return 4;
+    case "round":
+      return (
+        6 +
+        block.block.toolCalls.length * 4 +
+        block.block.progressEntries.length * 2
+      );
     case "queued_prompt":
       return estimateQueuedPromptHeight(block.block.prompt);
     case "message":
@@ -466,7 +494,8 @@ function buildTranscriptBlocks(
   liveBlocks: UIAssistantBlock[],
   model: string,
 ): TranscriptBlock[] {
-  const blocks: TranscriptBlock[] = [];
+  // First pass: resolve all entries into flat blocks.
+  const flat: TranscriptBlock[] = [];
 
   for (const entry of transcript) {
     if (!entry) {
@@ -481,7 +510,7 @@ function buildTranscriptBlocks(
         continue;
       }
 
-      blocks.push({
+      flat.push({
         kind: "artifact",
         key: `artifact-${artifact.id}`,
         artifact,
@@ -495,7 +524,7 @@ function buildTranscriptBlocks(
         continue;
       }
 
-      blocks.push({
+      flat.push({
         kind: "progress",
         key: `progress-${progress.id}`,
         progress,
@@ -516,7 +545,7 @@ function buildTranscriptBlocks(
         continue;
       }
 
-      blocks.push({
+      flat.push({
         kind: "message",
         key: `message-${message.id}`,
         message,
@@ -530,14 +559,16 @@ function buildTranscriptBlocks(
       continue;
     }
 
-    blocks.push({
+    flat.push({
       kind: "tool_call",
       key: `tool-${toolCall.id}`,
       toolCall,
     });
   }
 
-  return withMessageContinuations(blocks);
+  // Second pass: group assistant messages with following tool calls and
+  // progress entries into round blocks.
+  return groupIntoRounds(flat);
 }
 
 function resolveLiveAssistantMessage(
@@ -573,47 +604,139 @@ function ProgressMessage({ progress }: { progress: UIProgressEntry }) {
   );
 }
 
-function withMessageContinuations(
-  blocks: TranscriptBlock[],
-): TranscriptBlock[] {
-  let previousMessage: UIMessage | null = null;
+/**
+ * Groups an assistant message with its following tool calls and progress
+ * entries into a single "round" block.  Non-assistant messages, artifacts,
+ * and orphan tool calls / progress entries remain standalone.
+ */
+function groupIntoRounds(flat: TranscriptBlock[]): TranscriptBlock[] {
+  const result: TranscriptBlock[] = [];
+  let i = 0;
 
-  return blocks.map((block) => {
-    if (block.kind !== "message") {
-      previousMessage = null;
-      return block;
+  while (i < flat.length) {
+    const block = flat[i];
+
+    // Collect leading progress entries before an assistant message — attach
+    // them to the upcoming round if the next non-progress block is an
+    // assistant message.
+    if (block.kind === "progress") {
+      const pendingProgress: UIProgressEntry[] = [];
+      const startIdx = i;
+      while (i < flat.length && flat[i].kind === "progress") {
+        const pb = flat[i] as Extract<TranscriptBlock, { kind: "progress" }>;
+        pendingProgress.push(pb.progress);
+        i++;
+      }
+
+      // Check if an assistant message follows — if so, the progress will
+      // be absorbed into the round.  Otherwise emit them standalone.
+      if (
+        i < flat.length &&
+        flat[i].kind === "message" &&
+        (flat[i] as Extract<TranscriptBlock, { kind: "message" }>).message
+          .role === "assistant"
+      ) {
+        const msgBlock = flat[i] as Extract<
+          TranscriptBlock,
+          { kind: "message" }
+        >;
+        const assistantMsg = msgBlock.message as UIAssistantMessage;
+        i++;
+
+        // Collect trailing tool calls and progress.
+        const roundToolCalls: UIToolCall[] = [];
+        const roundProgress = [...pendingProgress];
+        while (
+          i < flat.length &&
+          (flat[i].kind === "tool_call" || flat[i].kind === "progress")
+        ) {
+          if (flat[i].kind === "tool_call") {
+            const tb = flat[i] as Extract<
+              TranscriptBlock,
+              { kind: "tool_call" }
+            >;
+            roundToolCalls.push(tb.toolCall);
+          } else {
+            const pb = flat[i] as Extract<
+              TranscriptBlock,
+              { kind: "progress" }
+            >;
+            roundProgress.push(pb.progress);
+          }
+          i++;
+        }
+
+        if (roundToolCalls.length > 0 || roundProgress.length > 0) {
+          result.push({
+            kind: "round",
+            key: `round-${assistantMsg.id}`,
+            message: assistantMsg,
+            toolCalls: roundToolCalls,
+            progressEntries: roundProgress,
+          });
+        } else {
+          result.push(msgBlock);
+        }
+        continue;
+      }
+
+      // No assistant message follows — emit progress standalone.
+      for (let j = startIdx; j < i; j++) {
+        result.push(flat[j]);
+      }
+      continue;
     }
 
-    const nextBlock = {
-      ...block,
-      continuation: isMessageContinuation(previousMessage, block.message),
-    };
-    previousMessage = block.message;
-    return nextBlock;
-  });
-}
+    // Assistant message: absorb following tool calls and progress into a round.
+    if (
+      block.kind === "message" &&
+      block.message.role === "assistant"
+    ) {
+      const assistantMsg = block.message as UIAssistantMessage;
+      i++;
 
-function isMessageContinuation(
-  previousMessage: UIMessage | null,
-  currentMessage: UIMessage,
-): boolean {
-  if (!previousMessage || previousMessage.role !== currentMessage.role) {
-    return false;
+      const roundToolCalls: UIToolCall[] = [];
+      const roundProgress: UIProgressEntry[] = [];
+      while (
+        i < flat.length &&
+        (flat[i].kind === "tool_call" || flat[i].kind === "progress")
+      ) {
+        if (flat[i].kind === "tool_call") {
+          const tb = flat[i] as Extract<
+            TranscriptBlock,
+            { kind: "tool_call" }
+          >;
+          roundToolCalls.push(tb.toolCall);
+        } else {
+          const pb = flat[i] as Extract<
+            TranscriptBlock,
+            { kind: "progress" }
+          >;
+          roundProgress.push(pb.progress);
+        }
+        i++;
+      }
+
+      if (roundToolCalls.length > 0 || roundProgress.length > 0) {
+        result.push({
+          kind: "round",
+          key: `round-${assistantMsg.id}`,
+          message: assistantMsg,
+          toolCalls: roundToolCalls,
+          progressEntries: roundProgress,
+        });
+      } else {
+        result.push(block);
+      }
+      continue;
+    }
+
+    // Everything else passes through.
+    result.push(block);
+    i++;
   }
 
-  if (currentMessage.role === "assistant") {
-    return previousMessage.role === "assistant"
-      ? previousMessage.model === currentMessage.model
-      : false;
-  }
-
-  if (currentMessage.role === "system") {
-    return previousMessage.role === "system"
-      ? previousMessage.tone === currentMessage.tone
-      : false;
-  }
-
-  return true;
+  return result;
 }
 
 function blockSearchText(block: TranscriptBlock): string {
@@ -638,6 +761,12 @@ function blockSearchText(block: TranscriptBlock): string {
         .toLowerCase();
     case "tool_call":
       return toolCallSearchText(block.toolCall);
+    case "round":
+      return [
+        messageSearchText(block.message),
+        ...block.toolCalls.map(toolCallSearchText),
+        ...block.progressEntries.map((p) => p.text.toLowerCase()),
+      ].join("\n");
     case "queued_prompt":
       return queuedPromptSearchText(block.prompt);
     default:
