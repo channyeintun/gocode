@@ -214,6 +214,7 @@ export interface ModeChangedPayload {
 
 export interface ModelChangedPayload {
   model: string;
+  reasoning_effort?: string;
   max_context_window?: number;
   max_output_tokens?: number;
 }

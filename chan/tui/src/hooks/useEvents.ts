@@ -287,6 +287,7 @@ export interface EngineUIState {
   showPlanPanel: boolean;
   mode: string;
   model: string;
+  reasoningEffort: string | null;
   sessionId: string | null;
   sessionTitle: string | null;
   maxContextWindow: number | null;
@@ -364,6 +365,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   showPlanPanel: false,
   mode,
   model,
+  reasoningEffort: null,
   sessionId: null,
   sessionTitle: null,
   maxContextWindow: null,
@@ -952,6 +954,10 @@ export function useEvents(initialModel: string, initialMode: string) {
         setUIState((s) => ({
           ...s,
           model: p.model,
+          reasoningEffort:
+            typeof p.reasoning_effort === "string" && p.reasoning_effort.trim()
+              ? p.reasoning_effort.trim()
+              : null,
           maxContextWindow:
             typeof p.max_context_window === "number" && p.max_context_window > 0
               ? p.max_context_window

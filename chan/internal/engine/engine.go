@@ -15,6 +15,7 @@ import (
 	"github.com/channyeintun/chan/internal/api"
 	artifactspkg "github.com/channyeintun/chan/internal/artifacts"
 	"github.com/channyeintun/chan/internal/clientdebug"
+	commandspkg "github.com/channyeintun/chan/internal/commands"
 	"github.com/channyeintun/chan/internal/compact"
 	"github.com/channyeintun/chan/internal/config"
 	costpkg "github.com/channyeintun/chan/internal/cost"
@@ -650,7 +651,10 @@ func toRateLimitWindowPayload(window *api.RateLimitWindow) *ipc.RateLimitWindowP
 }
 
 func emitModelChanged(bridge *ipc.Bridge, activeModelID string, client api.LLMClient) error {
-	payload := ipc.ModelChangedPayload{Model: activeModelID}
+	payload := ipc.ModelChangedPayload{
+		Model:           activeModelID,
+		ReasoningEffort: commandspkg.EffectiveReasoningEffort(strings.TrimSpace(config.Load().ReasoningEffort), activeModelID),
+	}
 	if client != nil {
 		capabilities := client.Capabilities()
 		payload.MaxContextWindow = capabilities.MaxContextWindow

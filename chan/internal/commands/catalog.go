@@ -88,21 +88,26 @@ func ParseReasoningArgs(args string) (string, bool, error) {
 	return normalized, false, nil
 }
 
-func DescribeReasoningEffort(configured string, modelID string) string {
+func EffectiveReasoningEffort(configured string, modelID string) string {
 	effective := api.ClampReasoningEffort(modelID, configured)
-	if effective == "" {
-		effective = api.DefaultReasoningEffort(modelID)
-		if effective == "" {
-			if configured == "" {
-				return "default"
-			}
-			return configured + " (saved for supported models)"
-		}
-		if configured == "" {
-			return effective + " (default)"
-		}
+	if effective != "" {
+		return effective
 	}
-	if configured != "" && configured != effective {
+	return api.DefaultReasoningEffort(modelID)
+}
+
+func DescribeReasoningEffort(configured string, modelID string) string {
+	effective := EffectiveReasoningEffort(configured, modelID)
+	if effective == "" {
+		if configured == "" {
+			return "default"
+		}
+		return configured + " (saved for supported models)"
+	}
+	if configured == "" {
+		return effective + " (default)"
+	}
+	if configured != effective {
 		return fmt.Sprintf("%s (clamped from %s for %s)", effective, configured, modelID)
 	}
 	return effective

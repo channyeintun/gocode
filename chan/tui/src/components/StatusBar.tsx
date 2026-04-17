@@ -18,6 +18,7 @@ interface StatusBarProps {
   ready: boolean;
   mode: string;
   model: string;
+  reasoningEffort?: string | null;
   sessionId?: string | null;
   sessionTitle?: string | null;
   maxContextWindow?: number | null;
@@ -44,6 +45,7 @@ const StatusBar: FC<StatusBarProps> = ({
   ready,
   mode,
   model,
+  reasoningEffort,
   sessionId,
   sessionTitle,
   maxContextWindow,
@@ -74,6 +76,7 @@ const StatusBar: FC<StatusBarProps> = ({
       ? `session ${sessionId.slice(0, 8)}`
       : null;
   const modelLabel = formatModelLabel(model);
+  const reasoningLabel = formatReasoningEffortLabel(reasoningEffort);
   const contextWindow = getEffectiveContextWindow(
     model,
     maxContextWindow,
@@ -126,6 +129,7 @@ const StatusBar: FC<StatusBarProps> = ({
         </Text>
         <Text color="$muted"> · </Text>
         <Text color="$accent">{modelLabel}</Text>
+        {reasoningLabel ? <Text color="$muted"> [{reasoningLabel}]</Text> : null}
         <Text color="$muted"> · </Text>
         <Text color={contextColor}>{`ctx ~${contextPercent}%`}</Text>
         <Text color="$muted"> {formatTokenCount(contextTokens)}/</Text>
@@ -245,6 +249,16 @@ function formatModelLabel(model: string): string {
 
   return compact.replace(/-/g, " ");
 }
+function formatReasoningEffortLabel(
+  reasoningEffort: string | null | undefined,
+): string | null {
+  if (typeof reasoningEffort !== "string") {
+    return null;
+  }
+  const compact = reasoningEffort.trim().toLowerCase();
+  return compact || null;
+}
+
 function formatRateLimitWindow(label: string, usedPercentage: number): string {
   const rounded = Math.max(0, Math.min(999, Math.round(usedPercentage)));
   return `${label} ${rounded}%`;

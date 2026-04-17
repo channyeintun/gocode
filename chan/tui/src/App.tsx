@@ -506,6 +506,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           ready={isEngineReady}
           mode={uiState.mode}
           model={uiState.model}
+          reasoningEffort={uiState.reasoningEffort}
           sessionId={uiState.sessionId}
           sessionTitle={uiState.sessionTitle}
           maxContextWindow={uiState.maxContextWindow}

@@ -162,6 +162,7 @@ type ModeChangedPayload struct {
 
 type ModelChangedPayload struct {
 	Model            string `json:"model"`
+	ReasoningEffort  string `json:"reasoning_effort,omitempty"`
 	MaxContextWindow int    `json:"max_context_window,omitempty"`
 	MaxOutputTokens  int    `json:"max_output_tokens,omitempty"`
 }
