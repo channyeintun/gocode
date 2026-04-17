@@ -57,6 +57,12 @@
    - Status: completed
    - Notes: Restored curated quick-pick models alongside provider defaults, preserved provider-state labels in the picker, and updated custom model entry paths to accept explicit `provider/model` input when the user needs to disambiguate providers.
 
+## TUI Toast Follow-up
+
+1. Remove layout shift from the done toast
+   - Status: completed
+   - Notes: Moved the inline done toast into an absolute overlay within the prompt area so the chip stays centered above the input region without pushing the input/footer layout downward.
+
 ---
 
 # Provider UX Implementation Progress

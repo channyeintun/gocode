@@ -655,6 +655,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           flexDirection="column"
           flexShrink={0}
           maxHeight="45%"
+          position="relative"
           overflow="scroll"
         >
           <SafeToastContainer toasts={toasts} />
@@ -743,9 +744,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
             onCancel={() => handleModelSelection()}
           />
         </CenteredViewportOverlay>
-      ) : (
-        null
-      )}
+      ) : null}
     </Screen>
   );
 };
@@ -760,7 +759,12 @@ function SafeToastContainer({ toasts }: { toasts: ToastData[] }) {
   }
 
   return (
-    <Box flexDirection="row" justifyContent="center" marginBottom={1}>
+    <Box
+      position="absolute"
+      width="100%"
+      flexDirection="row"
+      justifyContent="center"
+    >
       <SafeToastItem toast={latestToast} />
     </Box>
   );
