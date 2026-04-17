@@ -84,4 +84,5 @@
    - Notes: Added a separate recent-model file in the config directory, prefer that selection on startup when the model source is only the default or saved config, and update it after successful startup, `/model`, `/connect`, and `/resume` model initialization paths.
 
 8. Final rebuild and install
-   - Status: in progress
+   - Status: completed
+   - Notes: Rebuilt the TUI launcher and Go engine with `make release-local`, installed `chan` and `chan-engine` into `~/.local/bin`, and verified the installed launcher responds with the updated help text and default model.
