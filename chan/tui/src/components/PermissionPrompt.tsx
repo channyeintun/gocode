@@ -197,12 +197,9 @@ const PermissionPrompt: FC<PermissionPromptProps> = ({
         flexDirection="column"
         flexShrink={0}
         minWidth={0}
-        overflow="hidden"
       >
         <Text color="$muted">{detailLabel}</Text>
-        <Box flexDirection="column" minWidth={0}>
-          <Text wrap="truncate-end">{detailPreview.line}</Text>
-        </Box>
+        <Text wrap="truncate-end">{detailPreview.line}</Text>
         {detailPreview.truncated ? (
           <Text dimColor>Preview truncated to one line.</Text>
         ) : null}
