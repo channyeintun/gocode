@@ -799,8 +799,6 @@ func normalizeToolCall(call api.ToolCall) (api.ToolCall, error) {
 	case "read_file", "file_read":
 		normalized.Name = "read_file"
 		renameToolParam(normalizedParams, "filePath", "file_path")
-		renameToolParam(normalizedParams, "startLine", "start_line")
-		renameToolParam(normalizedParams, "endLine", "end_line")
 	case "replace_string_in_file", "file_edit":
 		normalized.Name = "replace_string_in_file"
 		renameToolParam(normalizedParams, "filePath", "file_path")

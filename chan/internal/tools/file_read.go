@@ -14,11 +14,19 @@ import (
 	"unicode/utf8"
 )
 
-const fileReadMaxTokenBytes = 2 * 1024 * 1024
 const fileReadBinarySampleBytes = 8192
+const fileReadDefaultLimitLines = 2000
+const fileReadMaxLimitLines = 2000
+const fileReadMaxOutputBytes = 50 * 1024
+const fileReadMaxRenderedLineChars = 2000
 
-// FileReadTool reads file contents from disk, optionally limited to a line range.
+// FileReadTool reads file contents from disk with bounded line-based pagination.
 type FileReadTool struct{}
+
+type fileReadRenderedLine struct {
+	lineNo int
+	text   string
+}
 
 // NewFileReadTool constructs the file read tool.
 func NewFileReadTool() *FileReadTool {
@@ -30,7 +38,7 @@ func (t *FileReadTool) Name() string {
 }
 
 func (t *FileReadTool) Description() string {
-	return "Read the contents of a file. Use this when you need the exact text from a specific file, optionally limited to a 1-based line range. Prefer reading larger ranges over many tiny reads."
+	return "Read the contents of a text file. Use filePath with an optional 1-based offset and limit. Reads are bounded by default; continue truncated reads with offset and limit instead of using legacy line-range parameters."
 }
 
 func (t *FileReadTool) InputSchema() any {
@@ -41,41 +49,43 @@ func (t *FileReadTool) InputSchema() any {
 				"type":        "string",
 				"description": "The absolute path to the file to read.",
 			},
-			"file_path": map[string]any{
-				"type":        "string",
-				"description": "Compatibility alias for the absolute path to the file to read.",
-			},
-			"path": map[string]any{
-				"type":        "string",
-				"description": "Compatibility alias for the absolute path to the file to read.",
-			},
-			"startLine": map[string]any{
+			"offset": map[string]any{
 				"type":        "integer",
-				"description": "Optional 1-based start line.",
+				"description": "Optional 1-based starting line. Defaults to 1.",
 				"minimum":     1,
 			},
-			"endLine": map[string]any{
+			"limit": map[string]any{
 				"type":        "integer",
-				"description": "Optional 1-based inclusive end line.",
+				"description": "Optional number of lines to read. Defaults to 2000 and is capped at 2000.",
 				"minimum":     1,
-			},
-			"start_line": map[string]any{
-				"type":        "integer",
-				"description": "Compatibility alias for the 1-based start line.",
-				"minimum":     1,
-			},
-			"end_line": map[string]any{
-				"type":        "integer",
-				"description": "Compatibility alias for the 1-based inclusive end line.",
-				"minimum":     1,
+				"maximum":     fileReadMaxLimitLines,
 			},
 		},
-		"anyOf": []map[string]any{
-			{"required": []string{"filePath"}},
-			{"required": []string{"file_path"}},
-			{"required": []string{"path"}},
-		},
+		"required": []string{"filePath"},
 	}
+}
+
+func (t *FileReadTool) Validate(input ToolInput) error {
+	if _, ok := firstParam(input.Params, "startLine", "endLine", "start_line", "end_line"); ok {
+		return fmt.Errorf("read_file no longer accepts startLine/endLine; use offset and limit")
+	}
+	filePath, ok := firstStringParam(input.Params, "filePath", "file_path", "path")
+	if !ok || strings.TrimSpace(filePath) == "" {
+		return fmt.Errorf("read_file requires filePath")
+	}
+	resolvedPath, err := resolveToolPath(filePath)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(resolvedPath)
+	if err != nil {
+		return fmt.Errorf("stat file %q: %w", resolvedPath, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%q is a directory", resolvedPath)
+	}
+	_, _, err = fileReadRange(input.Params)
+	return err
 }
 
 func (t *FileReadTool) Permission() PermissionLevel {
@@ -87,6 +97,9 @@ func (t *FileReadTool) Concurrency(input ToolInput) ConcurrencyDecision {
 }
 
 func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
+	if _, ok := firstParam(input.Params, "startLine", "endLine", "start_line", "end_line"); ok {
+		return ToolOutput{}, fmt.Errorf("read_file no longer accepts startLine/endLine; use offset and limit")
+	}
 	filePath, ok := firstStringParam(input.Params, "filePath", "file_path", "path")
 	if !ok || strings.TrimSpace(filePath) == "" {
 		return ToolOutput{}, fmt.Errorf("read_file requires filePath")
@@ -104,21 +117,7 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 		return ToolOutput{}, fmt.Errorf("%q is a directory", filePath)
 	}
 
-	normalizedParams := map[string]any{}
-	for key, value := range input.Params {
-		normalizedParams[key] = value
-	}
-	if _, ok := normalizedParams["start_line"]; !ok {
-		if value, ok := normalizedParams["startLine"]; ok {
-			normalizedParams["start_line"] = value
-		}
-	}
-	if _, ok := normalizedParams["end_line"]; !ok {
-		if value, ok := normalizedParams["endLine"]; ok {
-			normalizedParams["end_line"] = value
-		}
-	}
-	startLine, endLine, err := fileReadRange(normalizedParams)
+	offset, limit, err := fileReadRange(input.Params)
 	if err != nil {
 		return ToolOutput{}, err
 	}
@@ -139,58 +138,88 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	}
 	if isLikelyBinaryFile(filePath, sample[:readCount]) {
 		return ToolOutput{
-			Output:  fmt.Sprintf("%s: binary or image-like file detected; read_file only supports text files and skipped this read for safety", filePath),
-			IsError: true,
+			Output:   fmt.Sprintf("%s: binary or image-like file detected; read_file only supports text files and skipped this read for safety", filePath),
+			IsError:  true,
+			FilePath: filePath,
 		}, nil
 	}
 
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 0, 64*1024), fileReadMaxTokenBytes)
-
-	var builder strings.Builder
+	reader := bufio.NewReader(file)
 	lineNo := 0
-	hasMoreLines := false
-	for scanner.Scan() {
+	partial := false
+	lineClipped := false
+	nextOffset := offset
+	lines := make([]fileReadRenderedLine, 0, min(limit, 128))
+	outputBytes := 0
+
+	for {
 		select {
 		case <-ctx.Done():
 			return ToolOutput{}, ctx.Err()
 		default:
 		}
 
-		lineNo++
-		if lineNo < startLine {
-			continue
+		rawLine, readErr := reader.ReadString('\n')
+		if readErr != nil && !errors.Is(readErr, io.EOF) {
+			return ToolOutput{}, fmt.Errorf("read file %q: %w", filePath, readErr)
 		}
-		if endLine > 0 && lineNo > endLine {
-			hasMoreLines = true
+		if errors.Is(readErr, io.EOF) && rawLine == "" {
 			break
 		}
-		fmt.Fprintf(&builder, "%d\t%s\n", lineNo, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		if errors.Is(err, bufio.ErrTooLong) {
-			notice := fmt.Sprintf("[Output truncated: encountered a line longer than %d bytes while reading %s]", fileReadMaxTokenBytes, filePath)
-			output := strings.TrimRight(builder.String(), "\n")
-			if output == "" {
-				return ToolOutput{Output: notice, Truncated: true}, nil
+
+		lineNo++
+		if lineNo < offset {
+			if errors.Is(readErr, io.EOF) {
+				break
 			}
-			return ToolOutput{Output: output + "\n\n" + notice, Truncated: true}, nil
+			continue
 		}
-		return ToolOutput{}, fmt.Errorf("read file %q: %w", filePath, err)
+		if len(lines) >= limit {
+			partial = true
+			nextOffset = lineNo
+			break
+		}
+
+		trimmedLine := strings.TrimSuffix(rawLine, "\n")
+		trimmedLine = strings.TrimSuffix(trimmedLine, "\r")
+		renderedText, wasClipped := clipRenderedLine(trimmedLine)
+		lineClipped = lineClipped || wasClipped
+		renderedLine := fmt.Sprintf("%d\t%s", lineNo, renderedText)
+		addedBytes := len(renderedLine)
+		if outputBytes > 0 {
+			addedBytes++
+		}
+		if outputBytes+addedBytes > fileReadMaxOutputBytes {
+			partial = true
+			nextOffset = lineNo
+			break
+		}
+
+		lines = append(lines, fileReadRenderedLine{lineNo: lineNo, text: renderedLine})
+		outputBytes += addedBytes
+		nextOffset = lineNo + 1
+
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
 	}
 
-	if builder.Len() == 0 {
-		return ToolOutput{Output: fmt.Sprintf("%s: no content in requested range", filePath)}, nil
+	if len(lines) == 0 {
+		return ToolOutput{Output: fmt.Sprintf("%s: no content in requested range", filePath), FilePath: filePath}, nil
 	}
 
-	output := strings.TrimRight(builder.String(), "\n")
-	if hasMoreLines && endLine > 0 {
-		nextStart := endLine + 1
-		nextEnd := endLine + max(1, endLine-startLine+1)
-		output += fmt.Sprintf("\n\n[Partial read. Continue with start_line=%d and end_line=%d.]", nextStart, nextEnd)
-		return ToolOutput{Output: output, Truncated: true}, nil
+	output := renderReadOutput(lines, partial, nextOffset, limit)
+	preview := output
+	if len(preview) > PreviewChars {
+		preview = preview[:PreviewChars]
 	}
-	return ToolOutput{Output: output}, nil
+
+	return ToolOutput{
+		Output:    output,
+		Truncated: partial || lineClipped,
+		FilePath:  filePath,
+		Preview:   preview,
+	}, nil
 }
 
 func isLikelyBinaryFile(filePath string, sample []byte) bool {
@@ -217,25 +246,70 @@ func isLikelyBinaryFile(filePath string, sample []byte) bool {
 }
 
 func fileReadRange(params map[string]any) (int, int, error) {
-	startLine := 1
-	if value, ok := intParam(params, "start_line"); ok {
+	offset := 1
+	if value, ok := intParam(params, "offset"); ok {
 		if value < 1 {
-			return 0, 0, fmt.Errorf("start_line must be >= 1")
+			return 0, 0, fmt.Errorf("offset must be >= 1")
 		}
-		startLine = value
+		offset = value
 	}
 
-	endLine := 0
-	if value, ok := intParam(params, "end_line"); ok {
+	limit := fileReadDefaultLimitLines
+	if value, ok := intParam(params, "limit"); ok {
 		if value < 1 {
-			return 0, 0, fmt.Errorf("end_line must be >= 1")
+			return 0, 0, fmt.Errorf("limit must be >= 1")
 		}
-		endLine = value
+		limit = min(value, fileReadMaxLimitLines)
 	}
-	if endLine > 0 && endLine < startLine {
-		return 0, 0, fmt.Errorf("end_line must be >= start_line")
+	return offset, limit, nil
+}
+
+func clipRenderedLine(line string) (string, bool) {
+	if utf8.RuneCountInString(line) <= fileReadMaxRenderedLineChars {
+		return line, false
 	}
-	return startLine, endLine, nil
+	trimTo := max(1, fileReadMaxRenderedLineChars-3)
+	var builder strings.Builder
+	runeCount := 0
+	for _, r := range line {
+		if runeCount >= trimTo {
+			break
+		}
+		builder.WriteRune(r)
+		runeCount++
+	}
+	builder.WriteString("...")
+	return builder.String(), true
+}
+
+func renderReadOutput(lines []fileReadRenderedLine, partial bool, nextOffset, limit int) string {
+	if !partial {
+		return joinRenderedReadLines(lines)
+	}
+	for {
+		hint := fmt.Sprintf("[Partial read. Continue with offset=%d limit=%d.]", nextOffset, limit)
+		body := joinRenderedReadLines(lines)
+		candidate := hint
+		if body != "" {
+			candidate = body + "\n\n" + hint
+		}
+		if len(candidate) <= fileReadMaxOutputBytes || len(lines) == 0 {
+			return candidate
+		}
+		nextOffset = lines[len(lines)-1].lineNo
+		lines = lines[:len(lines)-1]
+	}
+}
+
+func joinRenderedReadLines(lines []fileReadRenderedLine) string {
+	if len(lines) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		parts = append(parts, line.text)
+	}
+	return strings.Join(parts, "\n")
 }
 
 func intParam(params map[string]any, key string) (int, bool) {

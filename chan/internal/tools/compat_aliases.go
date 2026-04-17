@@ -124,14 +124,24 @@ func (t *ReadFileAliasTool) InputSchema() any {
 				"type":        "string",
 				"description": "Snake_case compatibility alias for the file path.",
 			},
+			"offset": map[string]any{
+				"type":        "integer",
+				"description": "Optional 1-based starting line.",
+				"minimum":     1,
+			},
+			"limit": map[string]any{
+				"type":        "integer",
+				"description": "Optional number of lines to read.",
+				"minimum":     1,
+			},
 			"startLine": map[string]any{
 				"type":        "integer",
-				"description": "Optional 1-based start line.",
+				"description": "Legacy line-range parameter. No longer supported; use offset instead.",
 				"minimum":     1,
 			},
 			"endLine": map[string]any{
 				"type":        "integer",
-				"description": "Optional 1-based inclusive end line.",
+				"description": "Legacy line-range parameter. No longer supported; use limit instead.",
 				"minimum":     1,
 			},
 		},
@@ -160,11 +170,14 @@ func (t *ReadFileAliasTool) Execute(ctx context.Context, input ToolInput) (ToolO
 	params := map[string]any{
 		"file_path": filePath,
 	}
-	if startLine, ok := firstIntParam(input.Params, "startLine", "start_line"); ok {
-		params["start_line"] = startLine
+	if offset, ok := firstIntParam(input.Params, "offset"); ok {
+		params["offset"] = offset
 	}
-	if endLine, ok := firstIntParam(input.Params, "endLine", "end_line"); ok {
-		params["end_line"] = endLine
+	if limit, ok := firstIntParam(input.Params, "limit"); ok {
+		params["limit"] = limit
+	}
+	if _, ok := firstParam(input.Params, "startLine", "endLine", "start_line", "end_line"); ok {
+		params["startLine"] = true
 	}
 
 	delegate := NewFileReadTool()

@@ -12,11 +12,11 @@
    - Notes: Added this file to track task-by-task execution and commits.
 
 2. Refactor `read_file` API
-   - Status: pending
-   - Notes: Move to `filePath` + `offset` + `limit`, add bounded default reads, byte cap, long-line clipping, and canonical continuation hints.
+   - Status: completed
+   - Notes: `read_file` now uses `filePath` + `offset` + `limit`, applies bounded default reads, clips long lines, caps output bytes, emits canonical continuation hints, and rejects legacy line-range parameters.
 
 3. Add reread dedup state
-   - Status: pending
+   - Status: in progress
    - Notes: Add session-scoped unchanged-slice suppression keyed by path, range, size, and modification time.
 
 4. Invalidate cache on writes
