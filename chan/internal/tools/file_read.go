@@ -38,7 +38,7 @@ func (t *FileReadTool) Name() string {
 }
 
 func (t *FileReadTool) Description() string {
-	return "Read the contents of a text file. Use filePath with an optional 1-based offset and limit. For large files, use grep_search first to find anchors, then read a larger bounded window instead of many tiny slices. Reads are bounded by default; continue truncated reads with offset and limit, and avoid legacy line-range parameters or rereading the same unchanged slice."
+	return "Read the contents of a text file. Use filePath with an optional 1-based offset and limit. For large files, use grep_search first to find anchors, then read a larger bounded window instead of many tiny slices. Reads are bounded by default; continue truncated reads with offset and limit, and avoid rereading the same unchanged slice."
 }
 
 func (t *FileReadTool) InputSchema() any {
@@ -66,10 +66,6 @@ func (t *FileReadTool) InputSchema() any {
 }
 
 func (t *FileReadTool) Validate(input ToolInput) error {
-	if _, ok := firstParam(input.Params, "startLine", "endLine", "start_line", "end_line"); ok {
-		recordFileReadMetric(FileReadMetric{LegacyParamRejected: true})
-		return fmt.Errorf("read_file no longer accepts startLine/endLine; use offset and limit")
-	}
 	filePath, ok := firstStringParam(input.Params, "filePath", "file_path", "path")
 	if !ok || strings.TrimSpace(filePath) == "" {
 		return fmt.Errorf("read_file requires filePath")
@@ -98,9 +94,6 @@ func (t *FileReadTool) Concurrency(input ToolInput) ConcurrencyDecision {
 }
 
 func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
-	if _, ok := firstParam(input.Params, "startLine", "endLine", "start_line", "end_line"); ok {
-		return ToolOutput{}, fmt.Errorf("read_file no longer accepts startLine/endLine; use offset and limit")
-	}
 	filePath, ok := firstStringParam(input.Params, "filePath", "file_path", "path")
 	if !ok || strings.TrimSpace(filePath) == "" {
 		return ToolOutput{}, fmt.Errorf("read_file requires filePath")

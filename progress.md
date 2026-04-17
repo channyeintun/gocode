@@ -13,7 +13,7 @@
 
 2. Refactor `read_file` API
    - Status: completed
-   - Notes: `read_file` now uses `filePath` + `offset` + `limit`, applies bounded default reads, clips long lines, caps output bytes, emits canonical continuation hints, and rejects legacy line-range parameters.
+   - Notes: `read_file` now uses only `filePath` + `offset` + `limit`, applies bounded default reads, clips long lines, caps output bytes, and emits canonical continuation hints.
 
 3. Add reread dedup state
    - Status: completed

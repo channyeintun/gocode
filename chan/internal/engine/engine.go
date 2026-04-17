@@ -439,7 +439,6 @@ Read policy:
 - read_file uses filePath with optional offset and limit. Default reads are bounded.
 - Prefer one useful window over many tiny slices.
 - When read_file is truncated, continue with the hinted offset and limit.
-- Do not use legacy startLine/endLine parameters.
 
 File-edit ladder:
 - replace_string_in_file: one literal replacement, one file

@@ -134,16 +134,6 @@ func (t *ReadFileAliasTool) InputSchema() any {
 				"description": "Optional number of lines to read.",
 				"minimum":     1,
 			},
-			"startLine": map[string]any{
-				"type":        "integer",
-				"description": "Legacy line-range parameter. No longer supported; use offset instead.",
-				"minimum":     1,
-			},
-			"endLine": map[string]any{
-				"type":        "integer",
-				"description": "Legacy line-range parameter. No longer supported; use limit instead.",
-				"minimum":     1,
-			},
 		},
 		"anyOf": []map[string]any{
 			{"required": []string{"path"}},
@@ -175,9 +165,6 @@ func (t *ReadFileAliasTool) Execute(ctx context.Context, input ToolInput) (ToolO
 	}
 	if limit, ok := firstIntParam(input.Params, "limit"); ok {
 		params["limit"] = limit
-	}
-	if _, ok := firstParam(input.Params, "startLine", "endLine", "start_line", "end_line"); ok {
-		params["startLine"] = true
 	}
 
 	delegate := NewFileReadTool()

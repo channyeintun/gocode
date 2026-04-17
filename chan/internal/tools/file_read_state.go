@@ -24,13 +24,12 @@ type fileReadStateEntry struct {
 }
 
 type FileReadMetric struct {
-	RequestedOffset     int
-	RequestedLimit      int
-	LinesReturned       int
-	BytesReturned       int
-	Truncated           bool
-	UnchangedHit        bool
-	LegacyParamRejected bool
+	RequestedOffset int
+	RequestedLimit  int
+	LinesReturned   int
+	BytesReturned   int
+	Truncated       bool
+	UnchangedHit    bool
 }
 
 const maxFileReadMetrics = 256
