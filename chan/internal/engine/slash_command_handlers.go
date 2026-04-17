@@ -1093,8 +1093,11 @@ func handleHelpSlashCommand(cmd *slashCommandContext) error {
 }
 
 func handleStatusSlashCommand(cmd *slashCommandContext) error {
-	statusText := commandspkg.FormatStatusText(cmd.state.SessionID, cmd.state.StartedAt, cmd.state.Mode, cmd.state.ActiveModelID, cmd.state.SubagentModelID, cmd.state.CWD, len(cmd.state.Messages), cmd.tracker)
-	statusText += fmt.Sprintf("\nSession memory: %s\nMicrocompact: %s", enabledDisabled(cmd.cfg.EnableSessionMemory), enabledDisabled(cmd.cfg.EnableMicrocompact))
+	statusCfg := config.LoadForWorkingDir(cmd.state.CWD)
+	statusCfg.Model = cmd.state.ActiveModelID
+	snapshot := commandspkg.DiscoverProviderSnapshot(statusCfg)
+	statusText := commandspkg.FormatStatusText(cmd.state.SessionID, cmd.state.StartedAt, cmd.state.Mode, cmd.state.ActiveModelID, cmd.state.SubagentModelID, cmd.state.CWD, len(cmd.state.Messages), cmd.tracker, statusCfg, snapshot)
+	statusText += fmt.Sprintf("\nSession memory: %s\nMicrocompact: %s", enabledDisabled(statusCfg.EnableSessionMemory), enabledDisabled(statusCfg.EnableMicrocompact))
 	if mcpText := formatMCPStatusText(cmd.mcpManager); mcpText != "" {
 		statusText += "\n\n" + mcpText
 	}

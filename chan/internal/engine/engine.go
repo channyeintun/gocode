@@ -42,12 +42,14 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 
 	bridge := ipc.NewBridge(stdinR, stdoutW)
 	registry := toolpkg.NewRegistry()
-	provider, model := config.ParseModel(cfg.Model)
-	provider = normalizeProvider(provider)
+	startupSelection := resolveStartupProviderSelection(cfg)
+	provider := normalizeProvider(startupSelection.Provider)
+	model := strings.TrimSpace(startupSelection.Model)
 	var (
 		client          api.LLMClient
 		startupModelErr error
 	)
+	startupNotice := strings.TrimSpace(startupSelection.Notice)
 	toolUseNoticeModelID := ""
 	activeModelID := modelRef(provider, model)
 	client, err := newLLMClient(provider, model, cfg)
@@ -160,6 +162,11 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	})
 	if slashDescriptorErr != nil {
 		if err := bridge.EmitNotice(fmt.Sprintf("load slash skills: %v", slashDescriptorErr)); err != nil {
+			return err
+		}
+	}
+	if startupNotice != "" {
+		if err := bridge.EmitNotice(startupNotice); err != nil {
 			return err
 		}
 	}

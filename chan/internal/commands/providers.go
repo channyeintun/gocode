@@ -109,6 +109,16 @@ func (snapshot ProviderSnapshot) FirstUsable() (ProviderStatus, bool) {
 	return ProviderStatus{}, false
 }
 
+func (snapshot ProviderSnapshot) LookupProvider(providerID string) (ProviderStatus, bool) {
+	providerID = normalizeProviderID(providerID)
+	for _, status := range snapshot.Providers {
+		if status.ID == providerID {
+			return status, true
+		}
+	}
+	return ProviderStatus{}, false
+}
+
 func ResolveModelSelection(selection string) (string, string) {
 	provider, model := config.ParseModel(strings.TrimSpace(selection))
 	provider = normalizeProviderID(provider)

@@ -143,10 +143,10 @@ func FormatHelpText(catalog []Descriptor) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func FormatStatusText(sessionID string, startedAt time.Time, mode agent.ExecutionMode, model string, subagentModel string, cwd string, msgCount int, tracker *costpkg.Tracker) string {
+func FormatStatusText(sessionID string, startedAt time.Time, mode agent.ExecutionMode, model string, subagentModel string, cwd string, msgCount int, tracker *costpkg.Tracker, cfg config.Config, snapshot ProviderSnapshot) string {
 	elapsed := time.Since(startedAt).Round(time.Second)
 	snap := tracker.Snapshot()
-	reasoning := DescribeReasoningEffort(strings.TrimSpace(config.Load().ReasoningEffort), model)
+	reasoning := DescribeReasoningEffort(strings.TrimSpace(cfg.ReasoningEffort), model)
 	lines := []string{
 		fmt.Sprintf("Session: %s", sessionID),
 		fmt.Sprintf("Started: %s (%s ago)", startedAt.Format(time.RFC3339), elapsed),
@@ -154,6 +154,8 @@ func FormatStatusText(sessionID string, startedAt time.Time, mode agent.Executio
 		fmt.Sprintf("Model: %s", FormatModelSelectionLabel(model)),
 		fmt.Sprintf("Subagent: %s", FormatModelSelectionLabel(subagentModel)),
 		fmt.Sprintf("Reasoning: %s", reasoning),
+		formatActiveProviderStatusLine(snapshot),
+		formatFirstUsableProviderLine(snapshot),
 		fmt.Sprintf("CWD: %s", cwd),
 		fmt.Sprintf("Messages: %d", msgCount),
 		fmt.Sprintf("Cost: $%.4f", snap.TotalCostUSD),
@@ -164,6 +166,24 @@ func FormatStatusText(sessionID string, startedAt time.Time, mode agent.Executio
 		lines = append(lines, childLine)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatActiveProviderStatusLine(snapshot ProviderSnapshot) string {
+	if snapshot.ActiveProvider == "" {
+		return "Provider: unknown"
+	}
+	status, ok := snapshot.LookupProvider(snapshot.ActiveProvider)
+	if !ok {
+		return fmt.Sprintf("Provider: %s", snapshot.ActiveProvider)
+	}
+	return fmt.Sprintf("Provider: %s (%s, source %s)", status.ID, providerStateLabel(status), status.AuthSource)
+}
+
+func formatFirstUsableProviderLine(snapshot ProviderSnapshot) string {
+	if first, ok := snapshot.FirstUsable(); ok {
+		return fmt.Sprintf("First usable provider: %s/%s", first.ID, first.DefaultModel)
+	}
+	return "First usable provider: none"
 }
 
 func formatCacheStatusLine(snapshot costpkg.TrackerSnapshot) string {

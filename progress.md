@@ -68,10 +68,11 @@
    - Notes: Added a new `/providers` slash command that uses the shared provider snapshot and reports the active selection, first usable provider, per-provider auth source, setup state, and next action when setup is required.
 
 4. Improve startup and session status UX
-   - Status: in progress
+   - Status: completed
+   - Notes: Startup now uses provider discovery to fall back from an unusable default to the first safe provider with credentials, emits a clear notice when it switches, avoids optimistic auto-fallback to Ollama, and shows provider state in `/status`.
 
 5. Generalize `/connect`
-   - Status: not started
+   - Status: in progress
 
 6. Redesign model picker around provider state
    - Status: not started
