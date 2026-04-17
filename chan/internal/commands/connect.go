@@ -99,7 +99,7 @@ func FormatConnectOverviewText(snapshot ProviderSnapshot) string {
 	for _, spec := range ConnectProviderCatalog() {
 		state := "needs setup"
 		if status, ok := snapshot.LookupProvider(spec.ID); ok {
-			state = providerStateLabel(status)
+			state = ProviderStateLabel(status)
 		}
 		b.WriteString(fmt.Sprintf("  %-28s %s (%s)\n", "/connect "+spec.ID, connectMethodSummary(spec.Methods), state))
 	}
@@ -115,7 +115,7 @@ func FormatConnectProviderGuidance(spec ConnectProviderSpec, snapshot ProviderSn
 		fmt.Sprintf("%s setup", spec.Label),
 		"",
 		fmt.Sprintf("Default model: %s/%s", spec.ID, spec.DefaultModel),
-		fmt.Sprintf("Current state: %s", providerStateLabel(status)),
+		fmt.Sprintf("Current state: %s", ProviderStateLabel(status)),
 		fmt.Sprintf("Auth source: %s", status.AuthSource),
 	}
 	if status.LastError != "" {

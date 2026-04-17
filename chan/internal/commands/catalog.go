@@ -156,7 +156,7 @@ func formatActiveProviderStatusLine(snapshot ProviderSnapshot) string {
 	if !ok {
 		return fmt.Sprintf("Provider: %s", snapshot.ActiveProvider)
 	}
-	return fmt.Sprintf("Provider: %s (%s, source %s)", status.ID, providerStateLabel(status), status.AuthSource)
+	return fmt.Sprintf("Provider: %s (%s, source %s)", status.ID, ProviderStateLabel(status), status.AuthSource)
 }
 
 func formatFirstUsableProviderLine(snapshot ProviderSnapshot) string {
