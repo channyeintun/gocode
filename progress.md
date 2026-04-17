@@ -54,8 +54,8 @@
    - Notes: Updated `/connect` provider snapshots to use the live session model instead of the persisted config model so overview and status output match startup fallback and in-session model switches.
 
 3. Restore richer provider-aware model picker choices
-   - Status: pending
-   - Notes: Pending implementation.
+   - Status: completed
+   - Notes: Restored curated quick-pick models alongside provider defaults, preserved provider-state labels in the picker, and updated custom model entry paths to accept explicit `provider/model` input when the user needs to disambiguate providers.
 
 ---
 

@@ -125,6 +125,78 @@ var curatedModelSelectionPresets = []modelSelectionPreset{
 	},
 }
 
+func appendCuratedModelSelectionOptions(options []ipc.ModelSelectionOptionPayload, snapshot commandspkg.ProviderSnapshot, currentSelection string) []ipc.ModelSelectionOptionPayload {
+	if len(curatedModelSelectionPresets) == 0 {
+		return options
+	}
+
+	currentProvider, currentModel := commandspkg.ResolveModelSelection(currentSelection)
+	currentRef := modelSelectionOptionRef(currentProvider, currentModel)
+	merged := append([]ipc.ModelSelectionOptionPayload(nil), options...)
+	seen := make(map[string]struct{}, len(merged)+len(curatedModelSelectionPresets))
+	for _, option := range merged {
+		ref := modelSelectionOptionRef(option.Provider, option.Model)
+		if ref == "" {
+			continue
+		}
+		seen[ref] = struct{}{}
+	}
+
+	appendMatchingPresets := func(match func(commandspkg.ProviderStatus) bool) {
+		for _, preset := range curatedModelSelectionPresets {
+			providerID := normalizeProvider(strings.TrimSpace(preset.Provider))
+			status, ok := snapshot.LookupProvider(providerID)
+			if !ok || !match(status) {
+				continue
+			}
+
+			ref := modelSelectionOptionRef(providerID, preset.Model)
+			if _, exists := seen[ref]; exists {
+				continue
+			}
+
+			merged = append(merged, ipc.ModelSelectionOptionPayload{
+				Label:       fmt.Sprintf("%s · %s · %s", preset.Label, status.Label, commandspkg.ProviderStateLabel(status)),
+				Model:       strings.TrimSpace(preset.Model),
+				Provider:    providerID,
+				Description: formatCuratedModelSelectionDescription(preset.Description, status),
+				Active:      strings.EqualFold(ref, currentRef),
+			})
+			seen[ref] = struct{}{}
+		}
+	}
+
+	appendMatchingPresets(func(status commandspkg.ProviderStatus) bool { return status.Usable })
+	appendMatchingPresets(func(status commandspkg.ProviderStatus) bool { return !status.Usable })
+	return merged
+}
+
+func formatCuratedModelSelectionDescription(summary string, status commandspkg.ProviderStatus) string {
+	parts := make([]string, 0, 3)
+	if trimmed := strings.TrimSpace(summary); trimmed != "" {
+		parts = append(parts, trimmed)
+	}
+	if status.AuthSource != "" && status.AuthSource != "none" {
+		parts = append(parts, status.AuthSource)
+	}
+	if !status.Usable && status.SetupHint != "" {
+		parts = append(parts, status.SetupHint)
+	}
+	if len(parts) == 0 {
+		parts = append(parts, "Curated model preset")
+	}
+	return strings.Join(parts, " · ")
+}
+
+func modelSelectionOptionRef(provider string, model string) string {
+	provider = normalizeProvider(strings.TrimSpace(provider))
+	model = strings.TrimSpace(model)
+	if provider == "" && model == "" {
+		return ""
+	}
+	return strings.ToLower(modelRef(provider, model))
+}
+
 func newSlashCommandContext(
 	ctx context.Context,
 	bridge *ipc.Bridge,
@@ -605,7 +677,13 @@ func normalizeModelSlashInput(input string) (string, error) {
 		return "", fmt.Errorf("model cannot be empty")
 	}
 	if strings.Contains(compact, "/") {
-		return "", fmt.Errorf("/model only accepts a model name. Remove the provider prefix and try again")
+		provider, model := config.ParseModel(compact)
+		provider = normalizeProvider(strings.TrimSpace(provider))
+		model = strings.TrimSpace(model)
+		if provider == "" || model == "" {
+			return "", fmt.Errorf("model must use provider/model format")
+		}
+		return modelRef(provider, model), nil
 	}
 	return compact, nil
 }
@@ -634,9 +712,10 @@ func promptModelSelection(cmd *slashCommandContext, currentSelection string) (mo
 	selectionCfg.Model = currentSelection
 	snapshot := commandspkg.DiscoverProviderSnapshot(selectionCfg)
 	options := commandspkg.BuildModelSelectionOptions(snapshot, currentSelection)
+	options = appendCuratedModelSelectionOptions(options, snapshot, currentSelection)
 	options = append(options, ipc.ModelSelectionOptionPayload{
 		Label:       "Custom model",
-		Description: "Enter any model id",
+		Description: "Enter a model id or provider/model",
 		IsCustom:    true,
 	})
 

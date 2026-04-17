@@ -238,7 +238,7 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
         </Text>
         <Box marginTop={compactLayout ? 0 : 1} flexDirection="column" minWidth={0}>
           {!compactLayout ? (
-            <Text>Choose the active model or a provider default for the session.</Text>
+            <Text>Choose the active model, a curated preset, or a provider default for the session.</Text>
           ) : null}
           <Text color="$muted">
             Current: {formatCurrentModel(selection.currentModel)}
@@ -268,8 +268,8 @@ const ModelSelectionPrompt: FC<ModelSelectionPromptProps> = ({
           <Text color="$primary">Custom model</Text>
           <Text color="$muted">
             {compactLayout
-              ? "Model id only. No provider prefix."
-              : "Enter a model id only. Provider prefixes are not accepted."}
+              ? "Model id or provider/model."
+              : "Enter a model id or provider/model to pick a specific provider."}
           </Text>
           <Text>{renderEditableValue(customValue, cursorOffset)}</Text>
         </Box>
