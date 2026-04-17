@@ -89,7 +89,9 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 
 	startupMetrics := timing.NewCheckpointRecorder(engineStartedAt)
 	fileHistory := toolpkg.NewFileHistory(toolpkg.DefaultFileHistoryDir(sessionDir))
+	fileReadState := toolpkg.NewFileReadState()
 	toolpkg.SetGlobalFileHistory(fileHistory)
+	toolpkg.SetGlobalFileReadState(fileReadState)
 	toolpkg.SetGlobalSessionArtifacts(sessionID, artifactManager)
 	if client != nil {
 		startClientWarmup(ctx, timingLogger, startupMetrics, sessionID, activeModelID, client)

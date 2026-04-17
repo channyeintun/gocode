@@ -121,6 +121,14 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	if err != nil {
 		return ToolOutput{}, err
 	}
+	if readState := GetGlobalFileReadState(); readState != nil && readState.SeenUnchanged(filePath, offset, limit, info) {
+		stub := fmt.Sprintf("[File unchanged since last read: %s (offset=%d limit=%d).]", filePath, offset, limit)
+		preview := stub
+		if len(preview) > PreviewChars {
+			preview = preview[:PreviewChars]
+		}
+		return ToolOutput{Output: stub, FilePath: filePath, Preview: preview}, nil
+	}
 
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -205,6 +213,9 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	}
 
 	if len(lines) == 0 {
+		if readState := GetGlobalFileReadState(); readState != nil {
+			readState.Remember(filePath, offset, limit, info)
+		}
 		return ToolOutput{Output: fmt.Sprintf("%s: no content in requested range", filePath), FilePath: filePath}, nil
 	}
 
@@ -212,6 +223,9 @@ func (t *FileReadTool) Execute(ctx context.Context, input ToolInput) (ToolOutput
 	preview := output
 	if len(preview) > PreviewChars {
 		preview = preview[:PreviewChars]
+	}
+	if readState := GetGlobalFileReadState(); readState != nil {
+		readState.Remember(filePath, offset, limit, info)
 	}
 
 	return ToolOutput{

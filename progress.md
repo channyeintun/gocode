@@ -16,11 +16,11 @@
    - Notes: `read_file` now uses `filePath` + `offset` + `limit`, applies bounded default reads, clips long lines, caps output bytes, emits canonical continuation hints, and rejects legacy line-range parameters.
 
 3. Add reread dedup state
-   - Status: in progress
-   - Notes: Add session-scoped unchanged-slice suppression keyed by path, range, size, and modification time.
+   - Status: completed
+   - Notes: Added session-scoped unchanged-slice suppression keyed by path, offset, limit, size, and modification time, and wired it into engine startup plus `read_file`.
 
 4. Invalidate cache on writes
-   - Status: pending
+   - Status: in progress
    - Notes: Invalidate read-state entries after successful file mutations.
 
 5. Tighten prompt guidance
