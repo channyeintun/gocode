@@ -594,6 +594,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
               imageCount: queuedPrompt.images.length,
             }))}
             liveBlocks={uiState.liveAssistantBlocks}
+            liveAssistantMessageId={uiState.liveAssistantMessageId}
             isStreaming={uiState.isStreaming}
             activeTurnStatus={uiState.activeTurnStatus}
             model={uiState.model}

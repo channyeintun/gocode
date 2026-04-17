@@ -37,11 +37,11 @@ func (t *GrepTool) InputSchema() any {
 		"properties": map[string]any{
 			"query": map[string]any{
 				"type":        "string",
-				"description": "The exact string or regex pattern to search for in files.",
+				"description": "The text to search for in files. Treated as an exact string unless isRegexp is true.",
 			},
 			"isRegexp": map[string]any{
 				"type":        "boolean",
-				"description": "Whether query should be treated as a regex. Defaults to true when pattern is provided directly.",
+				"description": "Whether query should be treated as a regex. Defaults to false for query and true for pattern.",
 			},
 			"includePattern": map[string]any{
 				"type":        "string",
@@ -58,7 +58,7 @@ func (t *GrepTool) InputSchema() any {
 			},
 			"pattern": map[string]any{
 				"type":        "string",
-				"description": "Compatibility alias for the regular expression pattern to search for in file contents.",
+				"description": "Compatibility alias for a regex pattern to search for in file contents.",
 			},
 			"path": map[string]any{
 				"type":        "string",
@@ -109,10 +109,11 @@ func (t *GrepTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, er
 	}
 	if pattern, ok := stringParam(normalizedParams, "pattern"); !ok || strings.TrimSpace(pattern) == "" {
 		if query, ok := stringParam(normalizedParams, "query"); ok && strings.TrimSpace(query) != "" {
-			if isRegexp, ok := normalizedParams["isRegexp"].(bool); ok && !isRegexp {
-				normalizedParams["pattern"] = regexp.QuoteMeta(query)
-			} else {
+			isRegexp, hasRegexpFlag := normalizedParams["isRegexp"].(bool)
+			if hasRegexpFlag && isRegexp {
 				normalizedParams["pattern"] = query
+			} else {
+				normalizedParams["pattern"] = regexp.QuoteMeta(query)
 			}
 		}
 	}

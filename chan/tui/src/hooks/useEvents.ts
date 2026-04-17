@@ -282,6 +282,7 @@ export interface EngineUIState {
   messages: UIMessage[];
   progressEntries: UIProgressEntry[];
   transcript: UITranscriptEntry[];
+  liveAssistantMessageId: string | null;
   liveAssistantBlocks: UIAssistantBlock[];
   activeTurnStatus: UIActiveTurnStatus;
   showPlanPanel: boolean;
@@ -360,6 +361,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
   messages: [],
   progressEntries: [],
   transcript: [],
+  liveAssistantMessageId: null,
   liveAssistantBlocks: [],
   activeTurnStatus: "idle",
   showPlanPanel: false,
@@ -415,16 +417,21 @@ function createUserMessage(text: string): UIUserMessage {
 
 function createAssistantMessage(
   blocks: UIAssistantBlock[],
-  options?: { model?: string },
+  options?: { id?: string; model?: string },
 ): UIAssistantMessage {
-  nextMessageId += 1;
+  const id = options?.id ?? nextGeneratedMessageID();
   return {
-    id: `msg-${nextMessageId}`,
+    id,
     role: "assistant",
     blocks,
     timestamp: new Date().toISOString(),
     model: options?.model,
   };
+}
+
+function nextGeneratedMessageID(): string {
+  nextMessageId += 1;
+  return `msg-${nextMessageId}`;
 }
 
 function createSystemMessage(
@@ -553,34 +560,58 @@ export function useEvents(initialModel: string, initialMode: string) {
       }
       case "token_delta": {
         const p = event.payload as TokenDeltaPayload;
-        setUIState((s) => ({
-          ...s,
-          liveAssistantBlocks: appendAssistantBlock(
-            s.liveAssistantBlocks,
-            "text",
-            p.text,
-          ),
-          activeTurnStatus: "responding",
-          isStreaming: true,
-          statusLine: null,
-          error: null,
-        }));
+        setUIState((s) => {
+          const liveAssistantMessageId =
+            s.liveAssistantMessageId ?? nextGeneratedMessageID();
+          return {
+            ...s,
+            transcript:
+              s.liveAssistantMessageId === null
+                ? appendTranscriptEntry(s.transcript, {
+                    id: liveAssistantMessageId,
+                    kind: "message",
+                  })
+                : s.transcript,
+            liveAssistantMessageId,
+            liveAssistantBlocks: appendAssistantBlock(
+              s.liveAssistantBlocks,
+              "text",
+              p.text,
+            ),
+            activeTurnStatus: "responding",
+            isStreaming: true,
+            statusLine: null,
+            error: null,
+          };
+        });
         break;
       }
       case "thinking_delta": {
         const p = event.payload as TokenDeltaPayload;
-        setUIState((s) => ({
-          ...s,
-          liveAssistantBlocks: appendAssistantBlock(
-            s.liveAssistantBlocks,
-            "thinking",
-            p.text,
-          ),
-          activeTurnStatus: "thinking",
-          isStreaming: true,
-          statusLine: null,
-          error: null,
-        }));
+        setUIState((s) => {
+          const liveAssistantMessageId =
+            s.liveAssistantMessageId ?? nextGeneratedMessageID();
+          return {
+            ...s,
+            transcript:
+              s.liveAssistantMessageId === null
+                ? appendTranscriptEntry(s.transcript, {
+                    id: liveAssistantMessageId,
+                    kind: "message",
+                  })
+                : s.transcript,
+            liveAssistantMessageId,
+            liveAssistantBlocks: appendAssistantBlock(
+              s.liveAssistantBlocks,
+              "thinking",
+              p.text,
+            ),
+            activeTurnStatus: "thinking",
+            isStreaming: true,
+            statusLine: null,
+            error: null,
+          };
+        });
         break;
       }
       case "progress": {
@@ -619,6 +650,7 @@ export function useEvents(initialModel: string, initialMode: string) {
             const hasPartialResponse = partialBlocks.length > 0;
             const partialMessage = hasPartialResponse
               ? createAssistantMessage(partialBlocks, {
+                  id: s.liveAssistantMessageId ?? undefined,
                   model: s.model,
                 })
               : null;
@@ -628,12 +660,8 @@ export function useEvents(initialModel: string, initialMode: string) {
               messages: partialMessage
                 ? [...s.messages, partialMessage]
                 : s.messages,
-              transcript: partialMessage
-                ? appendTranscriptEntry(s.transcript, {
-                    id: partialMessage.id,
-                    kind: "message",
-                  })
-                : s.transcript,
+              transcript: s.transcript,
+              liveAssistantMessageId: null,
               liveAssistantBlocks: [],
               activeTurnStatus: "idle",
               pendingPermission: null,
@@ -654,14 +682,14 @@ export function useEvents(initialModel: string, initialMode: string) {
             completedBlocks.length > 0
               ? completedBlocks
               : [{ kind: "text", text: "(Model returned an empty response)" }];
-          const message = createAssistantMessage(blocks, { model: s.model });
+          const message = createAssistantMessage(blocks, {
+            id: s.liveAssistantMessageId ?? undefined,
+            model: s.model,
+          });
           return {
             ...s,
             messages: [...s.messages, message],
-            transcript: appendTranscriptEntry(s.transcript, {
-              id: message.id,
-              kind: "message",
-            }),
+            liveAssistantMessageId: null,
             liveAssistantBlocks: [],
             activeTurnStatus: "idle",
             submittingArtifactReviewRequestId: null,
@@ -1021,6 +1049,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           progressEntries: normalizeHydratedProgressEntries(p.progress),
           toolCalls: normalizeHydratedToolCalls(p.tool_calls),
           transcript: normalizeHydratedTranscriptEntries(p.transcript),
+          liveAssistantMessageId: null,
           liveAssistantBlocks: [],
           activeTurnStatus: "idle",
           isStreaming: false,
@@ -1328,6 +1357,7 @@ export function useEvents(initialModel: string, initialMode: string) {
           messages: [],
           progressEntries: [],
           transcript: [],
+          liveAssistantMessageId: null,
           liveAssistantBlocks: [],
           activeTurnStatus: "idle",
           showPlanPanel: false,
@@ -1397,6 +1427,7 @@ export function useEvents(initialModel: string, initialMode: string) {
               messages: [],
               progressEntries: [],
               transcript: [],
+              liveAssistantMessageId: null,
               liveAssistantBlocks: [],
               activeTurnStatus: "idle",
               showPlanPanel: false,
@@ -1479,6 +1510,7 @@ export function useEvents(initialModel: string, initialMode: string) {
   const clearStream = useCallback(() => {
     setUIState((s) => ({
       ...s,
+      liveAssistantMessageId: null,
       liveAssistantBlocks: [],
       activeTurnStatus: "idle",
       isStreaming: false,
@@ -1567,6 +1599,7 @@ export function useEvents(initialModel: string, initialMode: string) {
     setUIState((s) => ({
       ...s,
       liveAssistantBlocks: [],
+      liveAssistantMessageId: null,
       activeTurnStatus: "working",
       turnTiming: {
         firstTokenMs: null,

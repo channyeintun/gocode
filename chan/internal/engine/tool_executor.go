@@ -773,10 +773,11 @@ func normalizeToolCall(call api.ToolCall) (api.ToolCall, error) {
 		normalized.Name = "grep_search"
 		if pattern, ok := stringParamFromMap(normalizedParams, "pattern"); !ok || strings.TrimSpace(pattern) == "" {
 			if query, ok := stringParamFromMap(normalizedParams, "query"); ok && strings.TrimSpace(query) != "" {
-				if isRegexp, ok := normalizedParams["isRegexp"].(bool); ok && !isRegexp {
-					normalizedParams["pattern"] = regexp.QuoteMeta(query)
-				} else {
+				isRegexp, hasRegexpFlag := normalizedParams["isRegexp"].(bool)
+				if hasRegexpFlag && isRegexp {
 					normalizedParams["pattern"] = query
+				} else {
+					normalizedParams["pattern"] = regexp.QuoteMeta(query)
 				}
 			}
 		}

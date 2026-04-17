@@ -38,6 +38,7 @@ interface StreamOutputProps {
   artifacts: UIArtifact[];
   queuedPrompts: QueuedPromptPreview[];
   liveBlocks: UIAssistantBlock[];
+  liveAssistantMessageId?: string | null;
   isStreaming: boolean;
   activeTurnStatus: UIActiveTurnStatus;
   model: string;
@@ -92,6 +93,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
   artifacts,
   queuedPrompts,
   liveBlocks,
+  liveAssistantMessageId = null,
   isStreaming,
   activeTurnStatus,
   model,
@@ -127,8 +129,20 @@ const StreamOutput: FC<StreamOutputProps> = ({
         toolCallById,
         progressById,
         artifactById,
+        liveAssistantMessageId,
+        liveBlocks,
+        model,
       ),
-    [artifactById, messageById, progressById, toolCallById, transcript],
+    [
+      artifactById,
+      liveAssistantMessageId,
+      liveBlocks,
+      messageById,
+      model,
+      progressById,
+      toolCallById,
+      transcript,
+    ],
   );
   const displayBlocks = useMemo(() => {
     const items: DisplayBlock[] = transcriptBlocks.map((block) => ({
@@ -137,7 +151,7 @@ const StreamOutput: FC<StreamOutputProps> = ({
       block,
     }));
 
-    if (isStreaming) {
+    if (isStreaming && (!liveAssistantMessageId || liveBlocks.length === 0)) {
       items.push({ kind: "streaming", key: "live-stream" });
     }
 
@@ -448,6 +462,9 @@ function buildTranscriptBlocks(
   toolCallById: Map<string, UIToolCall>,
   progressById: Map<string, UIProgressEntry>,
   artifactById: Map<string, UIArtifact>,
+  liveAssistantMessageId: string | null,
+  liveBlocks: UIAssistantBlock[],
+  model: string,
 ): TranscriptBlock[] {
   const blocks: TranscriptBlock[] = [];
 
@@ -487,7 +504,14 @@ function buildTranscriptBlocks(
     }
 
     if (entry.kind !== "tool_call") {
-      const message = messageById.get(refID);
+      const message =
+        messageById.get(refID) ??
+        resolveLiveAssistantMessage(
+          refID,
+          liveAssistantMessageId,
+          liveBlocks,
+          model,
+        );
       if (!message) {
         continue;
       }
@@ -516,15 +540,35 @@ function buildTranscriptBlocks(
   return withMessageContinuations(blocks);
 }
 
+function resolveLiveAssistantMessage(
+  refID: string,
+  liveAssistantMessageId: string | null,
+  liveBlocks: UIAssistantBlock[],
+  model: string,
+): UIAssistantMessage | null {
+  if (
+    !liveAssistantMessageId ||
+    refID !== liveAssistantMessageId ||
+    liveBlocks.length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    id: liveAssistantMessageId,
+    role: "assistant",
+    blocks: liveBlocks,
+    timestamp: "",
+    model,
+  };
+}
+
 function ProgressMessage({ progress }: { progress: UIProgressEntry }) {
   return (
-    <MessageRow markerColor="$primary" markerDim>
-      <Text color="$primary" dimColor>
-        <Text bold>Progress</Text>
+    <MessageRow markerColor="$muted" markerDim marginBottom={0}>
+      <Text color="$muted" dimColor wrap="wrap">
+        {progress.text}
       </Text>
-      <Box width="100%" minWidth={0}>
-        <PreservedText text={progress.text} color="$muted" dimColor />
-      </Box>
     </MessageRow>
   );
 }
