@@ -176,7 +176,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
     }
 
     toast({
-      title: "Complete",
+      title: "Done ✓",
       variant: "success",
       duration: 2500,
     });
@@ -657,6 +657,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
           maxHeight="45%"
           overflow="scroll"
         >
+          <SafeToastContainer toasts={toasts} />
           {transcriptSearchActive && !keepPromptVisibleWithOverlay ? (
             <TranscriptSearchPrompt
               query={transcriptSearchQuery}
@@ -745,8 +746,6 @@ const App: FC<AppProps> = ({ enginePath, model, mode }) => {
       ) : (
         null
       )}
-
-      <SafeToastContainer toasts={toasts} />
     </Screen>
   );
 };
@@ -761,13 +760,7 @@ function SafeToastContainer({ toasts }: { toasts: ToastData[] }) {
   }
 
   return (
-    <Box
-      position="absolute"
-      width="100%"
-      height="100%"
-      justifyContent="center"
-      alignItems="center"
-    >
+    <Box flexDirection="row" justifyContent="center" marginBottom={1}>
       <SafeToastItem toast={latestToast} />
     </Box>
   );
@@ -803,56 +796,19 @@ function CenteredViewportOverlay({ children }: { children: React.ReactNode }) {
 }
 
 function SafeToastItem({ toast }: { toast: ToastData }) {
-  const accentColor = toastAccentColor(toast.variant);
-  const description =
-    typeof toast.description === "string" && toast.description.trim().length > 0
-      ? toast.description.trim()
-      : null;
-
   return (
     <Box
-      backgroundColor="$surface-bg"
-      borderColor={accentColor}
-      borderStyle="round"
-      flexDirection="column"
+      backgroundColor="$success"
+      flexDirection="row"
       flexShrink={0}
-      paddingY={1}
-      paddingX={2}
+      paddingY={0}
+      paddingX={1}
     >
-      <Text color={accentColor} bold>
-        {toastVariantIcon(toast.variant)} {toast.title}
+      <Text color="$surface-bg" bold>
+        {toast.title}
       </Text>
-      {description ? <Text color="$muted">{description}</Text> : null}
     </Box>
   );
-}
-
-function toastAccentColor(variant: ToastData["variant"]): string {
-  switch (variant) {
-    case "success":
-      return "$success";
-    case "error":
-      return "$error";
-    case "warning":
-      return "$warning";
-    case "info":
-      return "$info";
-    default:
-      return "$fg";
-  }
-}
-
-function toastVariantIcon(variant: ToastData["variant"]): string {
-  switch (variant) {
-    case "success":
-      return "+";
-    case "error":
-      return "x";
-    case "warning":
-      return "!";
-    default:
-      return "i";
-  }
 }
 
 function selectVisibleArtifacts(
