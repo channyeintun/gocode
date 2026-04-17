@@ -43,6 +43,20 @@
 - Fixed reread dedup bookkeeping so slices are only remembered after inline delivery survives output budgeting.
 - Tightened the compatibility alias path so it uses the same fail-fast validation and canonical `filePath` forwarding.
 
+## Provider Review Follow-ups
+
+1. Keep subagent selection aligned with usable providers
+   - Status: completed
+   - Notes: Added provider-usability checks for carried subagent selections, fall back to a safe default when startup or provider switches leave an old subagent unusable, and applied the same coercion in startup-derived defaults, `/connect`, `/model`, `/resume`, and runtime subagent resolution.
+
+2. Make `/connect status` reflect live session state
+   - Status: pending
+   - Notes: Pending implementation.
+
+3. Restore richer provider-aware model picker choices
+   - Status: pending
+   - Notes: Pending implementation.
+
 ---
 
 # Provider UX Implementation Progress

@@ -178,8 +178,9 @@ func resolveSubagentClient(parent api.LLMClient, activeModelID string, subagentM
 			selection = current
 		}
 	}
-	if selection == "" {
-		selection = defaultSessionSubagentModel(cfg, activeModelID)
+	selection = coerceSessionSubagentModel(cfg, activeModelID, selection)
+	if subagentModelState != nil {
+		subagentModelState.Set(selection)
 	}
 
 	childProvider, childModel := resolveModelSelection(selection, provider)

@@ -49,20 +49,8 @@ func (standardProviderBehavior) ResolveSelection(input, fallbackProvider string)
 }
 
 func (standardProviderBehavior) DefaultSubagentModel(cfg config.Config, activeModelID string) string {
-	selection := strings.TrimSpace(cfg.SubagentModel)
-	if selection != "" {
-		provider, model := config.ParseModel(selection)
-		if strings.TrimSpace(model) == "" && strings.TrimSpace(provider) != "" {
-			model = provider
-			provider = ""
-		}
-		if strings.TrimSpace(model) == "" {
-			return defaultSubagentFallback(cfg, activeModelID)
-		}
-		if strings.TrimSpace(provider) != "" {
-			return modelRef(provider, model)
-		}
-		return model
+	if selection, ok := configuredSubagentModel(cfg, activeModelID, ""); ok {
+		return selection
 	}
 	return defaultSubagentFallback(cfg, activeModelID)
 }
@@ -108,20 +96,8 @@ func (gitHubCopilotProviderBehavior) ResolveSelection(input, fallbackProvider st
 }
 
 func (gitHubCopilotProviderBehavior) DefaultSubagentModel(cfg config.Config, activeModelID string) string {
-	selection := strings.TrimSpace(cfg.SubagentModel)
-	if selection != "" {
-		provider, model := config.ParseModel(selection)
-		if strings.TrimSpace(model) == "" && strings.TrimSpace(provider) != "" {
-			model = provider
-			provider = ""
-		}
-		if strings.TrimSpace(model) == "" {
-			return api.GitHubCopilotDefaultSubagentModel
-		}
-		if strings.TrimSpace(provider) == "" {
-			return modelRef("github-copilot", model)
-		}
-		return modelRef(provider, model)
+	if selection, ok := configuredSubagentModel(cfg, activeModelID, "github-copilot"); ok {
+		return selection
 	}
 
 	activeProvider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
@@ -170,6 +146,74 @@ func defaultSubagentFallback(cfg config.Config, activeModelID string) string {
 		return modelRef(provider, preset.DefaultModel)
 	}
 	return api.GitHubCopilotDefaultSubagentModel
+}
+
+func configuredSubagentModel(cfg config.Config, activeModelID string, defaultProvider string) (string, bool) {
+	return normalizeUsableSubagentSelection(cfg, activeModelID, cfg.SubagentModel, defaultProvider)
+}
+
+func coerceSessionSubagentModel(cfg config.Config, activeModelID string, selection string) string {
+	activeProvider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
+	defaultProvider := ""
+	if retainSelectionProvider(activeProvider) {
+		defaultProvider = normalizeProvider(activeProvider)
+	}
+	if normalized, ok := normalizeUsableSubagentSelection(cfg, activeModelID, selection, defaultProvider); ok {
+		return normalized
+	}
+	return defaultSessionSubagentModel(cfg, activeModelID)
+}
+
+func normalizeUsableSubagentSelection(cfg config.Config, activeModelID string, selection string, defaultProvider string) (string, bool) {
+	selection = strings.TrimSpace(selection)
+	if selection == "" {
+		return "", false
+	}
+
+	provider, model := config.ParseModel(selection)
+	provider = normalizeProvider(provider)
+	if strings.TrimSpace(model) == "" && provider != "" {
+		model = provider
+		provider = ""
+	}
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", false
+	}
+
+	activeProvider, _ := config.ParseModel(strings.TrimSpace(activeModelID))
+	activeProvider = normalizeProvider(activeProvider)
+
+	resolvedProvider := provider
+	resolvedModel := model
+	if resolvedProvider == "" {
+		if preferredProvider := normalizeProvider(defaultProvider); preferredProvider != "" {
+			resolvedProvider = preferredProvider
+		} else {
+			resolvedProvider, resolvedModel = resolveModelSelection(model, activeProvider)
+		}
+	}
+
+	if resolvedProvider != "" && !isSubagentProviderUsable(cfg, activeModelID, resolvedProvider) {
+		return "", false
+	}
+	return modelRef(resolvedProvider, resolvedModel), true
+}
+
+func isSubagentProviderUsable(cfg config.Config, activeModelID string, providerID string) bool {
+	providerID = normalizeProvider(providerID)
+	if providerID == "" {
+		return true
+	}
+
+	statusCfg := cfg
+	statusCfg.Model = strings.TrimSpace(activeModelID)
+	snapshot := commandspkg.DiscoverProviderSnapshot(statusCfg)
+	status, ok := snapshot.LookupProvider(providerID)
+	if !ok {
+		return false
+	}
+	return status.Usable
 }
 
 func inferProviderFromModel(model, fallbackProvider string) string {

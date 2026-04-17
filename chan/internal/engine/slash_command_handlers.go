@@ -259,7 +259,7 @@ func handleConnectSlashCommand(cmd *slashCommandContext) error {
 	previousModelID := cmd.state.ActiveModelID
 	cmd.state.ActiveModelID = modelRef(result.Provider, nextClient.ModelID())
 	rememberSuccessfulModelSelection(cmd.state.ActiveModelID)
-	cmd.state.SubagentModelID = defaultSessionSubagentModel(result.Config, cmd.state.ActiveModelID)
+	cmd.state.SubagentModelID = coerceSessionSubagentModel(result.Config, cmd.state.ActiveModelID, cmd.state.SubagentModelID)
 	if err := emitCacheBustNoticeOnModelSwitch(cmd.bridge, cmd.tracker, previousModelID, cmd.state.ActiveModelID); err != nil {
 		return err
 	}
@@ -497,6 +497,7 @@ func handleModelSlashCommand(cmd *slashCommandContext) error {
 	previousModelID := cmd.state.ActiveModelID
 	cmd.state.ActiveModelID = modelRef(provider, nextClient.ModelID())
 	rememberSuccessfulModelSelection(cmd.state.ActiveModelID)
+	cmd.state.SubagentModelID = coerceSessionSubagentModel(config.LoadForWorkingDir(cmd.state.CWD), cmd.state.ActiveModelID, cmd.state.SubagentModelID)
 	if err := emitCacheBustNoticeOnModelSwitch(cmd.bridge, cmd.tracker, previousModelID, cmd.state.ActiveModelID); err != nil {
 		return err
 	}
@@ -818,10 +819,7 @@ func handleResumeSlashCommand(cmd *slashCommandContext) error {
 			return err
 		}
 	}
-	cmd.state.SubagentModelID = strings.TrimSpace(restored.Metadata.SubagentModel)
-	if cmd.state.SubagentModelID == "" {
-		cmd.state.SubagentModelID = defaultSessionSubagentModel(config.Load(), cmd.state.ActiveModelID)
-	}
+	cmd.state.SubagentModelID = coerceSessionSubagentModel(config.Load(), cmd.state.ActiveModelID, restored.Metadata.SubagentModel)
 
 	if restored.Metadata.CWD != "" {
 		if err := os.Chdir(restored.Metadata.CWD); err == nil {
