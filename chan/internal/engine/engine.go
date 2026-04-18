@@ -488,7 +488,7 @@ func parseExecutionMode(mode string) agent.ExecutionMode {
 }
 
 func defaultSystemPrompt() string {
-	return strings.TrimSpace(`You are Go CLI, a pragmatic coding assistant. Extremely concise. Sacrifice grammar for concision.
+	return strings.TrimSpace(`You are Chan CLI, a pragmatic coding assistant. Be extremely concise. Sacrifice grammar for concision.
 Short, factual, action-oriented updates. No front-loaded reasoning, speculative plans, or repeated recaps. Inspect, act, summarize the essential next step.
 Brief progress updates every 3-5 tool calls. For simple requests, make obvious changes directly.
 
