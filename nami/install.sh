@@ -7,11 +7,13 @@ set -e
 REPO="channyeintun/nami"
 BINARY_NAME="nami"
 ENGINE_NAME="nami-engine"
+LAUNCHER_JS_NAME="${BINARY_NAME}.js"
 
 DEFAULT_SYSTEM_DIR="/usr/local/bin"
 DEFAULT_USER_DIR="${HOME}/.local/bin"
 INSTALL_DIR="${INSTALL_DIR:-}"
 USE_SUDO="false"
+JS_RUNTIME=""
 
 # Detect OS and architecture
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -30,7 +32,8 @@ case "$OS" in
 esac
 
 PLATFORM="${OS}-${ARCH}"
-BINARY_ASSET="${BINARY_NAME}-${PLATFORM}"
+WRAPPER_ASSET="${BINARY_NAME}-${PLATFORM}"
+LAUNCHER_JS_ASSET="${BINARY_NAME}-js-${PLATFORM}.js"
 ENGINE_ASSET="${ENGINE_NAME}-${PLATFORM}"
 ARCHIVE="${BINARY_NAME}-${PLATFORM}.tar.gz"
 
@@ -50,7 +53,8 @@ fi
 
 echo "Detected platform: ${PLATFORM}"
 
-BINARY_URL="https://github.com/${REPO}/releases/latest/download/${BINARY_ASSET}"
+WRAPPER_URL="https://github.com/${REPO}/releases/latest/download/${WRAPPER_ASSET}"
+LAUNCHER_JS_URL="https://github.com/${REPO}/releases/latest/download/${LAUNCHER_JS_ASSET}"
 ENGINE_URL="https://github.com/${REPO}/releases/latest/download/${ENGINE_ASSET}"
 ARCHIVE_URL="https://github.com/${REPO}/releases/latest/download/${ARCHIVE}"
 
@@ -64,23 +68,37 @@ download_asset() {
 }
 
 requires_bun_runtime() {
-  first_line="$(LC_ALL=C sed -n '1p' "$1" 2>/dev/null || true)"
-  [ "$first_line" = "#!/usr/bin/env bun" ]
+  return 1
 }
 
-ensure_bun_available() {
-  if command -v bun >/dev/null 2>&1; then
+detect_supported_runtime() {
+  for runtime in node bun deno; do
+    if command -v "$runtime" >/dev/null 2>&1; then
+      echo "$runtime"
+      return 0
+    fi
+  done
+  return 1
+}
+
+ensure_supported_runtime_available() {
+  JS_RUNTIME="$(detect_supported_runtime || true)"
+  if [ -n "$JS_RUNTIME" ]; then
     return 0
   fi
 
   echo ""
-  echo "Install failed: this nami release uses a Bun launcher, but 'bun' was not found on PATH."
+  echo "Install failed: Nami needs one of these runtimes on PATH: node, bun, or deno."
   echo ""
-  echo "Install Bun first, then rerun this installer:"
-  echo "  https://bun.sh"
+  echo "Install one of the supported runtimes, then rerun this installer:"
+  echo "  Node.js: https://nodejs.org"
+  echo "  Bun:     https://bun.sh"
+  echo "  Deno:    https://deno.com"
   echo ""
-  echo "After Bun is installed, verify it with:"
+  echo "After installing a runtime, verify it with one of:"
+  echo "  node --version"
   echo "  bun --version"
+  echo "  deno --version"
   exit 1
 }
 
@@ -96,23 +114,27 @@ install_binary() {
 }
 
 echo "Trying direct release binaries..."
-if download_asset "$BINARY_URL" "$TMPDIR/$BINARY_ASSET" && \
+if download_asset "$WRAPPER_URL" "$TMPDIR/$WRAPPER_ASSET" && \
+  download_asset "$LAUNCHER_JS_URL" "$TMPDIR/$LAUNCHER_JS_ASSET" && \
   download_asset "$ENGINE_URL" "$TMPDIR/$ENGINE_ASSET"; then
-  BINARY_SOURCE="$TMPDIR/$BINARY_ASSET"
+  WRAPPER_SOURCE="$TMPDIR/$WRAPPER_ASSET"
+  LAUNCHER_JS_SOURCE="$TMPDIR/$LAUNCHER_JS_ASSET"
   ENGINE_SOURCE="$TMPDIR/$ENGINE_ASSET"
 else
-  rm -f "$TMPDIR/$BINARY_ASSET" "$TMPDIR/$ENGINE_ASSET"
+  rm -f "$TMPDIR/$WRAPPER_ASSET" "$TMPDIR/$LAUNCHER_JS_ASSET" "$TMPDIR/$ENGINE_ASSET"
   echo "Direct release binaries not found; trying legacy archive ${ARCHIVE}..."
   if download_asset "$ARCHIVE_URL" "$TMPDIR/$ARCHIVE"; then
     tar -xzf "$TMPDIR/$ARCHIVE" -C "$TMPDIR"
-    BINARY_SOURCE="$TMPDIR/${BINARY_NAME}-${PLATFORM}/${BINARY_NAME}"
+    WRAPPER_SOURCE="$TMPDIR/${BINARY_NAME}-${PLATFORM}/${BINARY_NAME}"
+    LAUNCHER_JS_SOURCE="$TMPDIR/${BINARY_NAME}-${PLATFORM}/${LAUNCHER_JS_NAME}"
     ENGINE_SOURCE="$TMPDIR/${BINARY_NAME}-${PLATFORM}/${ENGINE_NAME}"
   else
     echo ""
     echo "Install failed: no release assets found for ${PLATFORM}."
     echo ""
     echo "Expected one of these release asset sets:"
-    echo "  ${BINARY_ASSET}"
+    echo "  ${WRAPPER_ASSET}"
+    echo "  ${LAUNCHER_JS_ASSET}"
     echo "  ${ENGINE_ASSET}"
     echo "or:"
     echo "  ${ARCHIVE}"
@@ -122,19 +144,19 @@ else
     echo "If you already have a local build, install manually instead:"
     echo "  mkdir -p \"\$HOME/.local/bin\""
     echo "  install -m 755 nami \"\$HOME/.local/bin/nami\""
+    echo "  install -m 755 nami.js \"\$HOME/.local/bin/nami.js\""
     echo "  install -m 755 nami-engine \"\$HOME/.local/bin/nami-engine\""
     echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
     exit 1
   fi
 fi
 
-if requires_bun_runtime "$BINARY_SOURCE"; then
-  ensure_bun_available
-fi
+ensure_supported_runtime_available
 
 # Install binaries
 echo "Installing to ${INSTALL_DIR}..."
-install_binary "$BINARY_SOURCE" "$INSTALL_DIR/$BINARY_NAME"
+install_binary "$WRAPPER_SOURCE" "$INSTALL_DIR/$BINARY_NAME"
+install_binary "$LAUNCHER_JS_SOURCE" "$INSTALL_DIR/$LAUNCHER_JS_NAME"
 install_binary "$ENGINE_SOURCE" "$INSTALL_DIR/$ENGINE_NAME"
 
 echo ""
@@ -143,6 +165,7 @@ echo "Installed to: ${INSTALL_DIR}"
 echo ""
 echo "Verify installation:"
 echo "  command -v nami"
+echo "Detected JavaScript runtime: ${JS_RUNTIME}"
 
 case ":$PATH:" in
   *":${INSTALL_DIR}:"*)
@@ -160,9 +183,6 @@ esac
 echo ""
 echo "Set your API key and start:"
 echo "  export ANTHROPIC_API_KEY=\"sk-ant-...\""
-if requires_bun_runtime "$BINARY_SOURCE"; then
-  echo "  bun --version"
-fi
 echo "  nami"
 echo ""
 echo "Or use a different provider:"

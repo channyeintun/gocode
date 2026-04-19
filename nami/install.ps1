@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $Repo = "channyeintun/nami"
 $BinaryName = "nami"
 $EngineName = "nami-engine"
+$LauncherJsName = "$BinaryName.js"
 
 function Get-WindowsArch {
     $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture
@@ -13,17 +14,30 @@ function Get-WindowsArch {
     }
 }
 
-function Ensure-BunAvailable {
-    if (Get-Command bun -ErrorAction SilentlyContinue) {
-        return
+function Get-JavaScriptRuntime {
+    foreach ($runtime in @("node", "bun", "deno")) {
+        if (Get-Command $runtime -ErrorAction SilentlyContinue) {
+            return $runtime
+        }
+    }
+
+    return $null
+}
+
+function Ensure-SupportedRuntimeAvailable {
+    $runtime = Get-JavaScriptRuntime
+    if ($runtime) {
+        return $runtime
     }
 
     Write-Host ""
-    Write-Host "Install failed: this Nami release uses a Bun launcher, but 'bun' was not found on PATH."
-    Write-Host "Install Bun first, then rerun this installer:"
-    Write-Host "  https://bun.sh"
+    Write-Host "Install failed: Nami needs one of these runtimes on PATH: node, bun, or deno."
+    Write-Host "Install one of the supported runtimes, then rerun this installer:"
+    Write-Host "  Node.js: https://nodejs.org"
+    Write-Host "  Bun:     https://bun.sh"
+    Write-Host "  Deno:    https://deno.com"
     Write-Host ""
-    throw "bun is required"
+    throw "supported JavaScript runtime is required"
 }
 
 function Add-ToUserPath {
@@ -68,7 +82,7 @@ try {
     Expand-Archive -Path $ArchivePath -DestinationPath $TempDir -Force
 
     $ReleaseDir = Join-Path $TempDir "$BinaryName-$Platform"
-    $LauncherPath = Join-Path $ReleaseDir $BinaryName
+    $LauncherPath = Join-Path $ReleaseDir $LauncherJsName
     $WrapperPath = Join-Path $ReleaseDir "$BinaryName.cmd"
     $EnginePath = Join-Path $ReleaseDir "$EngineName.exe"
 
@@ -78,10 +92,10 @@ try {
         }
     }
 
-    Ensure-BunAvailable
+    $RuntimeName = Ensure-SupportedRuntimeAvailable
 
     Write-Host "Installing to $InstallDir..."
-    Copy-Item -Path $LauncherPath -Destination (Join-Path $InstallDir $BinaryName) -Force
+    Copy-Item -Path $LauncherPath -Destination (Join-Path $InstallDir $LauncherJsName) -Force
     Copy-Item -Path $WrapperPath -Destination (Join-Path $InstallDir "$BinaryName.cmd") -Force
     Copy-Item -Path $EnginePath -Destination (Join-Path $InstallDir "$EngineName.exe") -Force
 
@@ -90,6 +104,7 @@ try {
     Write-Host ""
     Write-Host "nami installed successfully!"
     Write-Host "Installed to: $InstallDir"
+    Write-Host "Detected JavaScript runtime: $RuntimeName"
     Write-Host ""
     Write-Host "Open a new PowerShell window, then verify installation:"
     Write-Host "  nami --help"

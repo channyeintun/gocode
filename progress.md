@@ -23,8 +23,8 @@ Current follow-up focus: complete
 
 - [x] Task 1: add runtime-neutral launcher plan and update docs site install instructions
 - [x] Task 2: replace release launcher bundle with portable JS launcher plus platform shims
-- [ ] Task 3: update installers and release packaging for node, bun, or deno runtimes
+- [x] Task 3: update installers and release packaging for node, bun, or deno runtimes
 - [ ] Task 4: update README and docs for the runtime-neutral release story
 - [ ] Task 5: run final formatting and verification for the launcher migration
 
-Current launcher focus: Task 3
+Current launcher focus: Task 4
