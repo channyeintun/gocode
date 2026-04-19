@@ -334,6 +334,10 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
   ]);
 
   useEffect(() => {
+    if (isQueuedPromptDispatchBlocked(uiState, isEngineReady)) {
+      return;
+    }
+
     if (pendingTaskNotifications.length > 0) {
       return;
     }
@@ -580,6 +584,9 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
     if (!uiState.isStreaming) {
       return;
     }
+    setQueuedPrompts([]);
+    setPendingTaskNotifications([]);
+    setPasteWarning(null);
     cancelActiveTurn();
     engine.sendCancel();
   };

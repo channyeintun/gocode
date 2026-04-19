@@ -294,6 +294,27 @@ const StreamOutput: FC<StreamOutputProps> = ({
             );
           }
 
+          if (
+            item.block.kind === "message" &&
+            item.block.message.role === "assistant" &&
+            isStreaming &&
+            liveAssistantMessageId !== null &&
+            item.block.message.id === liveAssistantMessageId
+          ) {
+            return (
+              <StreamingAssistantMessage
+                blocks={liveBlocks}
+                model={model}
+                showThinking={showThinking}
+                thinkingShortcutLabel={thinkingShortcutLabel}
+                statusLabel={activeTurnStatusLabel(
+                  liveBlocks,
+                  activeTurnStatus,
+                )}
+              />
+            );
+          }
+
           return renderTranscriptBlock(
             item.block,
             index,

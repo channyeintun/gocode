@@ -544,13 +544,20 @@ func finalizeApplyPatchOperation(operation applyPatchFileOperation, body []strin
 	case applyPatchActionUpdate:
 		hunks := make([]applyPatchHunk, 0)
 		currentHunk := applyPatchHunk{}
+		currentHunkHasChange := false
 		hasContent := false
 		finishHunk := func() error {
 			if len(currentHunk.Lines) == 0 {
 				return nil
 			}
+			if !currentHunkHasChange {
+				currentHunk = applyPatchHunk{}
+				currentHunkHasChange = false
+				return nil
+			}
 			hunks = append(hunks, currentHunk)
 			currentHunk = applyPatchHunk{}
+			currentHunkHasChange = false
 			return nil
 		}
 		for _, line := range body {
@@ -569,6 +576,9 @@ func finalizeApplyPatchOperation(operation applyPatchFileOperation, body []strin
 					kind = line[0]
 					value = line[1:]
 				}
+			}
+			if kind == '+' || kind == '-' {
+				currentHunkHasChange = true
 			}
 			currentHunk.Lines = append(currentHunk.Lines, applyPatchLine{Kind: kind, Value: value})
 		}

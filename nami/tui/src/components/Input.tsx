@@ -1,4 +1,11 @@
-import React, { type FC, useEffect, useMemo, useState } from "react";
+import React, {
+  type FC,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Box, Spinner, Text, useInput } from "silvery";
 import { usePaste } from "silvery/runtime";
 import { DEFAULT_PROMPT_MARKER } from "../constants/prompt.js";
@@ -35,6 +42,7 @@ interface InputProps {
 // still leaving a minimally usable wrapped editor width on narrow terminals.
 const PROMPT_CHROME_COLUMNS = 8;
 const MIN_PROMPT_TEXT_COLUMNS = 8;
+const SUBMIT_DEBOUNCE_MS = 40;
 
 function getPromptTextColumns(terminalColumns: number): number {
   return Math.max(
@@ -142,6 +150,54 @@ const Input: FC<InputProps> = ({
   const [terminalColumns, setTerminalColumns] = useState(
     process.stdout.columns ?? 80,
   );
+  const submitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPendingSubmit = useCallback(() => {
+    if (submitTimerRef.current === null) {
+      return false;
+    }
+
+    clearTimeout(submitTimerRef.current);
+    submitTimerRef.current = null;
+    return true;
+  }, []);
+
+  const convertPendingSubmitToNewline = useCallback(() => {
+    if (!clearPendingSubmit()) {
+      return false;
+    }
+
+    prompt.insertNewline();
+    return true;
+  }, [clearPendingSubmit, prompt]);
+
+  const flushPendingSubmit = useCallback(() => {
+    if (!clearPendingSubmit()) {
+      return false;
+    }
+
+    onSubmit();
+    return true;
+  }, [clearPendingSubmit, onSubmit]);
+
+  const scheduleSubmit = useCallback(() => {
+    clearPendingSubmit();
+    submitTimerRef.current = setTimeout(() => {
+      submitTimerRef.current = null;
+      onSubmit();
+    }, SUBMIT_DEBOUNCE_MS);
+  }, [clearPendingSubmit, onSubmit]);
+
+  const ensurePendingSubmitDoesNotSwallowPaste = useCallback(
+    (text: string) => {
+      if (submitTimerRef.current === null || text.length === 0) {
+        return;
+      }
+
+      convertPendingSubmitToNewline();
+    },
+    [convertPendingSubmitToNewline],
+  );
 
   useEffect(() => {
     const handleResize = () => {
@@ -155,6 +211,12 @@ const Input: FC<InputProps> = ({
       process.stdout.off("resize", handleResize);
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      clearPendingSubmit();
+    };
+  }, [clearPendingSubmit]);
 
   const promptTextColumns = useMemo(
     () => getPromptTextColumns(terminalColumns),
@@ -176,6 +238,8 @@ const Input: FC<InputProps> = ({
       if (disabled) {
         return;
       }
+
+      ensurePendingSubmitDoesNotSwallowPaste(text);
 
       void parsePasteParts(text).then((parts) => {
         if (parts.text.length > 0) {
@@ -204,6 +268,7 @@ const Input: FC<InputProps> = ({
       const text = key.text ?? input;
 
       if (key.escape) {
+        clearPendingSubmit();
         if (slashPreview.visible) {
           prompt.clear();
           return;
@@ -214,31 +279,37 @@ const Input: FC<InputProps> = ({
       }
 
       if ((key.meta && input?.toLowerCase() === "t") || text === "†") {
+        flushPendingSubmit();
         onThinkingVisibilityToggle();
         return;
       }
 
       if (key.meta && input?.toLowerCase() === "a") {
+        flushPendingSubmit();
         onArtifactVisibilityToggle();
         return;
       }
 
       if ((key.meta && input?.toLowerCase() === "r") || text === "®") {
+        flushPendingSubmit();
         onReasoningToggle();
         return;
       }
 
       if (key.meta && input?.toLowerCase() === "b") {
+        flushPendingSubmit();
         onBackgroundTasksToggle();
         return;
       }
 
       if (key.ctrl && input === "y") {
+        flushPendingSubmit();
         onSendQueuedPromptNow();
         return;
       }
 
       if (key.ctrl && input === "k") {
+        flushPendingSubmit();
         onRemoveQueuedPrompt();
         return;
       }
@@ -258,6 +329,7 @@ const Input: FC<InputProps> = ({
       }
 
       if (key.tab) {
+        flushPendingSubmit();
         if (slashPreview.visible) {
           const nextValue = slashPreview.applySelection();
           if (nextValue) {
@@ -271,11 +343,13 @@ const Input: FC<InputProps> = ({
       }
       if (key.return) {
         if (key.shift || key.meta) {
+          clearPendingSubmit();
           prompt.insertNewline();
           return;
         }
 
         if (slashPreview.visible && slashPreview.selectedCommand) {
+          clearPendingSubmit();
           const nextValue = slashPreview.applySelection();
           if (nextValue) {
             prompt.setValue(nextValue);
@@ -286,10 +360,11 @@ const Input: FC<InputProps> = ({
           return;
         }
 
-        onSubmit();
+        scheduleSubmit();
         return;
       }
       if (key.upArrow) {
+        flushPendingSubmit();
         if (slashPreview.visible) {
           slashPreview.selectPrevious();
           return;
@@ -302,6 +377,7 @@ const Input: FC<InputProps> = ({
         return;
       }
       if (key.downArrow) {
+        flushPendingSubmit();
         if (slashPreview.visible) {
           slashPreview.selectNext();
           return;
@@ -314,6 +390,7 @@ const Input: FC<InputProps> = ({
         return;
       }
       if (key.leftArrow) {
+        flushPendingSubmit();
         if (key.ctrl || key.meta) {
           prompt.moveWordLeft();
         } else {
@@ -323,6 +400,7 @@ const Input: FC<InputProps> = ({
         return;
       }
       if (key.rightArrow) {
+        flushPendingSubmit();
         if (key.ctrl || key.meta) {
           prompt.moveWordRight();
         } else {
@@ -332,14 +410,17 @@ const Input: FC<InputProps> = ({
         return;
       }
       if (key.home || (key.ctrl && input === "a")) {
+        flushPendingSubmit();
         prompt.moveLineStart();
         return;
       }
       if (key.end || (key.ctrl && input === "e")) {
+        flushPendingSubmit();
         prompt.moveLineEnd();
         return;
       }
       if (key.backspace) {
+        flushPendingSubmit();
         if (key.ctrl || key.meta) {
           prompt.deleteWordBackward();
         } else {
@@ -349,6 +430,7 @@ const Input: FC<InputProps> = ({
         return;
       }
       if (key.delete) {
+        flushPendingSubmit();
         if (key.ctrl || key.meta) {
           prompt.deleteWordForward();
         } else {
@@ -358,6 +440,7 @@ const Input: FC<InputProps> = ({
         return;
       }
       if (key.ctrl) {
+        flushPendingSubmit();
         switch (input) {
           case "b":
             prompt.moveLeft();
@@ -391,6 +474,7 @@ const Input: FC<InputProps> = ({
         }
       }
       if (text) {
+        ensurePendingSubmitDoesNotSwallowPaste(text);
         prompt.insertText(text);
         return;
       }
