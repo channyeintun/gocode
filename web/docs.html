@@ -149,11 +149,11 @@
             <ul class="space-y-4 text-sm text-gray-300">
               <li class="flex items-center gap-3">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand"></i>
-                macOS or Linux
+                macOS, Linux, or Windows 11
               </li>
               <li class="flex items-center gap-3">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand"></i>
-                Bun 1.0+ to run the <code>nami</code> launcher
+                Bun 1.0+ to run the current <code>nami</code> launcher
               </li>
               <li class="flex items-center gap-3">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand"></i>
@@ -172,28 +172,66 @@
               Installation
             </h2>
             <p class="text-gray-400 mb-8 leading-relaxed">
-              Downloads prebuilt binaries automatically. Bun 1.0+ must already
-              be installed.
+              Downloads prebuilt binaries automatically. Current releases still
+              use the Bun-based launcher, so Bun 1.0+ must already be installed.
             </p>
-            <div
-              class="bg-subtle p-6 border border-[#1a1a1a] rounded-md font-mono text-sm relative group overflow-x-auto mb-6"
-            >
-              <span class="text-brand mr-3">$</span
-              ><code class="inline-command"
-                >curl -fsSL
-                https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.sh
-                | sh</code
-              >
-              <button
-                class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"
-              >
-                <i data-lucide="copy" class="w-4 h-4"></i>
-              </button>
+            <div class="space-y-8">
+              <div>
+                <h4
+                  class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+                >
+                  macOS / Linux
+                </h4>
+                <div
+                  class="bg-subtle p-6 border border-[#1a1a1a] rounded-md font-mono text-sm relative group overflow-x-auto mb-3"
+                >
+                  <span class="text-brand mr-3">$</span
+                  ><code class="inline-command"
+                    >curl -fsSL
+                    https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.sh
+                    | sh</code
+                  >
+                  <button
+                    class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"
+                  >
+                    <i data-lucide="copy" class="w-4 h-4"></i>
+                  </button>
+                </div>
+                <p class="text-xs text-gray-600">
+                  Installs <code>nami</code> and <code>nami-engine</code> to
+                  <code>/usr/local/bin</code> or <code>~/.local/bin</code>.
+                </p>
+              </div>
+              <div>
+                <h4
+                  class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+                >
+                  Windows (PowerShell)
+                </h4>
+                <div
+                  class="bg-subtle p-6 border border-[#1a1a1a] rounded-md font-mono text-sm relative group overflow-x-auto mb-3"
+                >
+                  <span class="text-brand mr-3">PS&gt;</span
+                  ><code class="inline-command"
+                    >powershell -ExecutionPolicy Bypass -NoProfile -Command
+                    "iwr
+                    https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.ps1
+                    -UseBasicParsing | iex"</code
+                  >
+                  <button
+                    class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"
+                  >
+                    <i data-lucide="copy" class="w-4 h-4"></i>
+                  </button>
+                </div>
+                <p class="text-xs text-gray-600">
+                  Installs the current launcher plus
+                  <code>nami-engine.exe</code> into
+                  <code>%LOCALAPPDATA%\Programs\nami\bin</code> and adds that
+                  directory to the user <code>PATH</code>.
+                </p>
+              </div>
             </div>
-            <p class="text-xs text-gray-600">
-              Installs <code>nami</code> and <code>nami-engine</code> to
-              <code>/usr/local/bin</code> or <code>~/.local/bin</code>.
-            </p>
           </section>
 
           <!-- Manual Install -->
@@ -202,6 +240,20 @@
               Manual Installation
             </h2>
             <div class="space-y-8">
+              <div>
+                <h4
+                  class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
+                >
+                  Windows Release Archive
+                </h4>
+                <p class="text-sm text-gray-300 leading-relaxed">
+                  Download <code>nami-windows-amd64.zip</code> or
+                  <code>nami-windows-arm64.zip</code> from GitHub Releases, then
+                  place <code>nami</code>, <code>nami.cmd</code>, and
+                  <code>nami-engine.exe</code> in a directory on your
+                  <code>PATH</code>.
+                </p>
+              </div>
               <div>
                 <h4
                   class="text-xs font-bold text-gray-500 mb-4 uppercase tracking-widest"
