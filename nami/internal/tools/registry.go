@@ -42,6 +42,7 @@ func NewRegistry() *Registry {
 	r.Register(NewExitPlanModeTool())
 	r.Register(NewEnterWorktreeTool())
 	r.Register(NewExitWorktreeTool())
+	r.Register(NewNotebookEditTool())
 	r.Register(NewReadProjectStructureTool())
 	r.Register(NewProjectOverviewTool())
 	r.Register(NewDependencyOverviewTool())

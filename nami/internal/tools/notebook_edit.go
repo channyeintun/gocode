@@ -1,0 +1,219 @@
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"strings"
+)
+
+type NotebookEditTool struct{}
+
+func NewNotebookEditTool() *NotebookEditTool {
+	return &NotebookEditTool{}
+}
+
+func (t *NotebookEditTool) Name() string {
+	return "notebook_edit"
+}
+
+func (t *NotebookEditTool) Description() string {
+	return "Edit a Jupyter notebook at the cell level by inserting, updating, or deleting cells instead of modifying raw JSON."
+}
+
+func (t *NotebookEditTool) InputSchema() any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"filePath":   map[string]any{"type": "string", "description": "Absolute path to the .ipynb notebook file."},
+			"file_path":  map[string]any{"type": "string", "description": "Compatibility alias for filePath."},
+			"operation":  map[string]any{"type": "string", "enum": []string{"insert", "edit", "delete"}},
+			"cellIndex":  map[string]any{"type": "integer", "minimum": 1, "description": "1-based cell index. For insert, defaults to appending when omitted."},
+			"cell_index": map[string]any{"type": "integer", "minimum": 1, "description": "Snake_case alias for cellIndex."},
+			"cellType":   map[string]any{"type": "string", "description": "Cell type for insert or edit, usually markdown or code."},
+			"cell_type":  map[string]any{"type": "string", "description": "Snake_case alias for cellType."},
+			"source":     map[string]any{"type": "string", "description": "Full cell source text for insert or edit."},
+		},
+		"required": []string{"operation"},
+	}
+}
+
+func (t *NotebookEditTool) Permission() PermissionLevel {
+	return PermissionWrite
+}
+
+func (t *NotebookEditTool) Concurrency(input ToolInput) ConcurrencyDecision {
+	return ConcurrencySerial
+}
+
+func (t *NotebookEditTool) Validate(input ToolInput) error {
+	filePath, ok := firstStringParam(input.Params, "filePath", "file_path")
+	if !ok || strings.TrimSpace(filePath) == "" {
+		return fmt.Errorf("notebook_edit requires filePath")
+	}
+	resolvedPath, err := resolveToolPath(filePath)
+	if err != nil {
+		return err
+	}
+	if !isNotebookFile(resolvedPath) {
+		return fmt.Errorf("notebook_edit only supports .ipynb files")
+	}
+	operation, ok := stringParam(input.Params, "operation")
+	if !ok || strings.TrimSpace(operation) == "" {
+		return fmt.Errorf("notebook_edit requires operation")
+	}
+	switch strings.ToLower(strings.TrimSpace(operation)) {
+	case "insert":
+		if firstStringOrEmpty(input.Params, "cellType", "cell_type") == "" {
+			return fmt.Errorf("notebook_edit insert requires cellType")
+		}
+	case "edit":
+		if _, ok := firstIntParam(input.Params, "cellIndex", "cell_index"); !ok {
+			return fmt.Errorf("notebook_edit edit requires cellIndex")
+		}
+		if firstStringOrEmpty(input.Params, "source", "cellType", "cell_type") == "" {
+			return fmt.Errorf("notebook_edit edit requires source or cellType")
+		}
+	case "delete":
+		if _, ok := firstIntParam(input.Params, "cellIndex", "cell_index"); !ok {
+			return fmt.Errorf("notebook_edit delete requires cellIndex")
+		}
+	default:
+		return fmt.Errorf("unsupported notebook_edit operation %q", operation)
+	}
+	return nil
+}
+
+func (t *NotebookEditTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
+	select {
+	case <-ctx.Done():
+		return ToolOutput{}, ctx.Err()
+	default:
+	}
+
+	filePath, _ := firstStringParam(input.Params, "filePath", "file_path")
+	filePath, err := resolveToolPath(filePath)
+	if err != nil {
+		return ToolOutput{}, err
+	}
+	contentBytes, err := os.ReadFile(filePath)
+	if err != nil {
+		return ToolOutput{}, fmt.Errorf("read notebook %q: %w", filePath, err)
+	}
+
+	var notebook map[string]any
+	if err := json.Unmarshal(contentBytes, &notebook); err != nil {
+		return ToolOutput{}, fmt.Errorf("parse notebook %q: %w", filePath, err)
+	}
+	rawCells, ok := notebook["cells"].([]any)
+	if !ok {
+		return ToolOutput{}, fmt.Errorf("notebook %q does not contain a valid cells array", filePath)
+	}
+
+	operation := strings.ToLower(strings.TrimSpace(firstStringOrEmpty(input.Params, "operation")))
+	cellIndex, hasCellIndex := firstIntParam(input.Params, "cellIndex", "cell_index")
+	cellType := normalizeNotebookEditCellType(firstStringOrEmpty(input.Params, "cellType", "cell_type"))
+	source := firstStringOrEmpty(input.Params, "source")
+
+	trackFileBeforeWrite(filePath)
+
+	message := ""
+	switch operation {
+	case "insert":
+		insertAt := len(rawCells)
+		if hasCellIndex {
+			if cellIndex < 1 || cellIndex > len(rawCells)+1 {
+				return ToolOutput{}, fmt.Errorf("cellIndex must be between 1 and %d", len(rawCells)+1)
+			}
+			insertAt = cellIndex - 1
+		}
+		newCell := buildNotebookCell(cellType, source)
+		rawCells = append(rawCells[:insertAt], append([]any{newCell}, rawCells[insertAt:]...)...)
+		message = fmt.Sprintf("Inserted notebook cell %d in %s", insertAt+1, filePath)
+	case "edit":
+		if cellIndex < 1 || cellIndex > len(rawCells) {
+			return ToolOutput{}, fmt.Errorf("cellIndex must be between 1 and %d", len(rawCells))
+		}
+		cellMap, ok := rawCells[cellIndex-1].(map[string]any)
+		if !ok {
+			return ToolOutput{}, fmt.Errorf("cell %d is not a valid notebook cell", cellIndex)
+		}
+		if cellType != "" {
+			cellMap["cell_type"] = cellType
+		}
+		if _, exists := input.Params["source"]; exists {
+			cellMap["source"] = notebookSourceLines(source)
+		}
+		message = fmt.Sprintf("Edited notebook cell %d in %s", cellIndex, filePath)
+	case "delete":
+		if cellIndex < 1 || cellIndex > len(rawCells) {
+			return ToolOutput{}, fmt.Errorf("cellIndex must be between 1 and %d", len(rawCells))
+		}
+		rawCells = append(rawCells[:cellIndex-1], rawCells[cellIndex:]...)
+		message = fmt.Sprintf("Deleted notebook cell %d from %s", cellIndex, filePath)
+	}
+	notebook["cells"] = rawCells
+
+	updatedBytes, err := json.MarshalIndent(notebook, "", "  ")
+	if err != nil {
+		return ToolOutput{}, fmt.Errorf("marshal notebook %q: %w", filePath, err)
+	}
+	updatedContent := string(updatedBytes)
+	if !strings.HasSuffix(updatedContent, "\n") {
+		updatedContent += "\n"
+	}
+
+	if err := os.WriteFile(filePath, []byte(updatedContent), 0o644); err != nil {
+		return ToolOutput{}, fmt.Errorf("write notebook %q: %w", filePath, err)
+	}
+	invalidateFileReadState(filePath)
+	preview, insertions, deletions := buildFileDiffPreview(string(contentBytes), updatedContent)
+
+	return ToolOutput{
+		Output:     message,
+		FilePath:   filePath,
+		Preview:    preview,
+		Insertions: insertions,
+		Deletions:  deletions,
+	}, nil
+}
+
+func normalizeNotebookEditCellType(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	return value
+}
+
+func buildNotebookCell(cellType, source string) map[string]any {
+	if cellType == "" {
+		cellType = "markdown"
+	}
+	cell := map[string]any{
+		"cell_type": cellType,
+		"metadata":  map[string]any{},
+		"source":    notebookSourceLines(source),
+	}
+	if cellType == "code" {
+		cell["execution_count"] = nil
+		cell["outputs"] = []any{}
+	}
+	return cell
+}
+
+func notebookSourceLines(source string) []string {
+	if source == "" {
+		return []string{}
+	}
+	normalized := strings.ReplaceAll(source, "\r\n", "\n")
+	parts := strings.SplitAfter(normalized, "\n")
+	if len(parts) == 0 {
+		return []string{normalized}
+	}
+	if parts[len(parts)-1] == "" {
+		parts = parts[:len(parts)-1]
+	}
+	return parts
+}

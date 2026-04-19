@@ -17,7 +17,7 @@
 ## Phase 3
 
 - [x] Task 9: Expose explicit plan/worktree controls
-- [ ] Task 10: Add notebook editing support
+- [x] Task 10: Add notebook editing support
 - [ ] Task 11: Add richer task/team orchestration
 - [ ] Task 12: Add tool search
 
@@ -32,4 +32,5 @@
 - Completed: Task 7
 - Completed: Task 8
 - Completed: Task 9
-- In progress: Task 10
+- Completed: Task 10
+- In progress: Task 11
