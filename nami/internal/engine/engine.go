@@ -157,6 +157,11 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	registry.Register(toolpkg.NewAgentStopTool(func(ctx context.Context, req toolpkg.AgentStopRequest) (toolpkg.AgentRunResult, error) {
 		return stopBackgroundAgent(ctx, bridge, req)
 	}))
+	registry.Register(toolpkg.NewAgentTeamTool(func(ctx context.Context, req toolpkg.AgentTeamLaunchRequest) (toolpkg.AgentTeamLaunchResult, error) {
+		runner := makeSubagentRunner(bridge, registry, permissionCtx, tracker, sessionStore, artifactManager, hookRunner, modelState, subagentModelState, cwd)
+		return launchBackgroundTeam(ctx, runner, req)
+	}))
+	registry.Register(toolpkg.NewAgentTeamStatusTool(lookupBackgroundTeamStatus))
 	if err := persistSessionState(sessionStore, sessionStateParams{
 		SessionID:     sessionID,
 		CreatedAt:     startedAt,

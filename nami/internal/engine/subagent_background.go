@@ -36,10 +36,24 @@ var (
 	backgroundAgents   = make(map[string]*backgroundAgent)
 	backgroundAgentsMu sync.RWMutex
 	backgroundAgentCtr uint64
+	backgroundTeams    = make(map[string]*backgroundTeam)
+	backgroundTeamsMu  sync.RWMutex
+	backgroundTeamCtr  uint64
 )
+
+type backgroundTeam struct {
+	id          string
+	description string
+	agentIDs    []string
+	createdAt   time.Time
+}
 
 func newBackgroundAgentID() string {
 	return fmt.Sprintf("agent_%d", atomic.AddUint64(&backgroundAgentCtr, 1))
+}
+
+func newBackgroundTeamID() string {
+	return fmt.Sprintf("team_%d", atomic.AddUint64(&backgroundTeamCtr, 1))
 }
 
 func registerBackgroundAgent(bg *backgroundAgent) {
@@ -56,6 +70,22 @@ func getBackgroundAgent(agentID string) (*backgroundAgent, error) {
 		return nil, fmt.Errorf("agent %q not found", agentID)
 	}
 	return bg, nil
+}
+
+func registerBackgroundTeam(team *backgroundTeam) {
+	backgroundTeamsMu.Lock()
+	defer backgroundTeamsMu.Unlock()
+	backgroundTeams[team.id] = team
+}
+
+func getBackgroundTeam(teamID string) (*backgroundTeam, error) {
+	backgroundTeamsMu.RLock()
+	defer backgroundTeamsMu.RUnlock()
+	team, ok := backgroundTeams[teamID]
+	if !ok {
+		return nil, fmt.Errorf("team %q not found", teamID)
+	}
+	return team, nil
 }
 
 func scheduleBackgroundAgentCleanup(bg *backgroundAgent) {
@@ -339,4 +369,62 @@ func stopBackgroundAgent(ctx context.Context, bridge *ipc.Bridge, req toolpkg.Ag
 		result.Status = "cancelling"
 	}
 	return result, nil
+}
+
+func launchBackgroundTeam(ctx context.Context, runner toolpkg.AgentRunner, req toolpkg.AgentTeamLaunchRequest) (toolpkg.AgentTeamLaunchResult, error) {
+	if runner == nil {
+		return toolpkg.AgentTeamLaunchResult{}, fmt.Errorf("agent team launcher is not configured")
+	}
+	teamID := newBackgroundTeamID()
+	team := &backgroundTeam{id: teamID, description: req.Description, createdAt: time.Now(), agentIDs: make([]string, 0, len(req.Tasks))}
+	results := make([]toolpkg.AgentRunResult, 0, len(req.Tasks))
+	for _, task := range req.Tasks {
+		result, err := runner(ctx, toolpkg.AgentRunRequest{
+			Description:  task.Description,
+			Prompt:       task.Prompt,
+			SubagentType: toolpkg.NormalizeSubagentType(task.SubagentType),
+			Background:   true,
+		})
+		if err != nil {
+			return toolpkg.AgentTeamLaunchResult{}, err
+		}
+		if strings.TrimSpace(result.AgentID) != "" {
+			team.agentIDs = append(team.agentIDs, result.AgentID)
+		}
+		results = append(results, result)
+	}
+	registerBackgroundTeam(team)
+	return toolpkg.AgentTeamLaunchResult{Status: "async_launched", TeamID: teamID, Description: req.Description, Agents: results}, nil
+}
+
+func lookupBackgroundTeamStatus(ctx context.Context, req toolpkg.AgentTeamStatusRequest) (toolpkg.AgentTeamStatusResult, error) {
+	team, err := getBackgroundTeam(req.TeamID)
+	if err != nil {
+		return toolpkg.AgentTeamStatusResult{}, err
+	}
+	results := make([]toolpkg.AgentRunResult, 0, len(team.agentIDs))
+	overall := "completed"
+	for _, agentID := range team.agentIDs {
+		result, err := lookupBackgroundAgentStatus(ctx, toolpkg.AgentStatusRequest{AgentID: agentID, WaitMs: req.WaitMs})
+		if err != nil {
+			return toolpkg.AgentTeamStatusResult{}, err
+		}
+		results = append(results, result)
+		switch strings.ToLower(strings.TrimSpace(result.Status)) {
+		case "failed":
+			overall = "failed"
+		case "running", "async_launched", "cancelling":
+			if overall != "failed" {
+				overall = "running"
+			}
+		case "cancelled":
+			if overall == "completed" {
+				overall = "cancelled"
+			}
+		}
+	}
+	if len(results) == 0 {
+		overall = "empty"
+	}
+	return toolpkg.AgentTeamStatusResult{Status: overall, TeamID: team.id, Description: team.description, Agents: results}, nil
 }
