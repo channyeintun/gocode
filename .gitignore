@@ -10,7 +10,7 @@ build/
 # Go test binaries
 *.test
 *.out
-/chan/chan
+/nami/nami
 
 # Vendoring
 vendor/

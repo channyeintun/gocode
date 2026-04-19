@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Documentation | Chan CLI</title>
+    <title>Documentation | Nami CLI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link rel="stylesheet" href="styles.css" />
@@ -27,7 +27,7 @@
       class="fixed top-0 w-full z-50 border-b border-[#1a1a1a] bg-pure/80 backdrop-blur-md px-8 py-4"
     >
       <div class="container-max flex justify-between items-center">
-        <a href="index.html" class="brand-lockup" aria-label="Chan">
+        <a href="index.html" class="brand-lockup" aria-label="Nami">
           <div class="ascii-lockup" aria-hidden="true">
             <pre class="prompt-mark terminal-mark">
              
@@ -60,7 +60,7 @@
           </div>
           <span
             class="brand-wordmark text-xl font-bold tracking-tight font-['Outfit'] uppercase"
-            >Chan</span
+            >Nami</span
           >
         </a>
         <div class="flex gap-8 text-sm font-medium items-center">
@@ -70,7 +70,7 @@
             >Home</a
           >
           <a
-            href="https://github.com/channyeintun/chan"
+            href="https://github.com/channyeintun/nami"
             class="hidden md:block text-gray-400 hover:text-white transition"
             >Source</a
           >
@@ -183,7 +183,7 @@
               </li>
               <li class="flex items-center gap-3">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand"></i>
-                Bun 1.0+ to run the <code>chan</code> launcher
+                Bun 1.0+ to run the <code>nami</code> launcher
               </li>
               <li class="flex items-center gap-3">
                 <i data-lucide="check-circle" class="w-4 h-4 text-brand"></i>
@@ -211,7 +211,7 @@
               <span class="text-brand mr-3">$</span
               ><code class="inline-command"
                 >curl -fsSL
-                https://raw.githubusercontent.com/channyeintun/chan/main/chan/install.sh
+                https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.sh
                 | sh</code
               >
               <button
@@ -221,7 +221,7 @@
               </button>
             </div>
             <p class="text-xs text-gray-600">
-              Installs <code>chan</code> and <code>chan-engine</code> to
+              Installs <code>nami</code> and <code>nami-engine</code> to
               <code>/usr/local/bin</code> or <code>~/.local/bin</code>.
             </p>
           </section>
@@ -240,8 +240,8 @@
                 </h4>
                 <pre
                   class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto relative group"
-                ><code>sudo install -m 755 chan /usr/local/bin/chan
-sudo install -m 755 chan-engine /usr/local/bin/chan-engine</code><button class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"><i data-lucide="copy" class="w-4 h-4"></i></button></pre>
+                ><code>sudo install -m 755 nami /usr/local/bin/nami
+sudo install -m 755 nami-engine /usr/local/bin/nami-engine</code><button class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"><i data-lucide="copy" class="w-4 h-4"></i></button></pre>
               </div>
               <div>
                 <h4
@@ -252,8 +252,8 @@ sudo install -m 755 chan-engine /usr/local/bin/chan-engine</code><button class="
                 <pre
                   class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto relative group"
                 ><code>mkdir -p "$HOME/.local/bin"
-install -m 755 chan "$HOME/.local/bin/chan"
-install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"><i data-lucide="copy" class="w-4 h-4"></i></button></pre>
+install -m 755 nami "$HOME/.local/bin/nami"
+install -m 755 nami-engine "$HOME/.local/bin/nami-engine"</code><button class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"><i data-lucide="copy" class="w-4 h-4"></i></button></pre>
               </div>
             </div>
           </section>
@@ -331,7 +331,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
               >
                 Ollama Example
               </div>
-              <code>chan --model ollama/gemma4:e4b</code>
+              <code>nami --model ollama/gemma4:e4b</code>
               <button class="copy-button absolute top-6 right-6 text-gray-700 hover:text-white transition"><i data-lucide="copy" class="w-4 h-4"></i></button>
             </div>
           </section>
@@ -363,7 +363,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
               First-Class Outputs
             </h2>
             <p class="text-gray-400 mb-8 leading-relaxed">
-              Artifacts in Chan are durable, structured outputs that stay
+              Artifacts in Nami are durable, structured outputs that stay
               reviewable in the main TUI instead of disappearing into the
               transcript.
             </p>
@@ -399,18 +399,18 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
             >
               <div>
                 <span class="text-gray-500"># Use a specific model</span
-                ><br /><span class="text-brand">$</span> chan --model
+                ><br /><span class="text-brand">$</span> nami --model
                 openai/gpt-4o
               </div>
               <div>
                 <span class="text-gray-500"
                   ># Direct execution (skip planning)</span
-                ><br /><span class="text-brand">$</span> chan --mode fast
+                ><br /><span class="text-brand">$</span> nami --mode fast
               </div>
               <div>
                 <span class="text-gray-500"
                   ># Auto-approve non-destructive tools</span
-                ><br /><span class="text-brand">$</span> chan --auto-mode
+                ><br /><span class="text-brand">$</span> nami --auto-mode
               </div>
             </div>
           </section>
@@ -421,7 +421,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
               MCP Management
             </h2>
             <p class="text-gray-400 mb-8 leading-relaxed">
-              Chan includes a small MCP management CLI for adding, inspecting,
+              Nami includes a small MCP management CLI for adding, inspecting,
               listing, and removing configured MCP servers without editing JSON
               by hand.
             </p>
@@ -429,12 +429,12 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
             <div
               class="bg-subtle p-6 border border-[#1a1a1a] rounded-md space-y-4 font-mono text-sm overflow-x-auto mb-8"
             >
-              <div><span class="text-brand">$</span> chan mcp add my-server -- npx my-mcp-server</div>
-              <div><span class="text-brand">$</span> chan mcp add --transport http sentry https://mcp.sentry.dev/mcp</div>
-              <div><span class="text-brand">$</span> chan mcp add-json docs '{"transport":"stdio","command":"uvx","args":["docs-mcp"]}'</div>
-              <div><span class="text-brand">$</span> chan mcp list</div>
-              <div><span class="text-brand">$</span> chan mcp get sentry</div>
-              <div><span class="text-brand">$</span> chan mcp remove sentry</div>
+              <div><span class="text-brand">$</span> nami mcp add my-server -- npx my-mcp-server</div>
+              <div><span class="text-brand">$</span> nami mcp add --transport http sentry https://mcp.sentry.dev/mcp</div>
+              <div><span class="text-brand">$</span> nami mcp add-json docs '{"transport":"stdio","command":"uvx","args":["docs-mcp"]}'</div>
+              <div><span class="text-brand">$</span> nami mcp list</div>
+              <div><span class="text-brand">$</span> nami mcp get sentry</div>
+              <div><span class="text-brand">$</span> nami mcp remove sentry</div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 text-sm">
@@ -443,7 +443,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                   Project Scope
                 </p>
                 <p class="text-gray-300">
-                  Writes repo-local MCP config to <code>.chan/mcp.json</code>
+                  Writes repo-local MCP config to <code>.nami/mcp.json</code>
                 </p>
               </div>
               <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
@@ -452,7 +452,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                 </p>
                 <p class="text-gray-300">
                   Writes user MCP config to
-                  <code>~/.config/chan/config.json</code>
+                  <code>~/.config/nami/config.json</code>
                 </p>
               </div>
             </div>
@@ -1040,7 +1040,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
               Configuration Reference
             </h2>
             <p class="text-xs text-gray-500 mb-6">
-              File: <code>~/.config/chan/config.json</code>
+              File: <code>~/.config/nami/config.json</code>
             </p>
             <div class="table-wrapper mb-8">
               <table class="w-full text-left text-sm">
@@ -1053,7 +1053,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                 <tbody class="text-gray-300">
                   <tr>
                     <td class="p-4 border-t border-[#1a1a1a]">
-                      <code>CHAN_MODEL</code>
+                      <code>NAMI_MODEL</code>
                     </td>
                     <td class="p-4 border-t border-[#1a1a1a]">
                       Override default model
@@ -1061,7 +1061,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                   </tr>
                   <tr>
                     <td class="p-4 border-t border-[#1a1a1a]">
-                      <code>CHAN_API_KEY</code>
+                      <code>NAMI_API_KEY</code>
                     </td>
                     <td class="p-4 border-t border-[#1a1a1a]">
                       Override provider-specific key
@@ -1069,7 +1069,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                   </tr>
                   <tr>
                     <td class="p-4 border-t border-[#1a1a1a]">
-                      <code>CHAN_DEBUG</code>
+                      <code>NAMI_DEBUG</code>
                     </td>
                     <td class="p-4 border-t border-[#1a1a1a]">
                       Enable runtime diagnostic log
@@ -1077,7 +1077,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                   </tr>
                   <tr>
                     <td class="p-4 border-t border-[#1a1a1a]">
-                      <code>CHAN_AUTO_MODE</code>
+                      <code>NAMI_AUTO_MODE</code>
                     </td>
                     <td class="p-4 border-t border-[#1a1a1a]">
                       Auto-approve non-destructive tool calls
@@ -1090,12 +1090,12 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
             <section id="mcp-config" class="mt-12">
               <h3 class="text-2xl font-bold mb-6">MCP Configuration</h3>
               <p class="text-sm text-gray-400 mb-6 leading-relaxed">
-                Chan supports both a global user config and a repo-local MCP
+                Nami supports both a global user config and a repo-local MCP
                 override. Use the global file when you want the same server in
-                every workspace. Use <code>.chan/mcp.json</code> when you want
+                every workspace. Use <code>.nami/mcp.json</code> when you want
                 MCP setup scoped to the current repo. The workspace file is
                 merged on top of the global config for the current session. For
-                routine setup, prefer the <code>chan mcp add</code> command and
+                routine setup, prefer the <code>nami mcp add</code> command and
                 related management subcommands instead of editing JSON by hand.
               </p>
 
@@ -1105,7 +1105,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                     Global
                   </p>
                   <p class="text-gray-300">
-                    <code>~/.config/chan/config.json</code>
+                    <code>~/.config/nami/config.json</code>
                   </p>
                 </div>
                 <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
@@ -1113,7 +1113,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                     Repo Local
                   </p>
                   <p class="text-gray-300">
-                    <code>.chan/mcp.json</code>
+                    <code>.nami/mcp.json</code>
                   </p>
                 </div>
               </div>
@@ -1143,7 +1143,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
 
                 <div>
                   <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
-                    Repo-Local .chan/mcp.json Style
+                    Repo-Local .nami/mcp.json Style
                   </p>
                   <pre
                     class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300 overflow-x-auto"
@@ -1165,7 +1165,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                     Chrome DevTools Example
                   </p>
                   <p class="text-sm text-gray-400 mb-4 leading-relaxed">
-                    This uses the upstream Chrome DevTools MCP server in Chan's
+                    This uses the upstream Chrome DevTools MCP server in Nami's
                     config shape. Keep <code>trust</code> disabled by default
                     because the server can inspect and modify a live browser
                     session.
@@ -1198,7 +1198,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
           <section id="skills-system" class="mb-24">
             <h2 class="subsection-title text-3xl font-bold mb-6">Skills</h2>
             <p class="text-sm text-gray-400 mb-6 leading-relaxed">
-              Skills are task-specific instruction bundles that Chan can inject
+              Skills are task-specific instruction bundles that Nami can inject
               automatically when they match the current request. They are not
               always-on policy files. Use skills for reusable workflows,
               domain-specific guidance, and lightweight task playbooks that
@@ -1211,7 +1211,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                   User Global Skills
                 </p>
                 <p class="text-gray-300">
-                  <code>~/.config/chan/agents/*.md</code>
+                  <code>~/.config/nami/agents/*.md</code>
                 </p>
               </div>
               <div class="p-6 border border-[#1a1a1a] rounded-md bg-subtle/40">
@@ -1226,7 +1226,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
 
             <ul class="space-y-4 text-sm text-gray-400 mb-8">
               <li>
-                &bull; Chan loads built-in skills first, then user-global
+                &bull; Nami loads built-in skills first, then user-global
                 skills, then project-local skills.
               </li>
               <li>
@@ -1234,7 +1234,7 @@ install -m 755 chan-engine "$HOME/.local/bin/chan-engine"</code><button class="c
                 so project-local skills can override a global one.
               </li>
               <li>
-                &bull; Chan auto-selects up to three relevant skills for a turn
+                &bull; Nami auto-selects up to three relevant skills for a turn
                 based on the user prompt.
               </li>
               <li>
@@ -1266,7 +1266,7 @@ Focus on obvious code, explicit error handling, and small package responsibiliti
           <section id="agents-md" class="mb-24">
             <h2 class="subsection-title text-3xl font-bold mb-6">AGENTS.md</h2>
             <p class="text-sm text-gray-400 mb-6 leading-relaxed">
-              <code>AGENTS.md</code> is Chan's project-instructions file. It is
+              <code>AGENTS.md</code> is Nami's project-instructions file. It is
               loaded automatically and treated as always-on guidance for the
               current workspace. Use it for coding standards, repository
               workflow rules, architecture constraints, and other durable team
@@ -1290,7 +1290,7 @@ Focus on obvious code, explicit error handling, and small package responsibiliti
 
             <ul class="space-y-4 text-sm text-gray-400 mb-8">
               <li>
-                &bull; Chan walks upward from the current working directory and
+                &bull; Nami walks upward from the current working directory and
                 loads <code>AGENTS.md</code> files it finds along the path.
               </li>
               <li>
@@ -1333,7 +1333,7 @@ Focus on obvious code, explicit error handling, and small package responsibiliti
               Diagnostics
             </h2>
             <p class="text-gray-400 mb-6 leading-relaxed">
-              Chan now supports both startup debug capture and live session
+              Nami now supports both startup debug capture and live session
               capture. The canonical log format is structured JSONL so you can
               tail it directly or pipe it into external monitoring tools.
             </p>
@@ -1346,7 +1346,7 @@ Focus on obvious code, explicit error handling, and small package responsibiliti
                 </p>
                 <pre
                   class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300"
-                ><code>CHAN_DEBUG=1 chan</code></pre>
+                ><code>NAMI_DEBUG=1 nami</code></pre>
               </div>
               <div>
                 <p
@@ -1369,8 +1369,8 @@ Focus on obvious code, explicit error handling, and small package responsibiliti
                 </p>
                 <pre
                   class="bg-subtle p-6 border border-[#1a1a1a] rounded-md text-sm text-gray-300"
-                ><code>chan debug-view --file ~/.config/chan/sessions/&lt;session-id&gt;/debug.log
-tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
+                ><code>nami debug-view --file ~/.config/nami/sessions/&lt;session-id&gt;/debug.log
+tail -F ~/.config/nami/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
               </div>
             </div>
             <ul class="mt-8 space-y-3 text-sm text-gray-400 leading-relaxed">
@@ -1398,7 +1398,7 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
               Architecture
             </h2>
             <p class="text-sm text-gray-400 leading-relaxed mb-4">
-              Chan uses a split-process architecture. A Silvery-powered terminal
+              Nami uses a split-process architecture. A Silvery-powered terminal
               UI communicates with a Go engine over NDJSON. Every turn, the
               engine assembles context from four cooperating layers: live
               retrieval, durable preference memory, session memory, and
@@ -2215,7 +2215,7 @@ tail -F ~/.config/chan/sessions/&lt;session-id&gt;/debug.log | jq .</code></pre>
             </div>
 
             <p class="text-sm text-gray-500 leading-relaxed mb-8">
-              This diagram is intentionally retrieval-scoped. It shows how Chan
+              This diagram is intentionally retrieval-scoped. It shows how Nami
               selects fresh repo context per turn. Continuity under context
               pressure is handled by separate layers: session memory preserves
               structured working state, and compaction trims or summarizes older
@@ -2238,7 +2238,7 @@ make install        # Install to /usr/local/bin</code></pre>
           <footer
             class="pt-24 border-t border-[#1a1a1a] text-[10px] uppercase font-bold text-gray-800 tracking-[0.5em] text-center"
           >
-            &copy; 2026 Chan Environment &bull; Verified Build
+            &copy; 2026 Nami Environment &bull; Verified Build
           </footer>
         </main>
       </div>

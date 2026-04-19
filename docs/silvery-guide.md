@@ -1,21 +1,21 @@
-# Silvery Guide For Chan
+# Silvery Guide For Nami
 
-This is a project-specific guide for how `chan` currently uses Silvery in the TUI, plus the integration details and pitfalls discovered during the migration and follow-up UX work.
+This is a project-specific guide for how `nami` currently uses Silvery in the TUI, plus the integration details and pitfalls discovered during the migration and follow-up UX work.
 
-It is not a general Silvery tutorial. It is a practical note for working on `chan/tui`.
+It is not a general Silvery tutorial. It is a practical note for working on `nami/tui`.
 
 ## Current Setup
 
 ### Runtime shape
 
-- The TUI entrypoint is `chan/tui/src/index.tsx`.
+- The TUI entrypoint is `nami/tui/src/index.tsx`.
 - The app is wrapped in `ThemeProvider` from `silvery`.
 - The current default theme is `presetTheme("nord")`.
 - The main app root uses `Screen` so the layout fills the terminal and responds correctly to resize events.
 
 ### Package source
 
-- `chan/tui` depends on `silvery` via the local wrapper package at `chan/tui/vendor/silvery-local`.
+- `nami/tui` depends on `silvery` via the local wrapper package at `nami/tui/vendor/silvery-local`.
 - That wrapper package is built from the latest reference repo dist output, not from the stale published npm package.
 - This matters because several APIs and behaviors used by the TUI depend on newer Silvery codepaths.
 
@@ -33,7 +33,7 @@ Why:
 
 Current example:
 
-- `chan/tui/src/App.tsx` uses `Screen` as the top-level container.
+- `nami/tui/src/App.tsx` uses `Screen` as the top-level container.
 
 ### 2. Use `ListView` for transcript history
 
@@ -47,7 +47,7 @@ Why:
 
 Current example:
 
-- `chan/tui/src/components/StreamOutput.tsx`
+- `nami/tui/src/components/StreamOutput.tsx`
 
 Important detail:
 
@@ -73,9 +73,9 @@ Why:
 
 Current examples:
 
-- `chan/tui/src/components/Input.tsx`
-- `chan/tui/src/components/StatusBar.tsx`
-- `chan/tui/src/components/TranscriptSearchPrompt.tsx`
+- `nami/tui/src/components/Input.tsx`
+- `nami/tui/src/components/StatusBar.tsx`
+- `nami/tui/src/components/TranscriptSearchPrompt.tsx`
 
 ### 4. Use `Spinner` directly for inline activity
 
@@ -95,9 +95,9 @@ Current usage notes:
 
 Current examples:
 
-- `chan/tui/src/components/Input.tsx`
-- `chan/tui/src/components/messages/StreamingAssistantMessage.tsx`
-- `chan/tui/src/components/messages/AssistantThinkingMessage.tsx`
+- `nami/tui/src/components/Input.tsx`
+- `nami/tui/src/components/messages/StreamingAssistantMessage.tsx`
+- `nami/tui/src/components/messages/AssistantThinkingMessage.tsx`
 
 ### 5. Use `usePaste` from `silvery/runtime`
 
@@ -110,7 +110,7 @@ Why:
 
 Current example:
 
-- `chan/tui/src/components/Input.tsx`
+- `nami/tui/src/components/Input.tsx`
 
 ### 6. Use `key.text ?? input` for text insertion
 
@@ -125,10 +125,10 @@ This was important to keep characters like `?` and other shifted punctuation wor
 
 Current examples:
 
-- `chan/tui/src/components/Input.tsx`
-- `chan/tui/src/components/TranscriptSearchPrompt.tsx`
+- `nami/tui/src/components/Input.tsx`
+- `nami/tui/src/components/TranscriptSearchPrompt.tsx`
 
-## Practical Patterns In Chan
+## Practical Patterns In Nami
 
 ### Prompt area
 
@@ -142,7 +142,7 @@ Why this approach is currently used:
 
 Current example:
 
-- `chan/tui/src/components/Input.tsx`
+- `nami/tui/src/components/Input.tsx`
 
 ### Transcript item layout
 
@@ -150,10 +150,10 @@ Conversation rows are composed from small, explicit components instead of one ge
 
 Current examples:
 
-- `chan/tui/src/components/messages/UserTextMessage.tsx`
-- `chan/tui/src/components/messages/AssistantTextMessage.tsx`
-- `chan/tui/src/components/messages/StreamingAssistantMessage.tsx`
-- `chan/tui/src/components/MessageRow.tsx`
+- `nami/tui/src/components/messages/UserTextMessage.tsx`
+- `nami/tui/src/components/messages/AssistantTextMessage.tsx`
+- `nami/tui/src/components/messages/StreamingAssistantMessage.tsx`
+- `nami/tui/src/components/MessageRow.tsx`
 
 This makes it easier to change marker behavior, labels, metadata, and inline spinner placement without destabilizing the whole transcript surface.
 
@@ -188,7 +188,7 @@ This avoids the `Theme | ColorPalette` typing problem that showed up during inte
 
 ### 3. The vendored package layout matters
 
-`chan/tui/vendor/silvery-local` exposes built `dist` files, not source files.
+`nami/tui/vendor/silvery-local` exposes built `dist` files, not source files.
 
 So when checking types or behavior in the vendored package:
 
@@ -203,13 +203,13 @@ Do not assume the same source tree layout as `reference/silvery`.
 
 Current example:
 
-- `chan/tui/src/components/StreamOutput.tsx` uses `useBoxRect()` and derives `viewportHeight` from it.
+- `nami/tui/src/components/StreamOutput.tsx` uses `useBoxRect()` and derives `viewportHeight` from it.
 
 ### 5. Not every raw model status should be shown directly to users
 
 Internal activity states like `Thinking` can be technically accurate but not always desirable in the composer chrome.
 
-What `chan` currently does:
+What `nami` currently does:
 
 - Transcript internals can still distinguish thinking blocks.
 - The spinner above the prompt normalizes that label to `Working`.
@@ -218,7 +218,7 @@ This keeps the prompt area simpler without removing detailed transcript state en
 
 ## Good Defaults For Future TUI Work
 
-When adding or changing Silvery UI in `chan`, prefer this order of decisions:
+When adding or namiging Silvery UI in `nami`, prefer this order of decisions:
 
 1. Start from `Screen` and bounded layout regions.
 2. Use `ListView` for long, interactive vertical surfaces.
@@ -231,19 +231,19 @@ When adding or changing Silvery UI in `chan`, prefer this order of decisions:
 
 If you need to work on the TUI again, these are the most useful files to inspect first:
 
-- `chan/tui/src/App.tsx`
-- `chan/tui/src/index.tsx`
-- `chan/tui/src/components/Input.tsx`
-- `chan/tui/src/components/StreamOutput.tsx`
-- `chan/tui/src/components/MessageRow.tsx`
-- `chan/tui/src/components/messages/StreamingAssistantMessage.tsx`
-- `chan/tui/vendor/silvery-local/dist/index.d.mts`
+- `nami/tui/src/App.tsx`
+- `nami/tui/src/index.tsx`
+- `nami/tui/src/components/Input.tsx`
+- `nami/tui/src/components/StreamOutput.tsx`
+- `nami/tui/src/components/MessageRow.tsx`
+- `nami/tui/src/components/messages/StreamingAssistantMessage.tsx`
+- `nami/tui/vendor/silvery-local/dist/index.d.mts`
 - `reference/silvery/docs/api/spinner.md`
 - `reference/silvery/docs/guides/theming.md`
 
 ## Summary
 
-The biggest practical Silvery lessons in `chan` so far are:
+The biggest practical Silvery lessons in `nami` so far are:
 
 - treat `Screen` as the fullscreen shell
 - treat `ListView` as the transcript primitive

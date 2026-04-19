@@ -1,12 +1,12 @@
-# Chan
+# Nami
 
 An agentic coding CLI powered by LLMs. Think, plan, and execute code changes from your terminal.
 
-Chan combines a terminal UI, a Go-based execution engine, first-class artifacts, and bounded child agents so you can inspect code, plan work, edit safely, and verify results without leaving the terminal.
+Nami combines a terminal UI, a Go-based execution engine, first-class artifacts, and bounded child agents so you can inspect code, plan work, edit safely, and verify results without leaving the terminal.
 
 ![Agentic Coding CLI Architecture](./docs/architecture.webp)
 
-## Why Chan
+## Why Nami
 
 - **Agentic terminal workflow** — chat with your codebase, run tools, edit files, and inspect diffs in one place.
 - **Two operating modes** — use **plan** mode for review-first workflows or **fast** mode for direct execution.
@@ -17,7 +17,7 @@ Chan combines a terminal UI, a Go-based execution engine, first-class artifacts,
 
 ## Architecture & Vision
 
-Chan is built on three core pillars:
+Nami is built on three core pillars:
 
 1. **TUI (Silvery)** — interactive terminal UX with streaming output, tool transcripts, progress, background task visibility, and artifact panels.
 2. **Go Engine** — high-performance backend for the agent loop, tool execution, provider integration, session persistence, and permission gating.
@@ -26,26 +26,26 @@ Chan is built on three core pillars:
 ## Architecture Docs
 
 - [Lean Retrieval Architecture](./docs/lean-retrieval-architecture.md)
-- [Silvery Guide for Chan](./docs/silvery-guide.md)
+- [Silvery Guide for Nami](./docs/silvery-guide.md)
 
 ## Quick Start
 
 ### Prerequisites
 
 - macOS or Linux
-- Bun 1.0+ to run the `chan` launcher
+- Bun 1.0+ to run the `nami` launcher
 - One configured model provider: Anthropic, OpenAI, Google, DeepSeek, Groq, Mistral, Ollama, or GitHub Copilot
-- Go 1.26+ only if building from source or rebuilding `chan-engine`
+- Go 1.26+ only if building from source or rebuilding `nami-engine`
 
 ### Install
 
 #### macOS / Linux (one command)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/channyeintun/chan/main/chan/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.sh | sh
 ```
 
-This downloads prebuilt `chan` and `chan-engine` release assets from GitHub Releases. It does **not** build from source.
+This downloads prebuilt `nami` and `nami-engine` release assets from GitHub Releases. It does **not** build from source.
 
 Current releases install a Bun launcher plus the Go engine, so Bun must already be installed on the target machine.
 
@@ -57,7 +57,7 @@ The installer chooses a writable directory automatically:
 After install, verify:
 
 ```bash
-command -v chan
+command -v nami
 ```
 
 If needed, add the install dir to your `PATH`:
@@ -68,30 +68,30 @@ export PATH="$HOME/.local/bin:$PATH"
 
 #### Manual install
 
-If you already have local `chan` and `chan-engine` executables:
+If you already have local `nami` and `nami-engine` executables:
 
 ```bash
-sudo install -m 755 chan /usr/local/bin/chan
-sudo install -m 755 chan-engine /usr/local/bin/chan-engine
+sudo install -m 755 nami /usr/local/bin/nami
+sudo install -m 755 nami-engine /usr/local/bin/nami-engine
 ```
 
 Without `sudo`:
 
 ```bash
 mkdir -p "$HOME/.local/bin"
-install -m 755 chan "$HOME/.local/bin/chan"
-install -m 755 chan-engine "$HOME/.local/bin/chan-engine"
+install -m 755 nami "$HOME/.local/bin/nami"
+install -m 755 nami-engine "$HOME/.local/bin/nami-engine"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
 If installing from a local clone:
 
 ```bash
-cd chan/tui
+cd nami/tui
 make release-local
 mkdir -p "$HOME/.local/bin"
-install -m 755 release/chan "$HOME/.local/bin/chan"
-install -m 755 release/chan-engine "$HOME/.local/bin/chan-engine"
+install -m 755 release/nami "$HOME/.local/bin/nami"
+install -m 755 release/nami-engine "$HOME/.local/bin/nami-engine"
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
@@ -116,24 +116,24 @@ Supported providers:
 | Groq           | `GROQ_API_KEY`           |
 | Mistral        | `MISTRAL_API_KEY`        |
 | Ollama         | none — runs locally      |
-| GitHub Copilot | use `/connect` in Chan   |
+| GitHub Copilot | use `/connect` in Nami   |
 
 ### GitHub Copilot setup
 
 GitHub Copilot uses a device-login flow instead of a static API key.
 
-Start Chan, then run:
+Start Nami, then run:
 
 ```text
 /connect
 ```
 
-Chan will:
+Nami will:
 
 - print the GitHub verification URL and device code
 - try to open the verification page automatically
 - wait for authorization to complete
-- save credentials in `~/.config/chan/config.json`
+- save credentials in `~/.config/nami/config.json`
 - switch the main model to `github-copilot/gpt-5.4`
 - set the subagent model to `github-copilot/claude-haiku-4.5`
 
@@ -148,7 +148,7 @@ For GitHub Enterprise:
 Start the CLI:
 
 ```bash
-chan
+nami
 ```
 
 Then type what you want, for example:
@@ -161,31 +161,31 @@ Then type what you want, for example:
 ### Common flags
 
 ```bash
-chan --model openai/gpt-4o
-chan --model ollama/gemma3
-chan --model ollama/gemma4:e4b
-chan --mode fast
-chan --auto-mode
-chan --help
+nami --model openai/gpt-4o
+nami --model ollama/gemma3
+nami --model ollama/gemma4:e4b
+nami --mode fast
+nami --auto-mode
+nami --help
 ```
 
 ### MCP management
 
-Chan now includes a small MCP management CLI similar to Claude Code's core flow.
+Nami now includes a small MCP management CLI similar to Claude Code's core flow.
 
 ```bash
-chan mcp add my-server -- npx my-mcp-server
-chan mcp add --transport http sentry https://mcp.sentry.dev/mcp
-chan mcp add-json docs '{"transport":"stdio","command":"uvx","args":["docs-mcp"]}'
-chan mcp list
-chan mcp get sentry
-chan mcp remove sentry
+nami mcp add my-server -- npx my-mcp-server
+nami mcp add --transport http sentry https://mcp.sentry.dev/mcp
+nami mcp add-json docs '{"transport":"stdio","command":"uvx","args":["docs-mcp"]}'
+nami mcp list
+nami mcp get sentry
+nami mcp remove sentry
 ```
 
 Supported scopes:
 
-- `project` writes repo-local MCP config to `.chan/mcp.json`
-- `user` writes user MCP config to `~/.config/chan/config.json`
+- `project` writes repo-local MCP config to `.nami/mcp.json`
+- `user` writes user MCP config to `~/.config/nami/config.json`
 
 Notes:
 
@@ -213,7 +213,7 @@ Notes:
 
 ## First-Class Outputs
 
-Artifacts are central to Chan's workflow.
+Artifacts are central to Nami's workflow.
 
 - **Implementation plans** are saved as review artifacts before execution.
 - **Task lists** track multi-step progress across turns.
@@ -224,7 +224,7 @@ Artifacts are meant to be reopened, revised, and resumed — not just dumped tex
 
 ## Permission System
 
-When Chan wants to run a command or change files, it can ask for approval.
+When Nami wants to run a command or change files, it can ask for approval.
 
 ```text
 ╭─ Permission Required ──────────────────────╮
@@ -249,7 +249,7 @@ Destructive commands and sensitive edits such as `.env`, lockfiles, `.git`, or w
 
 ## Tooling
 
-Chan exposes a broad local-tool runtime, including:
+Nami exposes a broad local-tool runtime, including:
 
 | Tool                             | Description                                           |
 | -------------------------------- | ----------------------------------------------------- |
@@ -288,7 +288,7 @@ The `agent` tool supports three bounded modes:
 Config file:
 
 ```text
-~/.config/chan/config.json
+~/.config/nami/config.json
 ```
 
 Example:
@@ -304,18 +304,18 @@ Environment variables override config:
 
 | Variable               | Description                                      |
 | ---------------------- | ------------------------------------------------ |
-| `CHAN_MODEL`           | Model to use                                     |
-| `CHAN_API_KEY`         | API key override                                 |
-| `CHAN_BASE_URL`        | Custom API base URL                              |
-| `CHAN_DEBUG`           | Enable runtime debug logging                     |
-| `CHAN_PERMISSION_MODE` | `default`, `autoApprove`, or `bypassPermissions` |
-| `CHAN_AUTO_MODE`      | Set to `true` to auto-approve non-destructive tools |
+| `NAMI_MODEL`           | Model to use                                     |
+| `NAMI_API_KEY`         | API key override                                 |
+| `NAMI_BASE_URL`        | Custom API base URL                              |
+| `NAMI_DEBUG`           | Enable runtime debug logging                     |
+| `NAMI_PERMISSION_MODE` | `default`, `autoApprove`, or `bypassPermissions` |
+| `NAMI_AUTO_MODE`      | Set to `true` to auto-approve non-destructive tools |
 
 If you use GitHub Copilot, config may also persist Copilot credentials and a `subagent_model`.
 
 ### MCP servers
 
-Chan can load external MCP servers at startup from either `~/.config/chan/config.json` or `.chan/mcp.json` in the current workspace. The workspace file is merged on top of the user config for the current session, so team-local MCP settings can live in the repo without replacing your personal global setup.
+Nami can load external MCP servers at startup from either `~/.config/nami/config.json` or `.nami/mcp.json` in the current workspace. The workspace file is merged on top of the user config for the current session, so team-local MCP settings can live in the repo without replacing your personal global setup.
 
 Example user config:
 
@@ -353,7 +353,7 @@ Example user config:
 }
 ```
 
-Example workspace override in `.chan/mcp.json`:
+Example workspace override in `.nami/mcp.json`:
 
 ```json
 {
@@ -382,7 +382,7 @@ Discovered MCP tools are exposed with stable names like `mcp__github__search_iss
 Launch with debug capture:
 
 ```bash
-CHAN_DEBUG=1 chan
+NAMI_DEBUG=1 nami
 ```
 
 Or enable it inside the TUI:
@@ -394,20 +394,20 @@ Or enable it inside the TUI:
 Debug logs are written to:
 
 ```text
-~/.config/chan/sessions/<session-id>/debug.log
+~/.config/nami/sessions/<session-id>/debug.log
 ```
 
 Inspect manually:
 
 ```bash
-chan debug-view --file ~/.config/chan/sessions/<session-id>/debug.log
-tail -F ~/.config/chan/sessions/<session-id>/debug.log | jq .
+nami debug-view --file ~/.config/nami/sessions/<session-id>/debug.log
+tail -F ~/.config/nami/sessions/<session-id>/debug.log | jq .
 ```
 
 ## Repository Layout
 
 ```text
-chan/    Go engine, CLI, TUI launcher, install script
+nami/    Go engine, CLI, TUI launcher, install script
 web/     Project website and docs page assets
 docs/    Architecture and integration guides
 reference/  Reference material and external notes
@@ -417,25 +417,25 @@ reference/  Reference material and external notes
 
 ```text
 ┌──────────────────────────────┐
-│  chan (Bun launcher)         │  ← Terminal UI
+│  nami (Bun launcher)         │  ← Terminal UI
 │    Renders TUI, handles I/O  │
 │         │ stdin/stdout NDJSON│
 │  ┌──────▼─────────────────┐  │
-│  │ chan-engine (Go)       │  │  ← LLM client, tools, agent loop
+│  │ nami-engine (Go)       │  │  ← LLM client, tools, agent loop
 │  │  Streams events out    │  │
 │  │  Reads commands in     │  │
 │  └────────────────────────┘  │
 └──────────────────────────────┘
 ```
 
-Both executables must be in the same directory, or `chan-engine` must be in `PATH`.
+Both executables must be in the same directory, or `nami-engine` must be in `PATH`.
 
 ## Building from Source
 
 Requires: Go 1.26+, Bun 1.0+
 
 ```bash
-cd chan/tui
+cd nami/tui
 bun install --frozen-lockfile
 bun run setup
 bun run start
@@ -445,7 +445,7 @@ make release
 make install
 ```
 
-`make release` writes GitHub-release-ready artifacts under `chan/tui/release/`.
+`make release` writes GitHub-release-ready artifacts under `nami/tui/release/`.
 
 ## License
 

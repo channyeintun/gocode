@@ -1,12 +1,12 @@
 # Lean Retrieval Architecture
 
-This document describes the lean retrieval architecture now implemented in `chan`.
+This document describes the lean retrieval architecture now implemented in `nami`.
 
 It replaces the old idea of storing durable code summaries with a repo-first retrieval path that selects fresh, live context per turn.
 
 ## Summary
 
-Chan now uses five cooperating context layers:
+Nami now uses five cooperating context layers:
 
 1. **Working context** — current prompt, recent tool output, active session state, git state.
 2. **Live retrieval graph** — a session-scoped, in-memory graph over repository structure.
@@ -45,7 +45,7 @@ The new design optimizes for:
 
 `QueryState` now carries a session-scoped `RetrievalGraph`.
 
-- `chan/internal/agent/query_stream.go`
+- `nami/internal/agent/query_stream.go`
 - `NewQueryState(...)` initializes `Graph: NewRetrievalGraph(ctx.CurrentDir)`
 
 This means the graph persists across turns within one session instead of being rebuilt from scratch every turn.
@@ -54,7 +54,7 @@ This means the graph persists across turns within one session instead of being r
 
 The retrieval pass runs during the query loop before model invocation.
 
-- `chan/internal/agent/loop.go`
+- `nami/internal/agent/loop.go`
 - `runLiveRetrieval(...)`
 
 Per turn it does this:
@@ -79,7 +79,7 @@ The injected content is file-backed and attributed:
 
 The graph is implemented in:
 
-- `chan/internal/agent/retrieval_graph.go`
+- `nami/internal/agent/retrieval_graph.go`
 
 It is a session-scoped in-memory index over repository structure.
 
@@ -121,7 +121,7 @@ It extracts symbols, import-like edges, and common test relationships.
 
 ### Anchor extraction
 
-`chan/internal/agent/retrieval.go`
+`nami/internal/agent/retrieval.go`
 
 Anchors come from exact signals, especially:
 
@@ -147,7 +147,7 @@ If the first hop is sparse, retrieval expands a second hop with a penalty instea
 
 ### Live snippet reads
 
-After ranking, Chan reads only the top candidate files live from disk and injects small excerpts.
+After ranking, Nami reads only the top candidate files live from disk and injects small excerpts.
 
 Key limits in `retrieval.go`:
 
@@ -160,7 +160,7 @@ Key limits in `retrieval.go`:
 
 Durable memory still exists, but its role is narrower.
 
-- `chan/internal/agent/memory_files.go`
+- `nami/internal/agent/memory_files.go`
 
 `AGENTS.md` remains instruction-like context.
 
@@ -178,8 +178,8 @@ That is the key architectural shift: durable memory no longer acts as the main s
 
 Session memory is a separate layer from durable preference memory and separate from retrieval.
 
-- `chan/internal/engine/session_memory.go`
-- `chan/internal/agent/session_memory.go`
+- `nami/internal/engine/session_memory.go`
+- `nami/internal/agent/session_memory.go`
 
 Purpose:
 
@@ -203,7 +203,7 @@ These are related but not interchangeable.
 
 ## Session attempt log
 
-Chan also keeps a short-lived session attempt log.
+Nami also keeps a short-lived session attempt log.
 
 Purpose:
 
@@ -217,7 +217,7 @@ It is especially useful when the model keeps retrying the same failing edit or c
 
 ## Context pressure and shared budget
 
-`chan/internal/agent/context_pressure.go`
+`nami/internal/agent/context_pressure.go`
 
 Live retrieval shares the same pressure gate used by memory recall.
 
@@ -234,9 +234,9 @@ This keeps retrieval and compaction from competing independently for tokens.
 
 Compaction is no longer just a blunt summary fallback.
 
-- `chan/internal/compact/pipeline.go`
-- `chan/internal/compact/summarize.go`
-- `chan/internal/engine/session_helpers.go`
+- `nami/internal/compact/pipeline.go`
+- `nami/internal/compact/summarize.go`
+- `nami/internal/engine/session_helpers.go`
 
 The pipeline now has multiple cooperating steps:
 
@@ -281,8 +281,8 @@ The context system emits explicit runtime telemetry.
 
 Defined in:
 
-- `chan/internal/ipc/protocol.go`
-- `chan/internal/timing/analysis.go`
+- `nami/internal/ipc/protocol.go`
+- `nami/internal/timing/analysis.go`
 
 Key events:
 
@@ -345,22 +345,22 @@ It is a lightweight, repo-first retrieval layer inside a broader context system 
 
 ## Key source files
 
-- `chan/internal/agent/query_stream.go` — session state owns the graph
-- `chan/internal/agent/loop.go` — runs retrieval and emits telemetry
-- `chan/internal/agent/retrieval.go` — anchor extraction, scoring entrypoint, live snippet reads
-- `chan/internal/agent/retrieval_graph.go` — graph structure, parsing, invalidation, scoring expansion
-- `chan/internal/agent/context_pressure.go` — pressure gating and retrieval budget
-- `chan/internal/agent/memory_files.go` — preference-framed durable memory recall
-- `chan/internal/agent/session_memory.go` — prompt-facing session-memory snapshot formatting
-- `chan/internal/engine/session_memory.go` — session-memory extraction and refresh policy
-- `chan/internal/compact/pipeline.go` — microcompaction, summarization, partial compaction
-- `chan/internal/compact/summarize.go` — compaction prompts and session-memory coordination
-- `chan/internal/ipc/protocol.go` — retrieval and attempt-log telemetry events
-- `chan/internal/timing/analysis.go` — timing summary and compaction/session-memory analysis
+- `nami/internal/agent/query_stream.go` — session state owns the graph
+- `nami/internal/agent/loop.go` — runs retrieval and emits telemetry
+- `nami/internal/agent/retrieval.go` — anchor extraction, scoring entrypoint, live snippet reads
+- `nami/internal/agent/retrieval_graph.go` — graph structure, parsing, invalidation, scoring expansion
+- `nami/internal/agent/context_pressure.go` — pressure gating and retrieval budget
+- `nami/internal/agent/memory_files.go` — preference-framed durable memory recall
+- `nami/internal/agent/session_memory.go` — prompt-facing session-memory snapshot formatting
+- `nami/internal/engine/session_memory.go` — session-memory extraction and refresh policy
+- `nami/internal/compact/pipeline.go` — microcompaction, summarization, partial compaction
+- `nami/internal/compact/summarize.go` — compaction prompts and session-memory coordination
+- `nami/internal/ipc/protocol.go` — retrieval and attempt-log telemetry events
+- `nami/internal/timing/analysis.go` — timing summary and compaction/session-memory analysis
 
 ## Final takeaway
 
-Chan’s context architecture now works by combining:
+Nami’s context architecture now works by combining:
 
 - live repo reads
 - exact anchors
