@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# nami installer
+# nami installer for macOS and Linux
 # Usage: curl -fsSL https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.sh | sh
 
 REPO="channyeintun/nami"
@@ -26,7 +26,7 @@ esac
 
 case "$OS" in
   darwin|linux) ;;
-  *) echo "Unsupported OS: $OS"; exit 1 ;;
+  *) echo "Unsupported OS: $OS. On Windows, use nami/install.ps1 instead."; exit 1 ;;
 esac
 
 PLATFORM="${OS}-${ARCH}"

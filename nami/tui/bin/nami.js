@@ -6,11 +6,14 @@ import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const engineBinaryName =
+  process.platform === "win32" ? "nami-engine.exe" : "nami-engine";
 
 // Resolve the Go engine from installed and source-build layouts before PATH.
 const candidates = [
-  join(__dirname, "nami-engine"),
-  join(__dirname, "..", "engine", "nami-engine"),
+  join(__dirname, engineBinaryName),
+  join(__dirname, "..", "engine", engineBinaryName),
+  engineBinaryName,
   "nami-engine",
 ];
 const enginePath =

@@ -4,8 +4,11 @@ VERSION     := 0.1.0
 BUILD_DIR   := release
 GO_SRC      := ../cmd/nami-engine
 PREFIX      ?= /usr/local/bin
+WINDOWS_WRAPPER := bin/nami.cmd
 
-PLATFORMS := darwin-arm64 darwin-amd64 linux-amd64 linux-arm64
+UNIX_PLATFORMS := darwin-arm64 darwin-amd64 linux-amd64 linux-arm64
+WINDOWS_PLATFORMS := windows-amd64 windows-arm64
+PLATFORMS := $(UNIX_PLATFORMS) $(WINDOWS_PLATFORMS)
 
 .PHONY: all clean release build-tui-launcher $(PLATFORMS)
 
@@ -37,17 +40,33 @@ release: clean build-tui-launcher
 		dir=$(BUILD_DIR)/$(BINARY_NAME)-$$platform; \
 		asset_dir=$(BUILD_DIR)/assets; \
 		binary_asset=$$asset_dir/$(BINARY_NAME)-$$platform; \
-		engine_asset=$$asset_dir/$(ENGINE_NAME)-$$platform; \
 		echo "Building $$platform..."; \
 		mkdir -p $$dir $$asset_dir; \
 		install -m 755 $(BUILD_DIR)/$(BINARY_NAME) $$dir/$(BINARY_NAME); \
-		GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build -o $$dir/$(ENGINE_NAME) $(GO_SRC); \
-		install -m 755 $$dir/$(BINARY_NAME) $$binary_asset; \
-		install -m 755 $$dir/$(ENGINE_NAME) $$engine_asset; \
-		tar -czf $(BUILD_DIR)/$(BINARY_NAME)-$$platform.tar.gz -C $(BUILD_DIR) $(BINARY_NAME)-$$platform; \
-		echo "  -> $$binary_asset"; \
-		echo "  -> $$engine_asset"; \
-		echo "  -> $(BUILD_DIR)/$(BINARY_NAME)-$$platform.tar.gz"; \
+		if [ "$$os" = "windows" ]; then \
+			engine_name=$(ENGINE_NAME).exe; \
+			wrapper_asset=$$asset_dir/$(BINARY_NAME)-$$platform.cmd; \
+			engine_asset=$$asset_dir/$(ENGINE_NAME)-$$platform.exe; \
+			GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build -o $$dir/$$engine_name $(GO_SRC); \
+			install -m 644 $(WINDOWS_WRAPPER) $$dir/$(BINARY_NAME).cmd; \
+			install -m 755 $$dir/$(BINARY_NAME) $$binary_asset; \
+			install -m 644 $$dir/$(BINARY_NAME).cmd $$wrapper_asset; \
+			install -m 755 $$dir/$$engine_name $$engine_asset; \
+			(cd $(BUILD_DIR) && zip -qr $(BINARY_NAME)-$$platform.zip $(BINARY_NAME)-$$platform); \
+			echo "  -> $$binary_asset"; \
+			echo "  -> $$wrapper_asset"; \
+			echo "  -> $$engine_asset"; \
+			echo "  -> $(BUILD_DIR)/$(BINARY_NAME)-$$platform.zip"; \
+		else \
+			engine_asset=$$asset_dir/$(ENGINE_NAME)-$$platform; \
+			GOOS=$$os GOARCH=$$arch CGO_ENABLED=0 go build -o $$dir/$(ENGINE_NAME) $(GO_SRC); \
+			install -m 755 $$dir/$(BINARY_NAME) $$binary_asset; \
+			install -m 755 $$dir/$(ENGINE_NAME) $$engine_asset; \
+			tar -czf $(BUILD_DIR)/$(BINARY_NAME)-$$platform.tar.gz -C $(BUILD_DIR) $(BINARY_NAME)-$$platform; \
+			echo "  -> $$binary_asset"; \
+			echo "  -> $$engine_asset"; \
+			echo "  -> $(BUILD_DIR)/$(BINARY_NAME)-$$platform.tar.gz"; \
+		fi; \
 	done
 	@echo ""
 	@echo "Release artifacts in $(BUILD_DIR)/"

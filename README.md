@@ -32,7 +32,7 @@ Nami is built on three core pillars:
 
 ### Prerequisites
 
-- macOS or Linux
+- macOS, Linux, or Windows 11
 - Bun 1.0+ to run the `nami` launcher
 - One configured model provider: Anthropic, OpenAI, Google, DeepSeek, Groq, Mistral, Ollama, or GitHub Copilot
 - Go 1.26+ only if building from source or rebuilding `nami-engine`
@@ -66,7 +66,33 @@ If needed, add the install dir to your `PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+#### Windows (PowerShell)
+
+```powershell
+powershell -ExecutionPolicy Bypass -NoProfile -Command "iwr https://raw.githubusercontent.com/channyeintun/nami/main/nami/install.ps1 -UseBasicParsing | iex"
+```
+
+This downloads the Windows release archive, installs the bundled Bun launcher plus `nami-engine.exe`, and adds the install directory to your user `PATH`.
+
+Current Windows releases install into:
+
+- `%LOCALAPPDATA%\Programs\nami\bin`
+
+After install, open a new PowerShell window and verify:
+
+```powershell
+nami --help
+```
+
 #### Manual install
+
+On Windows, download `nami-windows-amd64.zip` or `nami-windows-arm64.zip` from GitHub Releases, extract it, then copy these files into a directory on your `PATH`:
+
+- `nami`
+- `nami.cmd`
+- `nami-engine.exe`
+
+Nami uses a Bun launcher on Windows too, so `bun` must already be installed.
 
 If you already have local `nami` and `nami-engine` executables:
 
@@ -94,6 +120,15 @@ install -m 755 release/nami "$HOME/.local/bin/nami"
 install -m 755 release/nami-engine "$HOME/.local/bin/nami-engine"
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+To build Windows release assets from source:
+
+```bash
+cd nami/tui
+make release
+```
+
+The release target now emits Windows archives and direct assets alongside the macOS and Linux artifacts.
 
 ## Setup
 
@@ -133,7 +168,7 @@ Nami will:
 - print the GitHub verification URL and device code
 - try to open the verification page automatically
 - wait for authorization to complete
-- save credentials in `~/.config/nami/config.json`
+- save credentials in the platform config file (`~/.config/nami/config.json` on macOS/Linux)
 - switch the main model to `github-copilot/gpt-5.4`
 - set the subagent model to `github-copilot/claude-haiku-4.5`
 
@@ -185,7 +220,7 @@ nami mcp remove sentry
 Supported scopes:
 
 - `project` writes repo-local MCP config to `.nami/mcp.json`
-- `user` writes user MCP config to `~/.config/nami/config.json`
+- `user` writes user MCP config to the platform config directory (`~/.config/nami/config.json` on macOS/Linux)
 
 Notes:
 
