@@ -750,6 +750,7 @@ const App: FC<AppProps> = ({ enginePath, model, mode, autoMode }) => {
             pendingArtifactReview={uiState.pendingArtifactReview}
             backgroundAgents={uiState.backgroundAgents}
             backgroundCommands={uiState.backgroundCommands}
+            allowedPermissionFileTypes={uiState.allowedPermissionFileTypes}
             rateLimits={uiState.rateLimits}
           />
         </Box>

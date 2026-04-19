@@ -38,6 +38,7 @@ interface StatusBarProps {
   pendingArtifactReview?: UIArtifactReview | null;
   backgroundAgents: UIBackgroundAgent[];
   backgroundCommands: UIBackgroundCommand[];
+  allowedPermissionFileTypes: string[];
   rateLimits: UIRateLimits;
 }
 
@@ -65,6 +66,7 @@ const StatusBar: FC<StatusBarProps> = ({
   pendingArtifactReview,
   backgroundAgents,
   backgroundCommands,
+  allowedPermissionFileTypes,
   rateLimits,
 }) => {
   const readinessLabel = ready ? "READY" : "BOOTING";
@@ -110,10 +112,14 @@ const StatusBar: FC<StatusBarProps> = ({
   const backgroundAgentSummary = summarizeBackgroundAgents(backgroundAgents);
   const backgroundCommandSummary =
     summarizeBackgroundCommands(backgroundCommands);
+  const allowedFileTypeSummary = summarizeAllowedFileTypes(
+    allowedPermissionFileTypes,
+  );
 
   return (
     <Box paddingX={1} paddingY={0} userSelect="none">
-      <Text wrap="truncate-end">
+      <Box flexDirection="row" justifyContent="space-between" minWidth={0}>
+        <Text wrap="truncate-end">
         <Text color={readinessColor}>{readinessLabel.toLowerCase()}</Text>
         <Text color="$muted"> · </Text>
         <Text bold>{workspaceLabel}</Text>
@@ -207,7 +213,14 @@ const StatusBar: FC<StatusBarProps> = ({
         ) : null}
         <Text color="$muted"> · </Text>
         <Text color="$muted">{`$${totalCostUsd.toFixed(4)}`}</Text>
-      </Text>
+        </Text>
+        {allowedFileTypeSummary ? (
+          <Text color="$muted" wrap="truncate-start">
+            <Text color="$primary">allow</Text>
+            {` ${allowedFileTypeSummary}`}
+          </Text>
+        ) : null}
+      </Box>
     </Box>
   );
 };
@@ -344,6 +357,19 @@ function summarizeBackgroundCommands(
   }
 
   return parts.length > 0 ? parts.join(" ") : null;
+}
+
+function summarizeAllowedFileTypes(fileTypes: string[]): string | null {
+  if (!Array.isArray(fileTypes) || fileTypes.length === 0) {
+    return null;
+  }
+
+  const preview = fileTypes.slice(0, 4).join(" ");
+  if (fileTypes.length <= 4) {
+    return preview;
+  }
+
+  return `${preview} +${fileTypes.length - 4}`;
 }
 
 function summarizeArtifacts(

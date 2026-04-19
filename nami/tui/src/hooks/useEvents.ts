@@ -365,6 +365,7 @@ export interface EngineUIState {
     firstArtifactFocusMs: number | null;
     totalMs: number | null;
   };
+  allowedPermissionFileTypes: string[];
   statusLine: string | null;
   pendingPermission: PermissionRequestPayload | null;
   error: string | null;
@@ -430,6 +431,7 @@ const initialState = (model: string, mode: string): EngineUIState => ({
     firstArtifactFocusMs: null,
     totalMs: null,
   },
+  allowedPermissionFileTypes: [],
   statusLine: null,
   pendingPermission: null,
   error: null,
@@ -1688,6 +1690,15 @@ export function useEvents(initialModel: string, initialMode: string) {
         decision === "allow_all_session"
           ? "running_tools"
           : "working",
+      allowedPermissionFileTypes:
+        decision === "allow" ||
+        decision === "always_allow" ||
+        decision === "allow_all_session"
+          ? mergeAllowedPermissionFileTypes(
+              s.allowedPermissionFileTypes,
+              extractAllowedPermissionFileTypes(s.pendingPermission),
+            )
+          : s.allowedPermissionFileTypes,
       pendingPermission: null,
       toolCalls: s.pendingPermission
         ? upsertToolCall(s.toolCalls, {
@@ -1844,6 +1855,144 @@ export function useEvents(initialModel: string, initialMode: string) {
     submitRewindSelection,
     submitResumeSelection,
   };
+}
+
+function mergeAllowedPermissionFileTypes(
+  current: string[],
+  next: string[],
+): string[] {
+  if (next.length === 0) {
+    return current;
+  }
+
+  const seen = new Set(current);
+  const merged = [...current];
+  for (const value of next) {
+    if (seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    merged.push(value);
+  }
+
+  return merged;
+}
+
+function extractAllowedPermissionFileTypes(
+  permission: PermissionRequestPayload | null,
+): string[] {
+  if (!permission) {
+    return [];
+  }
+
+  const kind = permission.target_kind?.trim().toLowerCase();
+  if (kind !== "file" && kind !== "files") {
+    return [];
+  }
+
+  const fileTypes = new Set<string>();
+  for (const target of extractPermissionTargetPaths(permission)) {
+    const fileType = normalizePermissionFileType(target);
+    if (fileType) {
+      fileTypes.add(fileType);
+    }
+  }
+
+  return Array.from(fileTypes).sort();
+}
+
+function extractPermissionTargetPaths(
+  permission: PermissionRequestPayload,
+): string[] {
+  const targets = new Set<string>();
+  const rawInput = parsePermissionRawInput(permission.raw_input);
+
+  const addTarget = (value: unknown) => {
+    if (typeof value !== "string") {
+      return;
+    }
+    const trimmed = value.trim();
+    if (trimmed) {
+      targets.add(trimmed);
+    }
+  };
+
+  if (rawInput && typeof rawInput === "object") {
+    const params = rawInput as Record<string, unknown>;
+    addTarget(params.file_path);
+    addTarget(params.filePath);
+
+    if (Array.isArray(params.replacements)) {
+      for (const replacement of params.replacements) {
+        if (!replacement || typeof replacement !== "object") {
+          continue;
+        }
+        const entry = replacement as Record<string, unknown>;
+        addTarget(entry.file_path);
+        addTarget(entry.filePath);
+      }
+    }
+
+    const patch =
+      typeof params.input === "string"
+        ? params.input
+        : typeof params.patch === "string"
+          ? params.patch
+          : "";
+    for (const target of extractApplyPatchPermissionTargets(patch)) {
+      addTarget(target);
+    }
+  }
+
+  if (targets.size === 0) {
+    addTarget(permission.target_value);
+  }
+
+  return Array.from(targets);
+}
+
+function parsePermissionRawInput(rawInput: string | undefined): unknown {
+  if (typeof rawInput !== "string" || rawInput.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawInput);
+  } catch {
+    return null;
+  }
+}
+
+function extractApplyPatchPermissionTargets(patch: string): string[] {
+  if (!patch.trim()) {
+    return [];
+  }
+
+  const targets = new Set<string>();
+  const matches = patch.matchAll(/^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm);
+  for (const match of matches) {
+    const target = match[1]?.trim();
+    if (target) {
+      targets.add(target);
+    }
+  }
+
+  return Array.from(targets);
+}
+
+function normalizePermissionFileType(target: string): string | null {
+  const trimmed = target.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const baseName = trimmed.split(/[\\/]/).at(-1)?.trim() ?? "";
+  const extensionMatch = baseName.match(/(\.[A-Za-z0-9_-]+)$/);
+  if (!extensionMatch) {
+    return null;
+  }
+
+  return extensionMatch[1].toLowerCase();
 }
 
 function normalizeAskUserQuestionPrompts(
