@@ -142,6 +142,8 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	mcpManager := mcppkg.NewManager(cwd, cfg.MCP)
 	toolpkg.SetGlobalMCPManager(mcpManager)
 	toolpkg.SetSessionControlRuntime(newSessionControlRuntime(bridge, sessionStore, tracker, loopState))
+	toolpkg.SetToolSearchRuntime(registry)
+	defer toolpkg.SetToolSearchRuntime(nil)
 	defer toolpkg.SetSessionControlRuntime(nil)
 	mcpManager.Start(ctx)
 	defer func() {

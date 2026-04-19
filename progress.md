@@ -19,7 +19,7 @@
 - [x] Task 9: Expose explicit plan/worktree controls
 - [x] Task 10: Add notebook editing support
 - [x] Task 11: Add richer task/team orchestration
-- [ ] Task 12: Add tool search
+- [x] Task 12: Add tool search
 
 ## Current Focus
 
@@ -34,4 +34,5 @@
 - Completed: Task 9
 - Completed: Task 10
 - Completed: Task 11
-- In progress: Task 12
+- Completed: Task 12
+- Plan complete
