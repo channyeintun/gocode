@@ -9,3 +9,12 @@ Plan source: `reference/windows-plan.md`
 - [x] Task 5: run final formatting and cross-platform build verification for the completed plan
 
 Current focus: complete
+
+## Post-Review Fixes
+
+- [x] Fix Windows background command startup without PTY support
+- [ ] Fix Windows launcher engine path fallback
+- [ ] Fix Windows UNC file URI decoding for pasted images
+- [ ] Run final formatting and verification for the follow-up fixes
+
+Current follow-up focus: launcher path fallback

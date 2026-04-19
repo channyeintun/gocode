@@ -149,7 +149,13 @@ func startBackgroundShellCommand(command, cwd string) (*backgroundCommand, error
 	}
 	cmd.Dir = cwd
 	streamCtx, cancel := context.WithCancel(context.Background())
+	if runtime.GOOS == "windows" {
+		return startBackgroundPipeCommand(streamCtx, cancel, id, command, cwd, cmd)
+	}
+	return startBackgroundPTYCommand(streamCtx, cancel, id, command, cwd, cmd)
+}
 
+func startBackgroundPTYCommand(streamCtx context.Context, cancel context.CancelFunc, id, command, cwd string, cmd *exec.Cmd) (*backgroundCommand, error) {
 	terminal, err := pty.Start(cmd)
 	if err != nil {
 		cancel()
@@ -181,6 +187,58 @@ func startBackgroundShellCommand(command, cwd string) (*backgroundCommand, error
 	return bg, nil
 }
 
+func startBackgroundPipeCommand(streamCtx context.Context, cancel context.CancelFunc, id, command, cwd string, cmd *exec.Cmd) (*backgroundCommand, error) {
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("open background command stdin: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancel()
+		_ = stdin.Close()
+		return nil, fmt.Errorf("open background command stdout: %w", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		cancel()
+		_ = stdin.Close()
+		_ = stdout.Close()
+		return nil, fmt.Errorf("open background command stderr: %w", err)
+	}
+	if err := cmd.Start(); err != nil {
+		cancel()
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
+		return nil, fmt.Errorf("start background command: %w", err)
+	}
+
+	bg := &backgroundCommand{
+		id:        id,
+		command:   command,
+		cwd:       cwd,
+		cmd:       cmd,
+		stdin:     stdin,
+		cancel:    cancel,
+		output:    &boundedOutput{},
+		running:   true,
+		done:      make(chan struct{}),
+		startedAt: time.Now(),
+		updatedAt: time.Now(),
+	}
+
+	backgroundCommandsMu.Lock()
+	backgroundCommands[id] = bg
+	backgroundCommandsMu.Unlock()
+
+	go streamBackgroundOutput(streamCtx, bg, bg.output, stdout)
+	go streamBackgroundOutput(streamCtx, bg, bg.output, stderr)
+	go waitForBackgroundCommand(bg)
+
+	return bg, nil
+}
+
 func waitForBackgroundCommand(bg *backgroundCommand) {
 	err := bg.cmd.Wait()
 
@@ -192,6 +250,9 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 	if bg.terminal != nil {
 		_ = bg.terminal.Close()
 		bg.terminal = nil
+		bg.stdin = nil
+	} else if bg.stdin != nil {
+		_ = bg.stdin.Close()
 		bg.stdin = nil
 	}
 
@@ -232,7 +293,7 @@ func waitForBackgroundCommand(bg *backgroundCommand) {
 	}
 }
 
-func streamBackgroundOutput(ctx context.Context, bg *backgroundCommand, buffer *boundedOutput, terminal *os.File) {
+func streamBackgroundOutput(ctx context.Context, bg *backgroundCommand, buffer *boundedOutput, reader io.ReadCloser) {
 	chunk := make([]byte, 4096)
 	for {
 		select {
@@ -241,8 +302,10 @@ func streamBackgroundOutput(ctx context.Context, bg *backgroundCommand, buffer *
 		default:
 		}
 
-		_ = terminal.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
-		readLen, err := terminal.Read(chunk)
+		if deadlineReader, ok := reader.(interface{ SetReadDeadline(time.Time) error }); ok {
+			_ = deadlineReader.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+		}
+		readLen, err := reader.Read(chunk)
 		if readLen > 0 {
 			_, _ = buffer.Write(chunk[:readLen])
 			bg.markUpdated(time.Now())
@@ -289,6 +352,7 @@ func (bg *backgroundCommand) shutdown() {
 	}
 	terminal := bg.terminal
 	bg.terminal = nil
+	stdin := bg.stdin
 	bg.stdin = nil
 	cmd := bg.cmd
 	running := bg.running
@@ -296,6 +360,8 @@ func (bg *backgroundCommand) shutdown() {
 
 	if terminal != nil {
 		_ = terminal.Close()
+	} else if stdin != nil {
+		_ = stdin.Close()
 	}
 	if running && cmd != nil && cmd.Process != nil {
 		_ = terminateBackgroundProcessTree(cmd)
