@@ -150,7 +150,7 @@ func (t *SwarmSubmitHandoffTool) Execute(ctx context.Context, input ToolInput) (
 func (t *SwarmListInboxTool) Name() string { return "swarm_list_inbox" }
 
 func (t *SwarmListInboxTool) Description() string {
-	return "List swarm handoffs for a role or status so orchestrated child agents can inspect queued work."
+	return "List or dequeue swarm handoffs for a role. When dequeue is true the role's queue policy (fifo, batch-review, latest-wins) is applied."
 }
 
 func (t *SwarmListInboxTool) InputSchema() any {
@@ -163,7 +163,8 @@ func (t *SwarmListInboxTool) InputSchema() any {
 				"items":       map[string]any{"type": "string", "enum": []string{"pending", "acked", "in_progress", "completed", "blocked", "superseded"}},
 				"description": "Optional status filters.",
 			},
-			"status": map[string]any{"type": "string", "description": "Optional single status filter."},
+			"status":  map[string]any{"type": "string", "description": "Optional single status filter."},
+			"dequeue": map[string]any{"type": "boolean", "description": "When true, apply the role's queue policy and return only the next actionable handoffs. Requires role."},
 		},
 	}
 }
@@ -175,24 +176,20 @@ func (t *SwarmListInboxTool) Concurrency(input ToolInput) ConcurrencyDecision {
 }
 
 func (t *SwarmListInboxTool) Execute(ctx context.Context, input ToolInput) (ToolOutput, error) {
-	sessionID, _, store, _, err := getSwarmRuntime()
+	sessionID, _, store, cwd, err := getSwarmRuntime()
 	if err != nil {
 		return ToolOutput{}, err
+	}
+	role := firstStringOrEmpty(input.Params, "role")
+	if boolParam(input.Params, "dequeue") {
+		return dequeueInbox(store, sessionID, cwd, role)
 	}
 	statuses := collectHandoffStatuses(input.Params)
-	handoffs, err := swarm.ListHandoffs(store, sessionID, firstStringOrEmpty(input.Params, "role"), statuses)
+	handoffs, err := swarm.ListHandoffs(store, sessionID, role, statuses)
 	if err != nil {
 		return ToolOutput{}, err
 	}
-	payload := map[string]any{
-		"count":    len(handoffs),
-		"handoffs": handoffs,
-	}
-	encoded, err := json.MarshalIndent(payload, "", "  ")
-	if err != nil {
-		return ToolOutput{}, fmt.Errorf("marshal swarm inbox: %w", err)
-	}
-	return ToolOutput{Output: string(encoded)}, nil
+	return marshalInboxResult(handoffs)
 }
 
 func (t *SwarmUpdateHandoffTool) Name() string { return "swarm_update_handoff" }
@@ -309,4 +306,46 @@ func collectHandoffStatuses(params map[string]any) []swarm.HandoffStatus {
 		statuses = append(statuses, normalized)
 	}
 	return statuses
+}
+
+func dequeueInbox(store *session.Store, sessionID string, cwd string, role string) (ToolOutput, error) {
+	if strings.TrimSpace(role) == "" {
+		return ToolOutput{}, fmt.Errorf("dequeue requires a role parameter")
+	}
+	policy, err := resolveRoleQueuePolicy(cwd, role)
+	if err != nil {
+		return ToolOutput{}, err
+	}
+	handoffs, err := swarm.DequeueHandoffs(store, sessionID, role, policy)
+	if err != nil {
+		return ToolOutput{}, err
+	}
+	return marshalInboxResult(handoffs)
+}
+
+func resolveRoleQueuePolicy(cwd string, role string) (swarm.QueuePolicy, error) {
+	spec, err := swarm.LoadProjectSpec(cwd)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return swarm.QueueFIFO, nil
+		}
+		return "", err
+	}
+	resolved, ok := spec.Role(role)
+	if !ok {
+		return swarm.QueueFIFO, nil
+	}
+	return resolved.QueuePolicy, nil
+}
+
+func marshalInboxResult(handoffs []swarm.Handoff) (ToolOutput, error) {
+	payload := map[string]any{
+		"count":    len(handoffs),
+		"handoffs": handoffs,
+	}
+	encoded, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return ToolOutput{}, fmt.Errorf("marshal swarm inbox: %w", err)
+	}
+	return ToolOutput{Output: string(encoded)}, nil
 }

@@ -20,13 +20,13 @@
 
 ## Current Focus
 
-- Next task: wire `DequeueHandoffs` into `swarm_list_inbox` tool.
+- Next task: follow-up plan completed.
 
 ## Follow-Up Plan Status
 
 - [x] Add `superseded` handoff status for `latest-wins` policy
 - [x] Add `DequeueHandoffs` function with policy enforcement
-- [ ] Wire `DequeueHandoffs` into `swarm_list_inbox` tool
+- [x] Wire `DequeueHandoffs` into `swarm_list_inbox` tool
 
 ## Completed Tasks
 
