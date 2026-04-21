@@ -60,6 +60,9 @@ var exploreSubagentTools = []string{
 	"web_search",
 	"web_fetch",
 	"git",
+	"swarm_submit_handoff",
+	"swarm_list_inbox",
+	"swarm_update_handoff",
 }
 
 var verificationSubagentTools = []string{
@@ -83,6 +86,9 @@ var verificationSubagentTools = []string{
 	"web_fetch",
 	"git",
 	"think",
+	"swarm_submit_handoff",
+	"swarm_list_inbox",
+	"swarm_update_handoff",
 }
 
 var generalPurposeSubagentTools = []string{
@@ -108,6 +114,9 @@ var generalPurposeSubagentTools = []string{
 	"web_fetch",
 	"git",
 	"file_history",
+	"swarm_submit_handoff",
+	"swarm_list_inbox",
+	"swarm_update_handoff",
 }
 
 func makeSubagentRunner(
@@ -257,6 +266,11 @@ func executeSubagent(
 		childPrompt = swarm.JoinPromptSections(childPrompt, overlay.Content)
 	} else if !errors.Is(overlayErr, os.ErrNotExist) {
 		return toolpkg.AgentRunResult{}, overlayErr
+	}
+	if handoffInstructions, handoffErr := swarm.LoadRoleHandoffInstructions(cwd, req.Role); handoffErr == nil {
+		childPrompt = swarm.JoinPromptSections(childPrompt, handoffInstructions)
+	} else if !errors.Is(handoffErr, os.ErrNotExist) {
+		return toolpkg.AgentRunResult{}, handoffErr
 	}
 	queryTools := allowedDefs
 	executionRegistry := childRegistry
@@ -683,7 +697,8 @@ Use tools early. Keep transcript terse. Final answer concise, concrete, evidence
 Always absolute paths. Working directory in environment context below.
 No follow-up questions to the parent/user. If context is thin, inspect workspace, make best reasonable assumptions, continue. State assumptions briefly in final answer.
 Available tools: %s.
-If additional tool schemas appear for cache compatibility, treat any tool not listed above as unavailable; those calls will be rejected.`, subagentDisplayName(subagentType), toolList)
+If additional tool schemas appear for cache compatibility, treat any tool not listed above as unavailable; those calls will be rejected.
+If swarm handoff tools are available, use them for structured role handoffs and inbox state instead of burying that state in prose.`, subagentDisplayName(subagentType), toolList)
 
 	switch subagentType {
 	case exploreSubagentType:
@@ -693,7 +708,8 @@ Read-only codebase explorer.
 Search broad first. Narrow after evidence.
 If first pass is weak, run another pass with different anchors.
 Prefer file_search, grep_search, read_file, project_overview, read_project_structure, go_definition, go_references.
-No file writes. No artifact writes. No background control.
+No file writes. No background control.
+You may use swarm handoff and inbox tools when they are available.
 
 Return ONLY <final_answer>.
 
@@ -721,7 +737,8 @@ Evidence:
 Verification specialist. Try to break the work.
 Reading code is not verification. Run commands. Check output.
 Do not modify project files. Do not install deps. Do not run git write commands.
-No artifact writes. No background control beyond provided command tools.
+No background control beyond provided command tools.
+You may use swarm handoff and inbox tools when they are available.
 If environment blocks verification, say exactly why.
 
 Return ONLY <final_answer>.
@@ -746,7 +763,8 @@ VERDICT: FAIL
 
 General-purpose subagent.
 Complete delegated task fully. Research first when needed. Edit only when task requires it.
-No artifact writes. No interactive approval. If denied, explain constraint, then continue with safe inspection.
+No interactive approval. If denied, explain constraint, then continue with safe inspection.
+Use swarm handoff and inbox tools when they are available and the delegated workflow needs structured state.
 
 Return ONLY <final_answer>.
 

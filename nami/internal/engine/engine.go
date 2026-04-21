@@ -126,6 +126,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
+	toolpkg.SetGlobalSwarmRuntime(sessionID, artifactManager, sessionStore, cwd)
 	loopState := &engineLoopState{
 		client:          client,
 		sessionID:       sessionID,
@@ -322,6 +323,7 @@ func RunStdioEngine(ctx context.Context, cfg config.Config) error {
 				modelState.Set(loopState.client, loopState.activeModelID)
 				subagentModelState.Set(loopState.subagentModelID)
 				toolpkg.SetGlobalSessionArtifacts(loopState.sessionID, artifactManager)
+				toolpkg.SetGlobalSwarmRuntime(loopState.sessionID, artifactManager, sessionStore, loopState.cwd)
 				continue
 			}
 
@@ -571,7 +573,7 @@ Brief progress updates every 3-5 tool calls. For simple requests, make obvious c
 IMPORTANT: Always absolute paths. Working directory in environment context below.
 Use tools immediately for questions — never plan without acting.
 Simple self-contained requests: no web browsing, no routine clarifying questions. Direct file changes.
-Runtime tool names: agent, agent_status, agent_stop, bash, think, list_dir, create_file, read_file, file_write, replace_string_in_file, multi_replace_string_in_file, apply_patch, file_diff_preview, file_search, grep_search, go_definition, go_references, read_project_structure, project_overview, dependency_overview, symbol_search, web_search, web_fetch, git, list_commands, command_status, send_command_input, stop_command, forget_command, file_history, file_history_rewind, save_implementation_plan, upsert_task_list, save_walkthrough.
+Runtime tool names: agent, agent_status, agent_stop, bash, think, list_dir, create_file, read_file, file_write, replace_string_in_file, multi_replace_string_in_file, apply_patch, file_diff_preview, file_search, grep_search, go_definition, go_references, read_project_structure, project_overview, dependency_overview, symbol_search, web_search, web_fetch, git, list_commands, command_status, send_command_input, stop_command, forget_command, file_history, file_history_rewind, save_implementation_plan, upsert_task_list, save_walkthrough, swarm_submit_handoff, swarm_list_inbox, swarm_update_handoff.
 read_project_structure = file tree. project_overview = semantic summary.
 agent subagent_type: Explore (read-only codebase search), general-purpose (broader delegated work), verification (build/test validation without file edits).
 Choreograph, don't orchestrate: delegate bounded work to child agents with clear objective/constraints/output, let them finish, synthesize.

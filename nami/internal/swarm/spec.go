@@ -11,7 +11,6 @@ import (
 
 	"github.com/channyeintun/nami/internal/api"
 	"github.com/channyeintun/nami/internal/config"
-	toolpkg "github.com/channyeintun/nami/internal/tools"
 )
 
 const ProjectSpecRelativePath = ".nami/swarm.json"
@@ -126,6 +125,12 @@ var allowedHandoffFields = map[HandoffField]struct{}{
 	HandoffFieldVerification: {},
 	HandoffFieldRisks:        {},
 	HandoffFieldNextAction:   {},
+}
+
+var supportedSubagentTypes = map[string]struct{}{
+	"Explore":         {},
+	"general-purpose": {},
+	"verification":    {},
 }
 
 func ProjectSpecPath(cwd string) string {
@@ -262,6 +267,19 @@ func (s ResolvedSpec) SummaryMarkdown() string {
 	return b.String()
 }
 
+func (s ResolvedSpec) Role(name string) (ResolvedRole, bool) {
+	name = normalizeRoleName(name)
+	if name == "" {
+		return ResolvedRole{}, false
+	}
+	for _, role := range s.Roles {
+		if role.Name == name {
+			return role, true
+		}
+	}
+	return ResolvedRole{}, false
+}
+
 func resolveRole(role RoleSpec, idx int) (ResolvedRole, []string) {
 	var problems []string
 
@@ -277,11 +295,11 @@ func resolveRole(role RoleSpec, idx int) (ResolvedRole, []string) {
 		problems = append(problems, fmt.Sprintf("role[%d] purpose is required", idx))
 	}
 
-	subagentType := toolpkg.NormalizeSubagentType(role.SubagentType)
+	subagentType := normalizeSubagentType(role.SubagentType)
 	if subagentType == "" {
-		subagentType = toolpkg.NormalizeSubagentType("general-purpose")
+		subagentType = normalizeSubagentType("general-purpose")
 	}
-	if !toolpkg.IsSupportedSubagentType(subagentType) {
+	if !isSupportedSubagentType(subagentType) {
 		problems = append(problems, fmt.Sprintf("role[%d] subagent_type %q is not supported", idx, role.SubagentType))
 	}
 
@@ -513,4 +531,22 @@ func joinListOrDefault(values []string, fallback string) string {
 
 func roleRef(idx int, name string) string {
 	return fmt.Sprintf("role[%d] %s", idx, name)
+}
+
+func normalizeSubagentType(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "explore":
+		return "Explore"
+	case "general-purpose":
+		return "general-purpose"
+	case "verification":
+		return "verification"
+	default:
+		return strings.TrimSpace(value)
+	}
+}
+
+func isSupportedSubagentType(value string) bool {
+	_, ok := supportedSubagentTypes[normalizeSubagentType(value)]
+	return ok
 }

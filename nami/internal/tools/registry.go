@@ -61,6 +61,9 @@ func NewRegistry() *Registry {
 	r.Register(NewSaveImplementationPlanTool())
 	r.Register(NewUpsertTaskListTool())
 	r.Register(NewSaveWalkthroughTool())
+	r.Register(NewSwarmSubmitHandoffTool())
+	r.Register(NewSwarmListInboxTool())
+	r.Register(NewSwarmUpdateHandoffTool())
 
 	return r
 }

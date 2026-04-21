@@ -12,15 +12,15 @@
 - [x] Phase 1A: Add swarm spec model and validator
 - [x] Phase 1B: Surface swarm spec at startup with artifact and notice
 - [x] Phase 2: Add role-aware prompt composition
-- [ ] Phase 3: Add structured handoff artifacts
-- [ ] Phase 4: Add durable inboxes and queue policy
+- [x] Phase 3: Add structured handoff artifacts
+- [x] Phase 4: Add durable inboxes and queue policy
 - [ ] Phase 5: Add optional worktree-backed child agents
 - [ ] Phase 6: Add swarm dashboard in the TUI
 - [ ] Phase 7: Add role-aware policy enforcement
 
 ## Current Focus
 
-- Next task: Phase 3: add structured handoff artifacts for directed role-to-role delegation.
+- Next task: Phase 5: add optional worktree-backed child agents for edit-heavy delegated work.
 
 ## Completed Tasks
 
@@ -28,3 +28,5 @@
 - Phase 1A completed: added `nami/internal/swarm/spec.go` with project-local swarm spec loading, normalization, validation, and markdown summary rendering.
 - Phase 1B completed: wired swarm spec startup surfacing into the engine with a session artifact and startup notices for valid and invalid specs.
 - Phase 2 completed: added `.nami/swarm` constitution and role prompt overlay loading, plus optional `role` support for `agent` and `agent_team` delegated child agents.
+- Phase 3 completed: added a first-class `handoff` artifact kind plus swarm handoff submission and status update tools.
+- Phase 4 completed: added a durable session-backed swarm inbox, inbox listing tool, and role-specific handoff guidance for delegated child agents.

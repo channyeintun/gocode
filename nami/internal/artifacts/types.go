@@ -17,6 +17,7 @@ const (
 	KindCompactSummary     Kind = "compact-summary"
 	KindSessionMemory      Kind = "session-memory"
 	KindKnowledgeItem      Kind = "knowledge-item"
+	KindHandoff            Kind = "handoff"
 )
 
 // Scope defines the artifact's lifetime.
