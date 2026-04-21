@@ -259,6 +259,83 @@ func ListHandoffs(store *session.Store, sessionID string, role string, statuses 
 	return filtered, nil
 }
 
+func DequeueHandoffs(store *session.Store, sessionID string, role string, policy QueuePolicy) ([]Handoff, error) {
+	role = normalizeRoleName(role)
+	if role == "" {
+		return nil, fmt.Errorf("DequeueHandoffs requires a role")
+	}
+
+	inboxMu.Lock()
+	defer inboxMu.Unlock()
+
+	inbox, err := loadInboxUnlocked(store, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	pending := make([]Handoff, 0, len(inbox.Handoffs))
+	for _, handoff := range inbox.Handoffs {
+		if handoff.TargetRole != role {
+			continue
+		}
+		if handoff.Status != HandoffStatusPending {
+			continue
+		}
+		pending = append(pending, handoff)
+	}
+	if len(pending) == 0 {
+		return nil, nil
+	}
+
+	sort.Slice(pending, func(i, j int) bool {
+		if pending[i].CreatedAt.Equal(pending[j].CreatedAt) {
+			return pending[i].ID < pending[j].ID
+		}
+		return pending[i].CreatedAt.Before(pending[j].CreatedAt)
+	})
+
+	switch policy {
+	case QueueBatchReview:
+		return pending, nil
+
+	case QueueLatestWins:
+		newest := pending[len(pending)-1]
+		if len(pending) > 1 {
+			now := time.Now().UTC()
+			for _, older := range pending[:len(pending)-1] {
+				supersededIdx := inboxIndexByID(inbox.Handoffs, older.ID)
+				if supersededIdx < 0 {
+					continue
+				}
+				inbox.Handoffs[supersededIdx].Status = HandoffStatusSuperseded
+				inbox.Handoffs[supersededIdx].StatusNote = fmt.Sprintf("superseded by %s under latest-wins policy", newest.ID)
+				inbox.Handoffs[supersededIdx].UpdatedAt = now
+				inbox.Handoffs[supersededIdx].History = append(inbox.Handoffs[supersededIdx].History, HandoffStatusEntry{
+					Status: HandoffStatusSuperseded,
+					Note:   inbox.Handoffs[supersededIdx].StatusNote,
+					At:     now,
+				})
+			}
+			if err := saveInboxUnlocked(store, sessionID, inbox); err != nil {
+				return nil, err
+			}
+		}
+		return []Handoff{newest}, nil
+
+	default:
+		return pending[:1], nil
+	}
+}
+
+func inboxIndexByID(handoffs []Handoff, id string) int {
+	for i := range handoffs {
+		if handoffs[i].ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
 func UpsertHandoff(store *session.Store, sessionID string, handoff Handoff) (Handoff, error) {
 	inboxMu.Lock()
 	defer inboxMu.Unlock()
