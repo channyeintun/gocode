@@ -10,9 +10,12 @@
 - Wired Codex into provider discovery, `/connect codex`, model switching, stored auth loading, and token refresh.
 - Added `gpt-5.5` to `xhigh` reasoning support.
 - Updated docs for Codex setup, `codex/gpt-5.5`, and GPT 5.5 defaults.
+- Replaced the TUI Silvery local file dependency with registry `silvery@^0.19.2`, refreshed `bun.lock`, and removed the vendored copy.
 
 ## In Progress
 
-- Next: replace the TUI Silvery local dependency with an npm registry dependency.
+- None.
 
 ## Pending
+
+- None.
