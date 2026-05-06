@@ -24,9 +24,14 @@ type standardProviderBehavior struct{}
 
 type gitHubCopilotProviderBehavior struct{}
 
+type codexProviderBehavior struct{}
+
 func providerBehaviorFor(provider string) providerBehavior {
-	if normalizeProvider(provider) == "github-copilot" {
+	switch normalizeProvider(provider) {
+	case "github-copilot":
 		return gitHubCopilotProviderBehavior{}
+	case "codex":
+		return codexProviderBehavior{}
 	}
 	return standardProviderBehavior{}
 }
@@ -126,6 +131,38 @@ func (gitHubCopilotProviderBehavior) PolicyModels(cfg config.Config) []string {
 
 func (gitHubCopilotProviderBehavior) RetainsSelectionProvider() bool {
 	return true
+}
+
+func (codexProviderBehavior) NewClient(provider, model string, cfg config.Config) (api.LLMClient, error) {
+	resolved, err := resolveCodexConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	client, err := api.NewClientForProvider(provider, model, resolved.APIKey, resolved.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	api.SetCodexAccountID(client, resolved.Codex.AccountID)
+	if strings.TrimSpace(resolved.Codex.RefreshToken) != "" {
+		api.SetAPIKeyFunc(client, newCodexTokenRefresher(resolved.Codex).resolve)
+	}
+	return client, nil
+}
+
+func (codexProviderBehavior) ResolveSelection(input, fallbackProvider string) (string, string) {
+	return standardProviderBehavior{}.ResolveSelection(input, fallbackProvider)
+}
+
+func (codexProviderBehavior) DefaultSubagentModel(cfg config.Config, activeModelID string) string {
+	return standardProviderBehavior{}.DefaultSubagentModel(cfg, activeModelID)
+}
+
+func (codexProviderBehavior) PolicyModels(cfg config.Config) []string {
+	return nil
+}
+
+func (codexProviderBehavior) RetainsSelectionProvider() bool {
+	return false
 }
 
 func defaultSubagentFallback(cfg config.Config, activeModelID string) string {
@@ -277,6 +314,24 @@ func resolveGitHubCopilotConfig(cfg config.Config) (config.Config, error) {
 
 	if strings.TrimSpace(cfg.BaseURL) == "" {
 		cfg.BaseURL = api.GetGitHubCopilotBaseURL(strings.TrimSpace(cfg.GitHubCopilot.AccessToken), cfg.GitHubCopilot.EnterpriseDomain)
+	}
+
+	return cfg, nil
+}
+
+func resolveCodexConfig(cfg config.Config) (config.Config, error) {
+	loaded := config.Load()
+	if strings.TrimSpace(loaded.Codex.AccessToken) != "" || strings.TrimSpace(loaded.Codex.RefreshToken) != "" {
+		cfg.Codex = loaded.Codex
+	}
+
+	if strings.TrimSpace(cfg.APIKey) == "" {
+		creds := cfg.Codex
+		if strings.TrimSpace(creds.AccessToken) == "" && strings.TrimSpace(creds.RefreshToken) == "" {
+			return cfg, &api.APIError{Type: api.ErrAuth, Message: "Codex is not connected. Run /connect codex or set CODEX_ACCESS_TOKEN."}
+		}
+		cfg.Codex = creds
+		cfg.APIKey = creds.AccessToken
 	}
 
 	return cfg, nil

@@ -57,7 +57,7 @@ func ParseConnectArgs(args string) (ConnectRequest, error) {
 		return ConnectRequest{}, fmt.Errorf("usage: %s", connectUsage)
 	case 2:
 		providerID := normalizeProviderID(parts[0])
-		if providerID == "github-copilot" {
+		if providerID == "github-copilot" || providerID == "codex" {
 			return ConnectRequest{Action: ConnectActionProvider, Provider: providerID, Extra: parts[1]}, nil
 		}
 		return ConnectRequest{}, fmt.Errorf("usage: %s", connectUsage)
@@ -141,6 +141,25 @@ func connectMethodsForProvider(providerID string, envKey string) []ConnectAuthMe
 			Label:       "Device login",
 			Description: "Open the GitHub device flow in the browser and store refreshed Copilot credentials.",
 		}}
+	case "codex":
+		return []ConnectAuthMethod{
+			{
+				Type:        "oauth_browser",
+				Label:       "Browser OAuth",
+				Description: "Run /connect codex browser to authorize ChatGPT Plus or Pro in your browser.",
+			},
+			{
+				Type:        "oauth_headless",
+				Label:       "Headless OAuth",
+				Description: "Run /connect codex headless and enter the shown code in a browser.",
+			},
+			{
+				Type:        "api_key",
+				Label:       "Access token",
+				EnvVar:      envKey,
+				Description: "Read a bearer token from the environment and switch the session once it is available.",
+			},
+		}
 	case "ollama":
 		return []ConnectAuthMethod{{
 			Type:        "local",
@@ -177,6 +196,12 @@ func formatConnectMethod(providerID string, method ConnectAuthMethod) string {
 	}
 	if method.Type == "device" {
 		return fmt.Sprintf("%s: run /connect %s to start browser login.", label, providerID)
+	}
+	if method.Type == "oauth_browser" {
+		return fmt.Sprintf("%s: run /connect %s or /connect %s browser.", label, providerID, providerID)
+	}
+	if method.Type == "oauth_headless" {
+		return fmt.Sprintf("%s: run /connect %s headless.", label, providerID)
 	}
 	if method.Type == "local" {
 		if strings.TrimSpace(method.EnvVar) != "" {

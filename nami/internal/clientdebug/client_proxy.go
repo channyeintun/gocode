@@ -107,6 +107,14 @@ func (p *proxy) SetGitHubCopilotEnterpriseDomain(domain string) {
 	setter.SetGitHubCopilotEnterpriseDomain(domain)
 }
 
+func (p *proxy) SetCodexAccountID(accountID string) {
+	setter, ok := p.inner.(api.CodexAccountIDSetter)
+	if !ok || api.IsNilValue(setter) {
+		return
+	}
+	setter.SetCodexAccountID(accountID)
+}
+
 func (p *proxy) Warmup(ctx context.Context) error {
 	warmable, ok := p.inner.(api.WarmupCapable)
 	if !ok || api.IsNilValue(warmable) {

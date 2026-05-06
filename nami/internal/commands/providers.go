@@ -83,6 +83,8 @@ func colorProviderName(name string) string {
 	switch trimmed {
 	case "github-copilot":
 		color = "\x1b[96m"
+	case "codex":
+		color = "\x1b[36m"
 	case "openai":
 		color = "\x1b[92m"
 	case "anthropic":
@@ -253,6 +255,7 @@ func InferProviderFromModel(model string) string {
 func orderedProviderIDs() []string {
 	preferred := []string{
 		"github-copilot",
+		"codex",
 		"openai",
 		"anthropic",
 		"gemini",
@@ -293,10 +296,51 @@ func populateProviderStatus(status *ProviderStatus, cfg config.Config, activePro
 	switch status.ID {
 	case "github-copilot":
 		populateGitHubCopilotStatus(status, cfg, activeProvider)
+	case "codex":
+		populateCodexStatus(status, cfg, activeProvider, preset.EnvKeyVar)
 	case "ollama":
 		populateOllamaStatus(status, cfg, activeProvider)
 	default:
 		populateAPIKeyProviderStatus(status, cfg, activeProvider, preset.EnvKeyVar)
+	}
+}
+
+func populateCodexStatus(status *ProviderStatus, cfg config.Config, activeProvider string, envKey string) {
+	if activeProvider == status.ID && strings.TrimSpace(cfg.APIKey) != "" {
+		status.AuthSource = "env:NAMI_API_KEY"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return
+	}
+
+	if envKey != "" && strings.TrimSpace(os.Getenv(envKey)) != "" {
+		status.AuthSource = "env:" + envKey
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return
+	}
+
+	creds := cfg.Codex
+	if strings.TrimSpace(creds.RefreshToken) != "" {
+		status.AuthSource = "stored OAuth"
+		status.Configured = true
+		status.Usable = true
+		status.SetupHint = ""
+		return
+	}
+
+	if strings.TrimSpace(creds.AccessToken) != "" {
+		status.AuthSource = "stored access token"
+		status.Configured = true
+		if creds.ExpiresAtUnixMS > 0 && time.Now().UnixMilli() > creds.ExpiresAtUnixMS {
+			status.LastError = "saved access token expired"
+			status.SetupHint = "Run /connect codex to refresh credentials."
+			return
+		}
+		status.Usable = true
+		status.SetupHint = ""
 	}
 }
 
@@ -367,6 +411,8 @@ func providerDisplayLabel(providerID string) string {
 	switch providerID {
 	case "github-copilot":
 		return "GitHub Copilot"
+	case "codex":
+		return "Codex"
 	case "openai":
 		return "OpenAI"
 	case "anthropic":
@@ -394,6 +440,8 @@ func providerSetupHint(providerID string, envKey string) string {
 	switch providerID {
 	case "github-copilot":
 		return "Run /connect github-copilot."
+	case "codex":
+		return "Run /connect codex or set CODEX_ACCESS_TOKEN."
 	case "ollama":
 		return "Ensure Ollama is running on http://localhost:11434."
 	default:

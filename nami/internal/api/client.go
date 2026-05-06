@@ -256,6 +256,10 @@ type GitHubCopilotEnterpriseDomainSetter interface {
 	SetGitHubCopilotEnterpriseDomain(domain string)
 }
 
+type CodexAccountIDSetter interface {
+	SetCodexAccountID(accountID string)
+}
+
 // SetAPIKeyFunc sets an API key resolver on the client if it supports it.
 // It unwraps decorator layers (e.g. WithCapabilities) to reach the inner client.
 func SetAPIKeyFunc(client LLMClient, fn func() (string, error)) {
@@ -283,6 +287,19 @@ func SetGitHubCopilotEnterpriseDomain(client LLMClient, domain string) {
 	}
 	if wrapper, ok := client.(*capabilitiesOverrideClient); ok {
 		SetGitHubCopilotEnterpriseDomain(wrapper.inner, domain)
+	}
+}
+
+func SetCodexAccountID(client LLMClient, accountID string) {
+	if IsNilLLMClient(client) {
+		return
+	}
+	if setter, ok := client.(CodexAccountIDSetter); ok {
+		setter.SetCodexAccountID(accountID)
+		return
+	}
+	if wrapper, ok := client.(*capabilitiesOverrideClient); ok {
+		SetCodexAccountID(wrapper.inner, accountID)
 	}
 }
 
