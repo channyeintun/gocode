@@ -11,11 +11,14 @@
 - Added `gpt-5.5` to `xhigh` reasoning support.
 - Updated docs for Codex setup, `codex/gpt-5.5`, and GPT 5.5 defaults.
 - Replaced the TUI Silvery local file dependency with registry `silvery@^0.19.2`, refreshed `bun.lock`, and removed the vendored copy.
+- Explored how opencode sources DeepSeek model metadata from `models.dev` and updated `plan.md` for DeepSeek V4 Flash/Pro support.
 
 ## In Progress
 
-- None.
+- Implementing DeepSeek V4 Flash/Pro support.
 
 ## Pending
 
-- None.
+- Update the DeepSeek provider preset and surfaced model options.
+- Update DeepSeek documentation if needed.
+- Run focused formatting and build checks.
