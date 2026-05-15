@@ -42,13 +42,13 @@ Concurrency and shared state:
 - Every goroutine needs ownership, a stop condition or stop signal, and a way to wait for exit.
 - Do not fire-and-forget goroutines in library code.
 - Do not start background goroutines in `init()`.
-- Prefer unbuffered channels or size 1 unless a larger buffer is justified.
+- Choose channel capacity deliberately based on coordination, backpressure, and expected burstiness.
 - Keep `sync.Mutex` and `sync.RWMutex` as value fields and do not embed mutexes.
 - Prefer typed atomics from `sync/atomic` in new code. Stay consistent inside packages already using another wrapper.
 
 Data ownership and initialization:
 - Copy slices and maps at package boundaries when later mutation would be surprising or unsafe.
-- Return nil slices when there is no data unless an API or wire format requires an empty slice.
+- Prefer nil slices for no data in internal APIs. Return empty slices when an external contract, wire format, or caller expectation makes that shape clearer.
 - Check emptiness with `len(s) == 0`, not `s == nil`.
 - Prefer `var items []T` when building slices incrementally from the zero value.
 - Use `make(map[K]V)` for empty programmatic maps and literals for fixed initial contents.
@@ -68,15 +68,15 @@ Control flow and style:
 - Avoid naked boolean arguments when the meaning is unclear.
 - Use the comma-ok form for type assertions unless failure is impossible by construction.
 - If you embed a type, put embedded fields first and do not embed purely for convenience or if it leaks internals or breaks zero values.
-- Add field tags for marshaled structs.
+- Add field tags for marshaled structs when the encoded form must be explicit, stable, renamed, or non-default.
 - Keep reusable `Printf` format strings as `const`, and give custom `Printf`-style helpers a trailing `f` so `go vet` can validate them.
 
 Time, performance, and modern Go:
 - Use `time.Time` for instants and `time.Duration` for durations.
-- If an external format cannot carry `time.Duration`, include the unit in the field name.
-- If an external format cannot carry `time.Time`, prefer RFC 3339 strings unless the contract says otherwise.
+- If an external contract cannot carry `time.Duration`, include the unit in the field name.
+- If an external contract cannot carry `time.Time`, default to RFC 3339 strings unless it already defines another format.
 - Use `strconv` over `fmt` in hot conversion paths.
-- Provide map and slice capacity hints when the size is known or easy to estimate.
+- Add map and slice capacity hints when the size is known or easy to estimate and the benefit is real enough to keep the code clear.
 - Avoid repeated string or byte-slice conversions in hot paths.
 - Prefer standard library helpers such as `slices`, `maps`, and `cmp` when they make code simpler.
 - Keep code compatible with the module's declared Go version even when a newer feature exists.
